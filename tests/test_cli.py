@@ -97,6 +97,39 @@ def test_second_run_adds_nothing(env, capsys):
     assert (env / "out.csv").read_text() == before  # byte-identical
 
 
+def test_hand_edits_are_picked_up_on_a_run_with_no_new_flights(env, capsys):
+    """The README promises a hand-filled figure reaches the total on the next
+    sync. That run finds no new flights, so it must still recompute and save."""
+    run_sync(["sync", "--csv-path", "out.csv"])
+
+    rows = read_csv(env / "out.csv")
+    unparsed_index = next(i for i, r in enumerate(rows) if r["emissions_source"] == "unparsed")
+    rows[unparsed_index]["emissions_kg_economy"] = "250.0"
+    with open(env / "out.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    assert run_sync(["sync", "--csv-path", "out.csv"]) == 0
+
+    updated = read_csv(env / "out.csv")
+    assert updated[unparsed_index]["emissions_kg_actual"] == "250.0"
+    assert updated[-1]["cumulative_kg_actual"] == "550.0"  # 300 priced + 250 by hand
+    assert "Recomputed" in capsys.readouterr().out
+
+
+def test_an_untouched_rerun_leaves_the_file_alone(env, capsys):
+    """Recomputing on every run must not mean rewriting on every run — that
+    would produce a daily empty commit in contrail-gh."""
+    run_sync(["sync", "--csv-path", "out.csv"])
+    before = (env / "out.csv").stat().st_mtime_ns
+
+    run_sync(["sync", "--csv-path", "out.csv"])
+
+    assert (env / "out.csv").stat().st_mtime_ns == before
+    assert "already up to date" in capsys.readouterr().out
+
+
 def test_dry_run_writes_nothing_and_prices_nothing(env, capsys):
     assert run_sync(["sync", "--csv-path", "out.csv", "--dry-run"]) == 0
 

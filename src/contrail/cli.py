@@ -6,6 +6,8 @@ import argparse
 import sys
 from datetime import datetime, timezone
 
+import requests
+
 from contrail import __version__
 from contrail.config import DEFAULT_CSV_PATH, Config, ConfigError, load_config
 from contrail.emissions import get_provider
@@ -16,7 +18,12 @@ from contrail.storage.local_csv import LocalCSVStorage, actual_kg, row_key
 
 
 def _grams_to_kg(grams) -> str:
-    return "" if grams is None else round(grams / 1000, 3)
+    """Grams to kilograms, as a string.
+
+    Every value in a row dict is a string, so a freshly built row and one loaded
+    back from the CSV compare and aggregate identically.
+    """
+    return "" if grams is None else str(round(grams / 1000, 3))
 
 
 def collect(config: Config) -> tuple[list[FlightRecord], list[UnparsedEvent]]:
@@ -113,7 +120,21 @@ def cmd_sync(args) -> int:
     new_unparsed = _drop_known(unparsed, seen)
 
     if not new_flights and not new_unparsed:
-        print("No new flights found. CSV is already up to date.")
+        print("No new flights found.")
+        if args.dry_run:
+            return 0
+        # Still recompute and save: a figure filled in by hand on an `unparsed`
+        # row, or a corrected cabin class, only reaches the cumulative total on a
+        # later run. Identical content rewrites the same bytes, so a no-op run
+        # produces no commit in contrail-gh.
+        before = [dict(row) for row in existing_rows]
+        rows = recompute_cumulative(existing_rows)
+        if rows != before:
+            storage.save(rows)
+            total = rows[-1]["cumulative_kg_actual"] if rows else 0
+            print(f"  Recomputed edited rows. Cumulative total: {total} kg CO2e.")
+        else:
+            print("  CSV is already up to date.")
         return 0
 
     print(
@@ -220,6 +241,11 @@ def main(argv: list[str] | None = None) -> int:
         return args.func(args)
     except ConfigError as exc:
         print(f"Configuration error: {exc}", file=sys.stderr)
+        return 1
+    except requests.RequestException as exc:
+        # Report the failure, not a traceback: a 403 or a quota error is an
+        # ordinary outcome, and cron setups routinely pipe stderr to a log file.
+        print(f"Network error talking to an API: {exc}", file=sys.stderr)
         return 1
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)

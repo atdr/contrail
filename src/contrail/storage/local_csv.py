@@ -11,8 +11,10 @@ number rather than leaving the CSV with two competing "cumulative" concepts.
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import os
+import tempfile
 from collections.abc import Sequence
 
 from contrail.models import CABIN_CLASSES
@@ -70,6 +72,23 @@ def row_key(row: dict) -> str:
     return f"{row.get('source', '')}:{row.get('source_id', '')}"
 
 
+def extra_fields(rows: Sequence[dict]) -> list[str]:
+    """Columns present in the data that contrail doesn't own.
+
+    Hand-editing the CSV is a documented workflow, so a column someone added
+    themselves (``notes``, say) is preserved rather than silently dropped on the
+    next sync.
+    """
+    known = set(CSV_FIELDS)
+    extra: list[str] = []
+    for row in rows:
+        for field in row:
+            if field not in known:
+                known.add(field)
+                extra.append(field)
+    return extra
+
+
 def actual_kg(row: dict) -> str:
     """Pick the per-cabin column matching ``cabin_class_known``, else economy."""
     cabin = (row.get("cabin_class_known") or "").strip().lower()
@@ -96,8 +115,25 @@ class LocalCSVStorage:
     def save(self, rows: Sequence[dict]) -> None:
         parent = os.path.dirname(os.path.abspath(self.path))
         os.makedirs(parent, exist_ok=True)
-        with open(self.path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore")
-            writer.writeheader()
-            for row in rows:
-                writer.writerow({field: row.get(field, "") for field in CSV_FIELDS})
+
+        fieldnames = CSV_FIELDS + extra_fields(rows)
+
+        # Write to a temp file in the same directory, then rename over the
+        # target. Opening the CSV directly with "w" truncates it before a single
+        # row is written, so a crash, a cron timeout, or a full disk mid-write
+        # would leave nothing behind — and a TripIt feed only exposes recent and
+        # upcoming trips, so older history could not be re-fetched.
+        fd, tmp_path = tempfile.mkstemp(dir=parent, prefix=".contrail-", suffix=".csv")
+        try:
+            with os.fdopen(fd, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+                writer.writeheader()
+                for row in rows:
+                    writer.writerow({field: row.get(field, "") for field in fieldnames})
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, self.path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp_path)
+            raise

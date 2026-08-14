@@ -2,6 +2,8 @@
 
 import csv
 
+import pytest
+
 from contrail.storage import recompute_cumulative
 from contrail.storage.local_csv import (
     CSV_FIELDS,
@@ -53,7 +55,7 @@ def test_cumulative_is_recomputed_in_date_order():
         row("uid-2", "2026-06-10", "50"),
     ]
     result = recompute_cumulative(rows)
-    assert [r["cumulative_kg_actual"] for r in result] == [100.0, 150.0]
+    assert [r["cumulative_kg_actual"] for r in result] == ["100.0", "150.0"]
 
 
 def test_inserting_an_older_flight_reshuffles_the_running_total():
@@ -67,7 +69,7 @@ def test_inserting_an_older_flight_reshuffles_the_running_total():
     result = recompute_cumulative(rows)
 
     assert [r["source_id"] for r in result] == ["uid-3", "uid-1", "uid-2"]
-    assert [r["cumulative_kg_actual"] for r in result] == [25.0, 125.0, 175.0]
+    assert [r["cumulative_kg_actual"] for r in result] == ["25.0", "125.0", "175.0"]
 
 
 def test_unparsed_rows_contribute_nothing_but_keep_their_place():
@@ -80,7 +82,72 @@ def test_unparsed_rows_contribute_nothing_but_keep_their_place():
     result = recompute_cumulative(rows)
 
     assert [r["source_id"] for r in result] == ["uid-1", "uid-2", "uid-3"]
-    assert [r["cumulative_kg_actual"] for r in result] == [100.0, 100.0, 150.0]
+    assert [r["cumulative_kg_actual"] for r in result] == ["100.0", "100.0", "150.0"]
+
+
+def test_hand_filled_emissions_reach_the_cumulative_total():
+    """The README tells people to fill unparsed rows in by hand and says the
+    total picks them up on the next sync. It has to actually do that."""
+    rows = [
+        row("uid-1", "2026-01-01", "200.0"),
+        row("uid-2", "2026-02-01", "", emissions_source="unparsed"),
+    ]
+    recompute_cumulative(rows)
+    assert rows[-1]["cumulative_kg_actual"] == "200.0"
+
+    rows[1]["emissions_kg_economy"] = "250.0"  # user edits the CSV
+    result = recompute_cumulative(rows)
+
+    assert result[1]["emissions_kg_actual"] == "250.0"
+    assert result[-1]["cumulative_kg_actual"] == "450.0"
+
+
+def test_correcting_the_cabin_class_updates_the_total():
+    """emissions_kg_actual is re-derived every pass, not frozen at write time."""
+    rows = [row("uid-1", "2026-01-01", economy="100", emissions_kg_business="300")]
+    recompute_cumulative(rows)
+    assert rows[0]["cumulative_kg_actual"] == "100.0"
+
+    rows[0]["cabin_class_known"] = "business"  # user corrects it
+    result = recompute_cumulative(rows)
+
+    assert result[0]["emissions_kg_actual"] == "300"
+    assert result[0]["cumulative_kg_actual"] == "300.0"
+
+
+def test_user_added_columns_survive_a_save(tmp_path):
+    """Hand-editing is documented, so a column someone added isn't silently wiped."""
+    path = tmp_path / "flight_emissions.csv"
+    storage = LocalCSVStorage(str(path))
+    data = row("uid-1", "2026-03-04", "100")
+    data["notes"] = "work trip, paid offset separately"
+
+    storage.save([data])
+    reloaded = storage.load()
+
+    assert reloaded[0]["notes"] == "work trip, paid offset separately"
+    with open(path) as f:
+        assert "notes" in next(csv.reader(f))
+
+
+def test_save_does_not_destroy_the_previous_file_if_writing_fails(tmp_path):
+    """The CSV is the whole product and TripIt can't re-supply old history, so a
+    failed write must leave the previous version intact."""
+    path = tmp_path / "flight_emissions.csv"
+    storage = LocalCSVStorage(str(path))
+    storage.save([row("uid-1", "2026-03-04", "100")])
+    original = path.read_text()
+
+    class Exploding(dict):
+        def get(self, *args, **kwargs):
+            raise OSError("disk full")
+
+    with pytest.raises(OSError):
+        storage.save([Exploding()])
+
+    assert path.read_text() == original
+    # and no temp files left lying around
+    assert [p.name for p in tmp_path.iterdir()] == ["flight_emissions.csv"]
 
 
 def test_rows_with_no_date_sort_first():
