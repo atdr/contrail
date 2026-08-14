@@ -129,7 +129,11 @@ it.
 
 `unparsed` rows are events that looked like a flight but couldn't be confidently parsed. They're
 rare. Check `raw_summary`, and fill the emissions in by hand if you want them counted — the
-cumulative total picks them up on the next sync.
+cumulative total picks them up on the next sync. The same goes for correcting `cabin_class_known`
+on a row: `emissions_kg_actual` and the running total are re-derived from the per-cabin columns
+on every run, not frozen when the row was first written.
+
+Columns you add yourself (a `notes` column, say) are preserved across syncs.
 
 The cumulative total is based on `emissions_kg_actual`, which falls back to economy whenever the
 source doesn't know the cabin. TripIt's feed never does; a future Flighty importer will.
@@ -218,8 +222,16 @@ changelog are handled by release-please.
 
 - The TIM API only returns exact emissions for flights that haven't departed yet. Hence the
   route-average fallback. See "How emissions are computed" above.
-- Departure date comes from the calendar event's start time. For flights leaving very close to
-  local midnight, this can occasionally land a day either side of the true local date.
+- **Departure date comes from the calendar event's start time, in whatever timezone the feed
+  states it in.** If your feed gives times with a timezone (`DTSTART;TZID=...`), the date is the
+  local departure date and this is all fine. If it gives them in UTC (`DTSTART:...Z`), the date is
+  the UTC date — so an evening departure west of Greenwich is recorded as the following day.
+  contrail can't correct for this on its own: recovering the local date needs a mapping from IATA
+  code to timezone, which isn't shipped. A wrong date also means the exact TIM lookup misses and
+  the row falls back to the route average.
+- An existing row is never re-fetched or re-priced, only skipped, so historical figures never
+  shift under you. The flip side: if you rebook a trip, TripIt reuses the calendar UID and
+  contrail keeps the original date, route, and emissions. Delete the row to have it re-imported.
 - Flight detection leans on TripIt's `[Flight]` description tag, with a regex fallback for other
   calendar tools. Anything it can't confidently parse is written as an `unparsed` row rather than
   guessed at.

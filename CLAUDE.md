@@ -50,6 +50,18 @@ future S3/GCS backend inherits the sort-and-total invariant for free.
 - **TIM returns exact emissions only for flights that haven't departed.** The
   route-average fallback isn't a workaround for a bug, it's the documented shape
   of the API. Don't "fix" it.
+- **The TIM key goes in the `x-goog-api-key` header, never the query string.**
+  `requests` embeds the full URL in every `HTTPError` it raises, and the README
+  suggests piping cron output to a log file.
+- **`recompute_cumulative` re-derives `emissions_kg_actual` on every pass**, which
+  is what makes hand-editing the CSV work. `cmd_sync` therefore recomputes and
+  saves even when it finds no new flights — but only writes if something actually
+  changed, or contrail-gh would produce an empty commit every day.
+- **Every value in a row dict is a string**, so a freshly built row compares equal
+  to the same row loaded back from the CSV.
+- **`LocalCSVStorage.save` writes to a temp file and `os.replace`s it.** TripIt's
+  feed only exposes recent and upcoming trips, so a half-written CSV would lose
+  history that cannot be re-fetched.
 - **`tripit_ical` accepts a local path or `file://` URL**, which is what lets CI
   run `--dry-run` against the fixture with no network and no mocking.
 - **`--dry-run` deliberately doesn't require `TIM_API_KEY`**, for the same reason.
