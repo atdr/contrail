@@ -1,0 +1,13 @@
+{
+  "csv_path": "flight_emissions.csv",
+  "sources": [
+    {
+      "type": "tripit_ical",
+      "url": "https://www.tripit.com/feed/ical/private/YOUR-FEED-ID/tripit.ics"
+    }
+  ],
+  "emissions": {
+    "provider": "tim",
+    "api_key": "YOUR-GOOGLE-CLOUD-API-KEY"
+  }
+}

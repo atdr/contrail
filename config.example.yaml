@@ -1,0 +1,49 @@
+# contrail configuration — copy to config.yaml and edit.
+#
+#   cp config.example.yaml config.yaml
+#
+# YAML needs PyYAML:  pip install "contrail[yaml]"
+# If you'd rather not add that dependency, use config.example.json instead —
+# same fields, no comments.
+#
+# config.yaml and config.json are gitignored. Never commit either: both hold
+# secrets.
+#
+# Anything set as an environment variable wins over this file, so a GitHub
+# Actions or cron setup can inject TRIPIT_ICAL_URL / TIM_API_KEY without you
+# editing anything here.
+
+# Where the flight log is written. Relative paths are resolved from the
+# directory you run `contrail sync` in. Overridden by --csv-path or CSV_PATH.
+csv_path: flight_emissions.csv
+
+# Every source listed here is read in a single `contrail sync`.
+sources:
+  - type: tripit_ical
+
+    # Your TripIt calendar feed: profile icon -> Settings -> Calendar Feed.
+    # TREAT THIS AS A PASSWORD. Anyone holding it can read your itineraries.
+    url: https://www.tripit.com/feed/ical/private/YOUR-FEED-ID/tripit.ics
+
+    # A local path or file:// URL works too, which is the easy way to inspect
+    # what your feed actually contains before pointing contrail at it live:
+    #
+    #   curl -s "$TRIPIT_ICAL_URL" > my-feed.ics
+    #   # then set:  url: ./my-feed.ics
+    #   contrail sync --dry-run
+    #
+    # Worth doing once: if the DTSTART lines in your feed end in "Z" the times
+    # are UTC, and an evening departure west of Greenwich will be recorded a day
+    # late. If they carry a TZID the dates are already correct. See the
+    # "Limitations" section of the README.
+
+  # A second source would go here. Each entry is passed to its own importer, so
+  # different importers can take completely different fields.
+
+emissions:
+  provider: tim
+
+  # Google Cloud API key with the Travel Impact Model API enabled. Free, no
+  # billing required. Overridden by the TIM_API_KEY environment variable.
+  # Not needed at all for `contrail sync --dry-run`.
+  api_key: YOUR-GOOGLE-CLOUD-API-KEY
