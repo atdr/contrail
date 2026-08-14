@@ -77,8 +77,17 @@ class TIMEmissionsProvider:
     # -- internals ----------------------------------------------------------
 
     def _post(self, endpoint: str, body: dict) -> dict:
-        url = f"{self.base_url}/flights:{endpoint}?key={self.api_key}"
-        resp = requests.post(url, json=body, timeout=REQUEST_TIMEOUT)
+        # The key goes in a header, never the query string. requests embeds the
+        # full URL in the HTTPError it raises, and the README suggests piping
+        # cron output to a log file — a query-string key would end up written
+        # there in plaintext on any 403 or quota error.
+        url = f"{self.base_url}/flights:{endpoint}"
+        resp = requests.post(
+            url,
+            json=body,
+            headers={"x-goog-api-key": self.api_key},
+            timeout=REQUEST_TIMEOUT,
+        )
         resp.raise_for_status()
         return resp.json()
 
@@ -104,8 +113,11 @@ class TIMEmissionsProvider:
                 ]
             }
             data = self._post("computeFlightEmissions", body)
-            model_version = data.get("modelVersion", {}).get("major") or json.dumps(
-                data.get("modelVersion", {})
+            # `major` is an int, so a legitimate 0 must not fall through to the
+            # serialized-object fallback.
+            major = data.get("modelVersion", {}).get("major")
+            model_version = (
+                str(major) if major is not None else json.dumps(data.get("modelVersion", {}))
             )
             for f, fe in zip(chunk, data.get("flightEmissions", []), strict=False):
                 results[f.key] = (fe.get("emissionsGramsPerPax"), model_version)
@@ -125,7 +137,17 @@ class TIMEmissionsProvider:
             chunk = markets[i : i + BATCH_SIZE]
             body = {"markets": [{"origin": o, "destination": d} for o, d in chunk]}
             data = self._post("computeTypicalFlightEmissions", body)
-            for market, entry in zip(chunk, data.get("typicalFlightEmissions", []), strict=False):
+            entries = data.get("typicalFlightEmissions", [])
+            for position, entry in enumerate(entries):
+                # The response echoes the market back. Trust that over position:
+                # matching positionally would attribute one route's emissions to
+                # a different flight if the API ever reordered or dropped an entry.
+                echoed = entry.get("market") or {}
+                market = (echoed.get("origin"), echoed.get("destination"))
+                if market not in market_to_keys:
+                    if position >= len(chunk):
+                        continue
+                    market = chunk[position]
                 emissions = entry.get("emissionsGramsPerPax")
                 for key in market_to_keys[market]:
                     results[key] = emissions

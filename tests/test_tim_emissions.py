@@ -36,8 +36,8 @@ def mock_post(responses: dict):
     """Return a requests.post stand-in that answers by endpoint, recording calls."""
     calls = []
 
-    def _post(url, json=None, timeout=None):
-        calls.append((url, json))
+    def _post(url, json=None, timeout=None, headers=None):
+        calls.append((url, json, headers or {}))
         endpoint = "typical" if "computeTypicalFlightEmissions" in url else "exact"
         return FakeResponse(responses[endpoint])
 
@@ -114,7 +114,7 @@ def test_typical_fallback_dedups_markets():
     with patch("contrail.emissions.tim.requests.post", post):
         results = TIMEmissionsProvider("key").compute(flights)
 
-    _, typical_body = post.calls[1]
+    _, typical_body, _ = post.calls[1]
     assert typical_body == {"markets": [{"origin": "AAA", "destination": "BBB"}]}
     assert all(r.method == "typical_route_average" for r in results.values())
     assert len(results) == 3
@@ -163,3 +163,61 @@ def test_flight_number_is_sent_as_an_integer():
     assert sent["flightNumber"] == 101
     assert sent["departureDate"] == {"year": 2026, "month": 3, "day": 4}
     assert sent["operatingCarrierCode"] == "XX"
+
+
+def test_api_key_is_sent_as_a_header_never_in_the_url():
+    """A key in the query string leaks into every HTTPError message, and cron
+    setups routinely redirect stderr to a log file."""
+    post = mock_post({"exact": EXACT_PAYLOAD})
+    with patch("contrail.emissions.tim.requests.post", post):
+        TIMEmissionsProvider("SUPERSECRET").compute([flight(1)])
+
+    url, _, headers = post.calls[0]
+    assert "SUPERSECRET" not in url
+    assert "key=" not in url
+    assert headers["x-goog-api-key"] == "SUPERSECRET"
+
+
+def test_a_model_version_of_zero_is_not_treated_as_missing():
+    """`major` is an int, so a legitimate 0 must not fall through to the fallback."""
+    payload = dict(EXACT_PAYLOAD, modelVersion={"major": 0, "minor": 9})
+    post = mock_post({"exact": payload})
+    with patch("contrail.emissions.tim.requests.post", post):
+        results = TIMEmissionsProvider("key").compute([flight(1)])
+
+    assert results["tripit_ical:uid-1"].model_version == "0"
+
+
+def test_typical_results_are_matched_on_the_echoed_market():
+    """Matching positionally would attribute one route's emissions to another
+    flight if the API ever reordered its response."""
+    empty_exact = {"modelVersion": {"major": "1"}, "flightEmissions": [{}, {}]}
+    reversed_response = {
+        "typicalFlightEmissions": [
+            {
+                "market": {"origin": "CCC", "destination": "DDD"},
+                "emissionsGramsPerPax": {"economy": 50000},
+            },
+            {
+                "market": {"origin": "AAA", "destination": "BBB"},
+                "emissionsGramsPerPax": {"economy": 90000},
+            },
+        ]
+    }
+    post = mock_post({"exact": empty_exact, "typical": reversed_response})
+    flights = [flight(1, "AAA", "BBB"), flight(2, "CCC", "DDD")]
+    with patch("contrail.emissions.tim.requests.post", post):
+        results = TIMEmissionsProvider("key").compute(flights)
+
+    assert results["tripit_ical:uid-1"].grams_economy == 90000  # AAA->BBB
+    assert results["tripit_ical:uid-2"].grams_economy == 50000  # CCC->DDD
+
+
+def test_typical_results_still_work_without_an_echoed_market():
+    """Falls back to position when the response omits the market field."""
+    empty_exact = {"modelVersion": {"major": "1"}, "flightEmissions": [{}]}
+    post = mock_post({"exact": empty_exact, "typical": TYPICAL_PAYLOAD})
+    with patch("contrail.emissions.tim.requests.post", post):
+        results = TIMEmissionsProvider("key").compute([flight(1)])
+
+    assert results["tripit_ical:uid-1"].grams_economy == 90000
