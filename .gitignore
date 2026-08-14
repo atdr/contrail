@@ -3,7 +3,11 @@
 config.json
 config.yaml
 config.yml
-flight_emissions.csv
+# Glob, not just the default filename: backups and per-account variants
+# (flight_emissions.backup-*.csv, flight_emissions-work.csv) are real flight
+# data too, and this repo is public.
+flight_emissions*.csv
+*.backup-*.csv
 last_checked.txt
 .env
 .env.*
