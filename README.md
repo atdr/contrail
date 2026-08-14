@@ -66,15 +66,22 @@ spend API calls. It doesn't need `TIM_API_KEY` set.
 contrail uses a hybrid approach, because of how the TIM API behaves:
 
 1. Every new flight goes into `computeFlightEmissions` first. That returns real, flight-specific
-   numbers **only for flights that haven't departed yet**. This is a property of Google's API,
-   not a limitation of contrail.
-2. Anything that comes back empty (i.e. the flight already happened) falls back to
-   `computeTypicalFlightEmissions`, a route/market average that works for any date.
+   numbers **only for flights that haven't departed yet, and only for flights TIM actually knows
+   about**. Not having departed is necessary but not sufficient: an upcoming flight outside TIM's
+   schedule coverage comes back empty too. This is a property of Google's API, not a limitation
+   of contrail.
+2. Anything that comes back empty falls back to `computeTypicalFlightEmissions`, a route/market
+   average that works for any date.
 3. The `emissions_source` column records which method produced each row.
 
-**So run it regularly.** A daily sync locks in the exact figure for each flight while it's still
-upcoming. Flights first discovered *after* they've flown — an initial backfill of your history,
-say — get the route average instead, permanently.
+**So run it regularly.** A daily sync gives each flight the most chances to be priced exactly
+while it is still upcoming. Flights first discovered *after* they've flown — an initial backfill
+of your history, say — get the route average instead.
+
+Note that a row is priced once and never re-priced, so a flight that TIM didn't recognise on the
+day it was first seen keeps its route average even if TIM would recognise it later. In practice a
+long-haul on a major carrier tends to resolve to `exact`; a codeshare or a flight several weeks
+out may not.
 
 ## Configuration
 

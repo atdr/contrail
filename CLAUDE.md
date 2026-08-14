@@ -47,9 +47,12 @@ S3/GCS backend inherits the sort-and-derive invariants for free.
   validated against a real TripIt feed.** Don't tidy them without a failing test.
 - **`FROM_TO_RE` is compiled with `re.IGNORECASE`**, so its `[A-Z]{3}` groups match
   lowercase too. That's intentional (real feeds are inconsistent) but surprising.
-- **TIM returns exact emissions only for flights that haven't departed.** The
-  route-average fallback isn't a workaround for a bug, it's the documented shape
-  of the API. Don't "fix" it.
+- **TIM returns exact emissions only for flights that haven't departed *and* that
+  it knows about.** Verified against a real feed on 2026-08-14: two upcoming
+  Iberia flights three weeks out still came back empty and fell back to the route
+  average, while two BA long-hauls seven weeks out priced exactly. Not having
+  departed is necessary, not sufficient. The fallback isn't a workaround for a
+  bug, it's the shape of the API. Don't "fix" it.
 - **The TIM key goes in the `x-goog-api-key` header, never the query string.**
   `requests` embeds the full URL in every `HTTPError` it raises, and the README
   suggests piping cron output to a log file.
