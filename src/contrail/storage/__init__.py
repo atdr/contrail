@@ -1,4 +1,4 @@
-"""Storage backends, plus the ordering/total invariant every backend shares."""
+"""Storage backends, plus the row invariants every backend shares."""
 
 from __future__ import annotations
 
@@ -15,32 +15,52 @@ def _sort_key(row: dict):
         return datetime.min
 
 
-def recompute_cumulative(rows: list[dict]) -> list[dict]:
-    """Sort by flight date ascending and recompute the running actual-cabin total.
+def kg_value(row: dict) -> float:
+    """A row's actual-cabin emissions as a number, treating anything unusable as 0."""
+    kg = row.get("emissions_kg_actual")
+    try:
+        return float(kg) if kg not in (None, "") else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def total_kg(rows: list[dict]) -> float:
+    """Sum of the actual-cabin emissions across rows.
+
+    Computed on demand for display. Deliberately not stored: the CSV is a record
+    of flights, and a running total is an analysis of it — see the note on
+    ``normalize_rows``.
+    """
+    return round(sum(kg_value(row) for row in rows), 3)
+
+
+def normalize_rows(rows: list[dict]) -> list[dict]:
+    """Sort by flight date ascending and re-derive the actual-cabin column.
 
     ``emissions_kg_actual`` is re-derived from the per-cabin columns on every
     pass, not just when a row is first written. That's what makes the documented
-    repair workflows actually work: filling in a figure by hand on an `unparsed`
-    row, or correcting ``cabin_class_known`` on an existing one, is picked up on
-    the next sync.
+    repair workflows work: filling in a figure by hand on an `unparsed` row, or
+    correcting ``cabin_class_known`` on an existing one, is picked up on the next
+    sync.
+
+    No running total is stored. The CSV is the database; totalling it is the job
+    of whatever reads it, so there is no derived aggregate to fall out of date or
+    to reshuffle every later row when one flight is backfilled out of order.
 
     Lives outside the Storage protocol so every backend inherits the same
-    invariant. Called by the CLI before ``storage.save()``.
+    invariants. Called by the CLI before ``storage.save()``.
     """
     rows.sort(key=_sort_key)
-    running = 0.0
     for row in rows:
         row["emissions_kg_actual"] = actual_kg(row)
-        kg = row.get("emissions_kg_actual")
-        try:
-            kg_val = float(kg) if kg not in (None, "") else 0.0
-        except (TypeError, ValueError):
-            kg_val = 0.0
-        running += kg_val
-        # String, like every other value in a row, so a recomputed row compares
-        # equal to the same row loaded back from the CSV.
-        row["cumulative_kg_actual"] = str(round(running, 3))
     return rows
 
 
-__all__ = ["CSV_FIELDS", "LocalCSVStorage", "Storage", "recompute_cumulative"]
+__all__ = [
+    "CSV_FIELDS",
+    "LocalCSVStorage",
+    "Storage",
+    "kg_value",
+    "normalize_rows",
+    "total_kg",
+]

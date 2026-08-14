@@ -1,12 +1,15 @@
 """CSV storage backend.
 
-Ported from the prototype, with one deliberate schema change: the headline
-cumulative column is now ``cumulative_kg_actual``, a running total of
-``emissions_kg_actual`` (the cabin actually flown, where the source knows it,
-falling back to economy). The per-cabin reference columns are all still there.
+Ported from the prototype, with two deliberate schema changes:
 
-That rename is what lets a future cabin-aware importer improve the headline
-number rather than leaving the CSV with two competing "cumulative" concepts.
+- ``emissions_kg_actual`` records the cabin actually flown where the source
+  knows it, falling back to economy. The per-cabin reference columns are all
+  still there beside it, so a future cabin-aware importer improves this number
+  without the file gaining a second, competing notion of "the" figure.
+- The prototype's running ``cumulative_kg_economy`` column is **gone**. This
+  file is a record of flights; totalling it is the job of whatever reads it.
+  A stored aggregate would go stale against hand edits and would rewrite every
+  row after any backfilled flight.
 """
 
 from __future__ import annotations
@@ -36,13 +39,16 @@ CSV_FIELDS = [
     "emissions_kg_premium_economy",
     "emissions_kg_economy",
     "emissions_kg_actual",  # the cabin flown if known, else economy
-    "cumulative_kg_actual",  # running total of the above, sorted by flight_date
     "raw_summary",  # original source text, for unparsed rows
 ]
 
 # Columns that identify the prototype's pre-v0.1.0 CSV.
 LEGACY_ID_FIELD = "tripit_uid"
 LEGACY_CUMULATIVE_FIELD = "cumulative_kg_economy"
+
+# Columns contrail used to write and no longer does. Dropped on read, so they
+# don't survive indefinitely as if they were a column someone added by hand.
+RETIRED_FIELDS = frozenset({LEGACY_CUMULATIVE_FIELD, "cumulative_kg_actual"})
 
 
 def is_legacy_row(row: dict) -> bool:
@@ -63,7 +69,6 @@ def migrate_legacy_row(row: dict) -> dict:
     # The prototype had no notion of an "actual" cabin, so economy is the
     # honest carry-over; cumulative gets recomputed from scratch anyway.
     migrated["emissions_kg_actual"] = row.get("emissions_kg_economy", "")
-    migrated["cumulative_kg_actual"] = ""
     return migrated
 
 
@@ -79,7 +84,7 @@ def extra_fields(rows: Sequence[dict]) -> list[str]:
     themselves (``notes``, say) is preserved rather than silently dropped on the
     next sync.
     """
-    known = set(CSV_FIELDS)
+    known = set(CSV_FIELDS) | RETIRED_FIELDS
     extra: list[str] = []
     for row in rows:
         for field in row:
@@ -110,7 +115,12 @@ class LocalCSVStorage:
             return []
         with open(self.path, newline="") as f:
             rows = list(csv.DictReader(f))
-        return [migrate_legacy_row(r) if is_legacy_row(r) else r for r in rows]
+        return [
+            migrate_legacy_row(row)
+            if is_legacy_row(row)
+            else {k: v for k, v in row.items() if k not in RETIRED_FIELDS}
+            for row in rows
+        ]
 
     def save(self, rows: Sequence[dict]) -> None:
         parent = os.path.dirname(os.path.abspath(self.path))

@@ -13,7 +13,7 @@ from contrail.config import DEFAULT_CSV_PATH, Config, ConfigError, load_config
 from contrail.emissions import get_provider
 from contrail.importers import IMPORTERS, get_importer
 from contrail.models import FlightRecord, UnparsedEvent
-from contrail.storage import recompute_cumulative
+from contrail.storage import kg_value, normalize_rows, total_kg
 from contrail.storage.local_csv import LocalCSVStorage, actual_kg, row_key
 
 
@@ -76,7 +76,6 @@ def _flight_row(flight: FlightRecord, result, now_iso: str) -> dict:
             result.grams_premium_economy if result else None
         ),
         "emissions_kg_economy": _grams_to_kg(result.grams_economy if result else None),
-        "cumulative_kg_actual": "",  # filled in by recompute_cumulative
         "raw_summary": flight.raw.get("summary", ""),
     }
     row["emissions_kg_actual"] = actual_kg(row)
@@ -103,7 +102,6 @@ def _unparsed_row(event: UnparsedEvent, now_iso: str) -> dict:
         "emissions_kg_premium_economy": "",
         "emissions_kg_economy": "",
         "emissions_kg_actual": "",
-        "cumulative_kg_actual": "",
         "raw_summary": event.raw_text,
     }
 
@@ -123,18 +121,17 @@ def cmd_sync(args) -> int:
         print("No new flights found.")
         if args.dry_run:
             return 0
-        # Still recompute and save: a figure filled in by hand on an `unparsed`
-        # row, or a corrected cabin class, only reaches the cumulative total on a
+        # Still normalize and save: a figure filled in by hand on an `unparsed`
+        # row, or a corrected cabin class, only reaches emissions_kg_actual on a
         # later run. Identical content rewrites the same bytes, so a no-op run
         # produces no commit in contrail-gh.
         before = [dict(row) for row in existing_rows]
-        rows = recompute_cumulative(existing_rows)
+        rows = normalize_rows(existing_rows)
         if rows != before:
             storage.save(rows)
-            total = rows[-1]["cumulative_kg_actual"] if rows else 0
-            print(f"  Recomputed edited rows. Cumulative total: {total} kg CO2e.")
+            print(f"  Picked up hand-edited rows. Total: {total_kg(rows):.1f} kg CO2e.")
         else:
-            print("  CSV is already up to date.")
+            print(f"  CSV is already up to date. Total: {total_kg(rows):.1f} kg CO2e.")
         return 0
 
     print(
@@ -168,17 +165,14 @@ def cmd_sync(args) -> int:
     new_rows = [_flight_row(f, results.get(f.key), now_iso) for f in new_flights]
     new_rows += [_unparsed_row(e, now_iso) for e in new_unparsed]
 
-    all_rows = recompute_cumulative(existing_rows + new_rows)
+    all_rows = normalize_rows(existing_rows + new_rows)
     storage.save(all_rows)
 
-    added_kg = sum(
-        float(r["emissions_kg_actual"]) for r in new_rows if r["emissions_kg_actual"] not in ("",)
-    )
-    total = all_rows[-1]["cumulative_kg_actual"] if all_rows else 0
+    added_kg = sum(kg_value(row) for row in new_rows)
 
     print(f"Added {len(new_rows)} row(s) to {config.csv_path}.")
     print(f"  +{added_kg:.1f} kg CO2e from new flights.")
-    print(f"  New cumulative total: {total} kg CO2e.")
+    print(f"  Total across {len(all_rows)} row(s): {total_kg(all_rows):.1f} kg CO2e.")
     if new_unparsed:
         print(
             f"  {len(new_unparsed)} event(s) could not be parsed automatically — check rows "

@@ -1,10 +1,10 @@
-"""Tests for CSV storage, the cumulative recompute, and the legacy schema migration."""
+"""Tests for CSV storage, row normalization, and the legacy schema migration."""
 
 import csv
 
 import pytest
 
-from contrail.storage import recompute_cumulative
+from contrail.storage import normalize_rows, total_kg
 from contrail.storage.local_csv import (
     CSV_FIELDS,
     LocalCSVStorage,
@@ -49,27 +49,34 @@ def test_save_creates_missing_directories(tmp_path):
     assert path.exists()
 
 
-def test_cumulative_is_recomputed_in_date_order():
-    rows = [
-        row("uid-1", "2026-03-04", "100"),
-        row("uid-2", "2026-06-10", "50"),
-    ]
-    result = recompute_cumulative(rows)
-    assert [r["cumulative_kg_actual"] for r in result] == ["100.0", "150.0"]
+def test_no_cumulative_column_is_stored():
+    """The CSV is a record of flights. Totalling it is the reader's job, so no
+    derived aggregate is written that could fall out of date."""
+    assert not [f for f in CSV_FIELDS if f.startswith("cumulative")]
 
 
-def test_inserting_an_older_flight_reshuffles_the_running_total():
-    """A backfilled flight lands in date order and every later total shifts up."""
-    rows = [
-        row("uid-1", "2026-03-04", "100"),
-        row("uid-2", "2026-06-10", "50"),
-    ]
-    recompute_cumulative(rows)
+def test_rows_are_sorted_by_flight_date():
+    rows = [row("uid-2", "2026-06-10", "50"), row("uid-1", "2026-03-04", "100")]
+    result = normalize_rows(rows)
+    assert [r["source_id"] for r in result] == ["uid-1", "uid-2"]
+    assert total_kg(result) == 150.0
+
+
+def test_backfilled_flight_sorts_into_place_without_touching_other_rows():
+    """Inserting an older flight reorders the file but changes no other row's
+    values — nothing downstream of it has to be rewritten."""
+    rows = [row("uid-1", "2026-03-04", "100"), row("uid-2", "2026-06-10", "50")]
+    normalize_rows(rows)
+    snapshot = {r["source_id"]: dict(r) for r in rows}
+
     rows.append(row("uid-3", "2026-01-01", "25"))
-    result = recompute_cumulative(rows)
+    result = normalize_rows(rows)
 
     assert [r["source_id"] for r in result] == ["uid-3", "uid-1", "uid-2"]
-    assert [r["cumulative_kg_actual"] for r in result] == ["25.0", "125.0", "175.0"]
+    for r in result:
+        if r["source_id"] in snapshot:
+            assert r == snapshot[r["source_id"]]
+    assert total_kg(result) == 175.0
 
 
 def test_unparsed_rows_contribute_nothing_but_keep_their_place():
@@ -79,40 +86,59 @@ def test_unparsed_rows_contribute_nothing_but_keep_their_place():
         row("uid-2", "2026-06-01", "", emissions_source="unparsed"),
         row("uid-3", "2026-12-01", "50"),
     ]
-    result = recompute_cumulative(rows)
+    result = normalize_rows(rows)
 
     assert [r["source_id"] for r in result] == ["uid-1", "uid-2", "uid-3"]
-    assert [r["cumulative_kg_actual"] for r in result] == ["100.0", "100.0", "150.0"]
+    assert total_kg(result) == 150.0
 
 
-def test_hand_filled_emissions_reach_the_cumulative_total():
+def test_hand_filled_emissions_are_picked_up():
     """The README tells people to fill unparsed rows in by hand and says the
-    total picks them up on the next sync. It has to actually do that."""
+    figure counts from the next sync. It has to actually do that."""
     rows = [
         row("uid-1", "2026-01-01", "200.0"),
         row("uid-2", "2026-02-01", "", emissions_source="unparsed"),
     ]
-    recompute_cumulative(rows)
-    assert rows[-1]["cumulative_kg_actual"] == "200.0"
+    normalize_rows(rows)
+    assert total_kg(rows) == 200.0
 
     rows[1]["emissions_kg_economy"] = "250.0"  # user edits the CSV
-    result = recompute_cumulative(rows)
+    result = normalize_rows(rows)
 
     assert result[1]["emissions_kg_actual"] == "250.0"
-    assert result[-1]["cumulative_kg_actual"] == "450.0"
+    assert total_kg(result) == 450.0
 
 
-def test_correcting_the_cabin_class_updates_the_total():
+def test_correcting_the_cabin_class_changes_the_actual_figure():
     """emissions_kg_actual is re-derived every pass, not frozen at write time."""
     rows = [row("uid-1", "2026-01-01", economy="100", emissions_kg_business="300")]
-    recompute_cumulative(rows)
-    assert rows[0]["cumulative_kg_actual"] == "100.0"
+    normalize_rows(rows)
+    assert total_kg(rows) == 100.0
 
     rows[0]["cabin_class_known"] = "business"  # user corrects it
-    result = recompute_cumulative(rows)
+    result = normalize_rows(rows)
 
     assert result[0]["emissions_kg_actual"] == "300"
-    assert result[0]["cumulative_kg_actual"] == "300.0"
+    assert total_kg(result) == 300.0
+
+
+def test_a_stale_cumulative_column_is_dropped_on_read(tmp_path):
+    """Earlier versions wrote cumulative_kg_actual. It must not linger as though
+    it were a column the user added by hand."""
+    path = tmp_path / "flight_emissions.csv"
+    header = [*CSV_FIELDS, "cumulative_kg_actual"]
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=header)
+        writer.writeheader()
+        writer.writerow({**row("uid-1", "2026-03-04", "100"), "cumulative_kg_actual": "100.0"})
+
+    storage = LocalCSVStorage(str(path))
+    loaded = storage.load()
+    assert "cumulative_kg_actual" not in loaded[0]
+
+    storage.save(normalize_rows(loaded))
+    with open(path) as f:
+        assert next(csv.reader(f)) == CSV_FIELDS
 
 
 def test_user_added_columns_survive_a_save(tmp_path):
@@ -152,7 +178,7 @@ def test_save_does_not_destroy_the_previous_file_if_writing_fails(tmp_path):
 
 def test_rows_with_no_date_sort_first():
     rows = [row("uid-1", "2026-01-01", "100"), row("uid-2", "", "")]
-    result = recompute_cumulative(rows)
+    result = normalize_rows(rows)
     assert result[0]["source_id"] == "uid-2"
 
 
@@ -239,10 +265,11 @@ def test_migrated_rows_survive_a_save_and_reload(tmp_path):
     write_legacy_csv(path)
     storage = LocalCSVStorage(str(path))
 
-    rows = recompute_cumulative(storage.load())
+    rows = normalize_rows(storage.load())
     storage.save(rows)
     reloaded = storage.load()
 
     assert not is_legacy_row(reloaded[0])
-    assert reloaded[0]["cumulative_kg_actual"] == "200.0"
+    assert reloaded[0]["emissions_kg_actual"] == "200"
     assert reloaded[0]["source_id"] == "item-legacy@tripit.com"
+    assert "cumulative_kg_economy" not in reloaded[0]

@@ -8,6 +8,7 @@ import pytest
 
 from contrail.cli import main
 from contrail.models import EmissionsResult
+from contrail.storage import total_kg
 
 
 class FakeProvider:
@@ -75,7 +76,9 @@ def test_sync_computes_the_cumulative_total(env):
     assert len(priced) == 3
     assert all(r["emissions_kg_economy"] == "100.0" for r in priced)
     assert all(r["emissions_kg_actual"] == "100.0" for r in priced)  # economy fallback
-    assert rows[-1]["cumulative_kg_actual"] == "300.0"
+    assert total_kg(rows) == 300.0
+    # The total is reported, never stored.
+    assert "cumulative_kg_actual" not in rows[0]
 
 
 def test_unparsed_rows_are_written_with_their_raw_text(env):
@@ -114,8 +117,8 @@ def test_hand_edits_are_picked_up_on_a_run_with_no_new_flights(env, capsys):
 
     updated = read_csv(env / "out.csv")
     assert updated[unparsed_index]["emissions_kg_actual"] == "250.0"
-    assert updated[-1]["cumulative_kg_actual"] == "550.0"  # 300 priced + 250 by hand
-    assert "Recomputed" in capsys.readouterr().out
+    assert total_kg(updated) == 550.0  # 300 priced + 250 by hand
+    assert "hand-edited" in capsys.readouterr().out
 
 
 def test_an_untouched_rerun_leaves_the_file_alone(env, capsys):
