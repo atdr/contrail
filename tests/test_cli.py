@@ -3,6 +3,7 @@
 import csv
 import json
 import pathlib
+from datetime import date
 from unittest.mock import patch
 
 import pytest
@@ -39,6 +40,16 @@ class FakeProvider:
 @pytest.fixture(autouse=True)
 def reset_provider():
     FakeProvider.seen = []
+
+
+# Pinned so the suite doesn't quietly start failing once the fixture's dates
+# fall into the past: the open/frozen boundary is a comparison against today.
+FROZEN_TODAY = date(2026, 8, 14)
+
+
+@pytest.fixture(autouse=True)
+def frozen_clock(monkeypatch):
+    monkeypatch.setattr("contrail.cli._today", lambda: FROZEN_TODAY)
 
 
 @pytest.fixture

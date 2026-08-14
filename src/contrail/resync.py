@@ -91,16 +91,12 @@ def is_better(new_method: str, existing_method: str) -> bool:
     return QUALITY.get(new_method, 0) >= QUALITY.get(existing_method or "", 0)
 
 
-def should_reprice(row: dict, changed: bool) -> bool:
-    """Every open row is re-priced on every sync, changed or not.
-
-    Skipping rows already priced ``exact`` looks like an easy saving and is
-    wrong: TIM's exact figure depends on the aircraft, and short-haul equipment
-    changes repeatedly right up to departure — A319/A320/A321, ceo against neo.
-    A figure captured weeks out can be stale by departure day, and letting it
-    keep catching up is the entire point of freezing only once the flight goes.
-    """
-    return True
+# Every open row is re-priced on every sync, changed or not. Skipping rows
+# already priced `exact` looks like an easy saving and is wrong: TIM's exact
+# figure depends on the aircraft, and short-haul equipment changes repeatedly
+# right up to departure — A319/A320/A321, ceo against neo. A figure captured
+# weeks out can be stale by departure day, and letting it keep catching up is
+# the entire point of freezing only once the flight goes.
 
 
 def restored(row: dict) -> bool:

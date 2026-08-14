@@ -9,7 +9,7 @@ from datetime import date
 import pytest
 
 from contrail.cli import _merge_row, reconcile
-from contrail.models import EmissionsResult, FlightRecord
+from contrail.models import EmissionsResult, FlightRecord, UnparsedEvent
 from contrail.resync import can_cancel, differences, is_better, is_open
 from contrail.storage import normalize_rows, total_kg
 from contrail.storage.local_csv import CSV_FIELDS, STATUS_CANCELLED, actual_kg
@@ -120,8 +120,38 @@ def test_a_changed_upcoming_flight_reports_which_fields_moved():
 
 
 def test_an_upcoming_flight_missing_from_the_feed_is_cancelled():
+    """The source did report other flights, so this one's absence means something."""
+    stored = [row(source_id="gone"), row(source_id="kept")]
+    plan = reconcile(stored, [flight(source_id="kept")], [], TODAY)
+
+    assert [r["source_id"] for r in plan.cancellations] == ["gone"]
+
+
+def test_a_source_that_returned_nothing_cancels_none_of_its_rows():
+    """A rotated feed URL, or a source dropped from the config, must not read as
+    'every one of those flights was called off'."""
+    stored = [
+        row(source_id="tripit-a"),
+        {**row(source_id="flighty-b"), "source": "flighty_csv"},
+    ]
+    plan = reconcile(stored, [flight(source_id="tripit-a")], [], TODAY)
+
+    assert plan.cancellations == []  # flighty_csv said nothing at all this run
+
+
+def test_an_entirely_empty_feed_cancels_nothing():
     plan = reconcile([row()], [], [], TODAY)
-    assert [r["source_id"] for r in plan.cancellations] == ["uid-1"]
+    assert plan.cancellations == []
+
+
+def test_a_key_arriving_as_both_parsed_and_unparsed_is_written_once():
+    """Two UID-less events can hash alike while only one parses. Writing both
+    would duplicate a dedup key forever and discard the priced flight."""
+    event = UnparsedEvent(source="tripit_ical", source_id="uid-1", raw_text="same key")
+    plan = reconcile([], [flight()], [event], TODAY)
+
+    assert len(plan.new_flights) == 1
+    assert plan.new_unparsed == []  # the parsed reading wins
 
 
 def test_a_departed_flight_missing_from_the_feed_is_left_alone():
@@ -276,3 +306,43 @@ def test_differences_ignores_cabin_class():
     """cabin_class_known is never compared: the feed has no opinion on it."""
     stored = row(cabin_class_known="business")
     assert differences(stored, flight()) == []
+
+
+def test_a_blank_answer_never_erases_hand_entered_figures():
+    """TIM returns nothing for a flight it can't price, and the README tells
+    people to fill exactly those rows in themselves."""
+    stored = row(
+        emissions_source="no_data",
+        emissions_kg_economy="250.0",
+        emissions_kg_actual="250.0",
+    )
+    merged = _merge_row(stored, flight(), None, "NOW", changed=False)
+
+    assert merged["emissions_kg_economy"] == "250.0"
+    assert merged["emissions_kg_actual"] == "250.0"
+
+
+def test_a_blank_answer_does_not_erase_them_even_when_the_flight_changed():
+    stored = row(
+        emissions_source="unparsed",
+        emissions_kg_economy="250.0",
+        emissions_kg_actual="250.0",
+    )
+    merged = _merge_row(stored, flight(destination="MAD"), None, "NOW", changed=True)
+
+    assert merged["destination"] == "MAD"  # details still corrected
+    assert merged["emissions_kg_economy"] == "250.0"  # the figure survives
+
+
+def test_a_blank_answer_is_fine_on_a_row_that_had_no_figures():
+    stored = row(emissions_source="", emissions_kg_economy="", emissions_kg_actual="")
+    merged = _merge_row(stored, flight(), None, "NOW", changed=False)
+    assert merged["emissions_source"] == "no_data"
+
+
+def test_raw_summary_follows_a_reroute():
+    stored = row(raw_summary="BA896 LHR to PFO")
+    rerouted = flight(destination="MAD", raw={"summary": "BA896 LHR to MAD"})
+    merged = _merge_row(stored, rerouted, result(), "NOW", changed=True)
+
+    assert merged["raw_summary"] == "BA896 LHR to MAD"

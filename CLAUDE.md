@@ -73,10 +73,20 @@ S3/GCS backend inherits the sort-and-derive invariants for free.
   unconditionally, so `_merge_row` keeps the original `sync_timestamp` on a no-op
   and `cmd_sync` compares against the rows as loaded. Otherwise contrail-gh would
   commit every single day for nothing.
+- **Only a source that returned something may have its rows cancelled.** With
+  several sources configured, a globally non-empty feed would otherwise let one
+  silently empty source cancel every flight it owns. Granularity is the importer
+  id, so two feeds of the same type still can't be told apart — noted, not solved.
+- **A blank answer never overwrites figures that exist.** TIM returns nothing for
+  a flight it can't price, and that is exactly the row the README tells people to
+  fill in by hand.
 - **A cancelled row keeps its per-cabin figures; only `emissions_kg_actual` is
   cleared** (via `actual_kg`). That single point is what drops it from every
   total, including the README's one-liner, with no reader needing to know the
   `status` column exists.
+- **`cli._today()` exists to be monkeypatched.** The open/frozen boundary is a
+  date comparison, so tests that rely on the real clock rot the moment the
+  fixture's dates fall into the past. `tests/test_cli.py` pins it.
 - **Don't document a CSV total by column number.** Adding the operating columns
   silently turned the README's `$16` into `emissions_kg_premium_economy`, a 23%
   overstatement that looked plausible. The documented command now looks the

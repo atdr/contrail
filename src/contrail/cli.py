@@ -17,6 +17,16 @@ from contrail.storage import kg_value, normalize_rows, total_kg
 from contrail.storage.local_csv import LocalCSVStorage, actual_kg, row_key
 
 
+def _today():
+    """Today in UTC.
+
+    Indirected so tests can pin it: the open/frozen boundary is a date
+    comparison, and a suite that depends on the real clock quietly starts
+    failing once its fixture dates fall into the past.
+    """
+    return datetime.now(timezone.utc).date()
+
+
 def _grams_to_kg(grams) -> str:
     """Grams to kilograms, as a string.
 
@@ -82,8 +92,19 @@ def reconcile(existing_rows, flights, unparsed, today) -> Reconciliation:
     by_key = {row_key(row): row for row in existing_rows}
 
     feed_flights = _dedup(flights)
-    feed_unparsed = _dedup(unparsed)
+    # A key that parsed is a key that parsed: never also queue it as unparsed,
+    # or it would be written twice under one dedup key and the priced flight
+    # discarded. Two UID-less events can hash alike while only one parses.
+    feed_unparsed = {
+        key: event for key, event in _dedup(unparsed).items() if key not in feed_flights
+    }
     feed_keys = set(feed_flights) | set(feed_unparsed)
+
+    # Only an importer that actually returned something this run may have its
+    # rows cancelled. Otherwise one silently empty feed — a rotated URL, a
+    # source removed from the config — would cancel all of its flights while
+    # other sources kept the global guard happy.
+    contributing = {item.source for item in list(flights) + list(unparsed)}
 
     for key, flight in feed_flights.items():
         row = by_key.get(key)
@@ -103,6 +124,8 @@ def reconcile(existing_rows, flights, unparsed, today) -> Reconciliation:
     for key, row in by_key.items():
         if key in feed_keys or resync.is_cancelled(row):
             continue
+        if row.get("source") not in contributing:
+            continue  # that source told us nothing this run, so absence proves nothing
         if resync.can_cancel(row, today):
             plan.cancellations.append(row)
 
@@ -151,9 +174,37 @@ def _merge_row(row: dict, flight: FlightRecord, result, now_iso: str, changed: b
     merged = {**row, **{field: fresh[field] for field in resync.FEED_FIELDS}}
     merged["status"] = ""  # present in the feed, so not cancelled
     merged["cabin_class_known"] = row.get("cabin_class_known", "")
+    # Keep the source text in step with the details, or a rerouted row reads
+    # MAD while its raw_summary still says PFO — and that column is the first
+    # thing anyone checks when a row looks wrong.
+    merged["raw_summary"] = fresh["raw_summary"]
 
     method = fresh["emissions_source"]
-    if changed or resync.is_better(method, row.get("emissions_source", "")):
+    # An answer carrying no figures at all never overwrites one that has them.
+    # TIM returns nothing for a flight it cannot price, and the README tells
+    # people to fill exactly those rows in by hand — blanking that is pure loss,
+    # not a correction, even when the flight itself changed.
+    priced = any(
+        fresh[field]
+        for field in (
+            "emissions_kg_first",
+            "emissions_kg_business",
+            "emissions_kg_premium_economy",
+            "emissions_kg_economy",
+        )
+    )
+    has_figures = any(
+        row.get(field)
+        for field in (
+            "emissions_kg_first",
+            "emissions_kg_business",
+            "emissions_kg_premium_economy",
+            "emissions_kg_economy",
+        )
+    )
+    if (priced or not has_figures) and (
+        changed or resync.is_better(method, row.get("emissions_source", ""))
+    ):
         for field in (
             "emissions_source",
             "model_version",
@@ -260,7 +311,9 @@ def cmd_sync(args) -> int:
 
     # A feed that yields nothing is far more likely to be broken than to mean
     # every trip was called off, and acting on it would mark the lot cancelled.
-    if not flights and not unparsed and existing_rows:
+    # A dry run cannot cancel anything, and inspecting a feed that legitimately
+    # holds no flights is precisely what it is for, so let that through.
+    if not flights and not unparsed and existing_rows and not args.dry_run:
         print(
             "The feed returned no flights at all, which usually means a broken or "
             "expired feed URL rather than a genuinely empty calendar.\n"
@@ -269,7 +322,7 @@ def cmd_sync(args) -> int:
         )
         return 1
 
-    today = datetime.now(timezone.utc).date()
+    today = _today()
     plan = reconcile(existing_rows, flights, unparsed, today)
 
     if not plan:
