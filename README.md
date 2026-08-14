@@ -1,7 +1,6 @@
 # contrail
 
-Estimate the CO2e emissions of flights you've taken or booked, and keep a running log with a
-cumulative total.
+Estimate the CO2e emissions of flights you've taken or booked, and keep a running log of them.
 
 contrail pulls flights from one or more *sources* (a TripIt calendar feed today, more later),
 prices each one using Google's [Travel Impact Model](https://travelimpactmodel.org/about-tim)
@@ -89,7 +88,14 @@ Resolution order, highest priority first:
 Environment variables come before the file because that's what every deployment target injects:
 GitHub Actions secrets, a cron environment, and Lambda environment variables all arrive that way.
 
-A config file lets you run several sources in one sync:
+Copy one of the shipped examples and edit it:
+
+```bash
+cp config.example.json config.json      # no extra dependencies
+cp config.example.yaml config.yaml      # commented; needs pip install "contrail[yaml]"
+```
+
+Both are gitignored once renamed. A config file also lets you run several sources in one sync:
 
 ```json
 {
@@ -123,20 +129,31 @@ it.
 | `emissions_source` | `exact`, `typical_route_average`, `unparsed`, or `no_data` |
 | `model_version` | TIM model version (only set on `exact` rows) |
 | `emissions_kg_first` / `_business` / `_premium_economy` / `_economy` | Per-passenger CO2e by cabin, in kg |
-| `emissions_kg_actual` | The cabin actually flown if known, else economy |
-| `cumulative_kg_actual` | Running total of the above, sorted by flight date — **the headline number** |
+| `emissions_kg_actual` | The cabin actually flown if known, else economy — **the per-flight figure to sum** |
 | `raw_summary` | Original source text, useful for `unparsed` rows |
 
+**There is deliberately no cumulative column.** The CSV is a record of flights; totalling it is
+the job of whatever reads it. `contrail sync` prints the current total, and one line of your tool
+of choice gets it from the file:
+
+```bash
+awk -F, 'NR>1 && $16 != "" {t+=$16} END {print t" kg CO2e"}' flight_emissions.csv
+```
+
+A stored running total would go stale the moment you hand-edited a row, and would rewrite every
+later row whenever an older flight was backfilled — noisy in a file that lives in git.
+
 `unparsed` rows are events that looked like a flight but couldn't be confidently parsed. They're
-rare. Check `raw_summary`, and fill the emissions in by hand if you want them counted — the
-cumulative total picks them up on the next sync. The same goes for correcting `cabin_class_known`
-on a row: `emissions_kg_actual` and the running total are re-derived from the per-cabin columns
-on every run, not frozen when the row was first written.
+rare. Check `raw_summary`, and fill the emissions in by hand if you want them counted — the figure
+counts from the next sync. The same goes for correcting `cabin_class_known` on a row:
+`emissions_kg_actual` is re-derived from the per-cabin columns on every run, not frozen when the
+row was first written.
 
-Columns you add yourself (a `notes` column, say) are preserved across syncs.
+Columns you add yourself (a `notes` column, say) are preserved across syncs. Rows are kept sorted
+by flight date.
 
-The cumulative total is based on `emissions_kg_actual`, which falls back to economy whenever the
-source doesn't know the cabin. TripIt's feed never does; a future Flighty importer will.
+`emissions_kg_actual` falls back to economy whenever the source doesn't know the cabin. TripIt's
+feed never does; a future Flighty importer will.
 
 ## Importers
 
@@ -155,8 +172,8 @@ Two are anticipated but not built:
 - **`tripit_api`** — TripIt's official API instead of the calendar feed. Needs OAuth, which the
   per-source config dict can already express.
 - **`flighty_csv`** — a CSV exported from the Flighty app. Flighty exports include the cabin
-  actually flown, so this one would populate `cabin_class` and make the headline cumulative total
-  reflect reality instead of assuming economy.
+  actually flown, so this one would populate `cabin_class` and make `emissions_kg_actual` reflect
+  reality instead of assuming economy.
 
 ## Running it on a schedule
 

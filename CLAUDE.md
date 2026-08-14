@@ -30,8 +30,8 @@ drop anything already stored → price → build rows → `recompute_cumulative`
 The dedup key is `f"{source}:{source_id}"` everywhere. Namespacing by source is
 what lets two importers write to one CSV without their IDs colliding.
 
-`recompute_cumulative` lives in `storage/__init__.py`, not on the protocol, so a
-future S3/GCS backend inherits the sort-and-total invariant for free.
+`normalize_rows` lives in `storage/__init__.py`, not on the protocol, so a future
+S3/GCS backend inherits the sort-and-derive invariants for free.
 
 ## Conventions
 
@@ -53,10 +53,14 @@ future S3/GCS backend inherits the sort-and-total invariant for free.
 - **The TIM key goes in the `x-goog-api-key` header, never the query string.**
   `requests` embeds the full URL in every `HTTPError` it raises, and the README
   suggests piping cron output to a log file.
-- **`recompute_cumulative` re-derives `emissions_kg_actual` on every pass**, which
-  is what makes hand-editing the CSV work. `cmd_sync` therefore recomputes and
-  saves even when it finds no new flights — but only writes if something actually
+- **`normalize_rows` re-derives `emissions_kg_actual` on every pass**, which is
+  what makes hand-editing the CSV work. `cmd_sync` therefore normalizes and saves
+  even when it finds no new flights — but only writes if something actually
   changed, or contrail-gh would produce an empty commit every day.
+- **The CSV stores no running total, deliberately.** It's a record of flights,
+  not an analysis of them. `total_kg()` computes one for display. Don't add a
+  cumulative column back: it goes stale against hand edits, and one backfilled
+  flight rewrites every row after it.
 - **Every value in a row dict is a string**, so a freshly built row compares equal
   to the same row loaded back from the CSV.
 - **`LocalCSVStorage.save` writes to a temp file and `os.replace`s it.** TripIt's
