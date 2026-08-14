@@ -113,3 +113,39 @@ def test_fetch_reads_a_local_path(sample_feed_path):
 def test_fetch_requires_a_url_in_config():
     with pytest.raises(ValueError, match="needs a 'url'"):
         list(TripItICalImporter().fetch({}))
+
+
+UID_LESS_FEED = b"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//exporter without uids//EN
+BEGIN:VEVENT
+DTSTART:20260304T083000Z
+SUMMARY:XX123 AAA to BBB
+DESCRIPTION:[Flight] one
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260610T093000Z
+SUMMARY:YY456 CCC to DDD
+DESCRIPTION:[Flight] two
+END:VEVENT
+END:VCALENDAR
+"""
+
+
+def test_events_without_a_uid_get_distinct_keys():
+    """Plenty of exporters omit UID. Without a fallback every such event would
+    key to `tripit_ical:`, so the first one written would mask all the others,
+    permanently."""
+    records = list(TripItICalImporter().parse(UID_LESS_FEED))
+
+    assert len(records) == 2
+    keys = {r.key for r in records}
+    assert len(keys) == 2
+    assert "tripit_ical:" not in keys
+
+
+def test_uid_less_keys_are_stable_across_runs():
+    """The fallback key must not change between syncs, or every run re-imports."""
+    first = [r.key for r in TripItICalImporter().parse(UID_LESS_FEED)]
+    second = [r.key for r in TripItICalImporter().parse(UID_LESS_FEED)]
+    assert first == second

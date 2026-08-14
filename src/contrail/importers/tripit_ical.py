@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Iterator
 from datetime import datetime
+from hashlib import sha1
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -93,6 +94,20 @@ def _looks_like_url(source: str) -> bool:
     return urlparse(source).scheme in ("http", "https")
 
 
+def _source_id(uid: str, summary: str, dtstart_raw: str) -> str:
+    """The event's UID, or a content hash when it has none.
+
+    TripIt always sets a UID, but this importer reads any iCal file and plenty
+    of exporters omit it. Without a fallback every UID-less event would share
+    the key ``tripit_ical:``, so the first one written would mask every other
+    one — in this run and in every run afterwards.
+    """
+    if uid:
+        return uid
+    digest = sha1(f"{dtstart_raw}\n{summary}".encode(), usedforsecurity=False).hexdigest()
+    return f"sha1:{digest[:16]}"
+
+
 def fetch_ical(url_or_path: str) -> bytes:
     """Read an iCal feed from an http(s) URL, a ``file://`` URL, or a local path.
 
@@ -144,6 +159,8 @@ class TripItICalImporter:
                 dt = dtstart.dt
                 flight_date = dt.date() if isinstance(dt, datetime) else dt
 
+            source_id = _source_id(uid, summary, str(dtstart) if dtstart is not None else "")
+
             carrier_code, flight_number, origin, destination = extract_flight_fields(
                 summary, description, location
             )
@@ -151,7 +168,7 @@ class TripItICalImporter:
             if all([carrier_code, flight_number, origin, destination, flight_date]):
                 yield FlightRecord(
                     source=self.id,
-                    source_id=uid,
+                    source_id=source_id,
                     flight_date=flight_date,
                     carrier_code=carrier_code,
                     flight_number=flight_number,
@@ -175,7 +192,7 @@ class TripItICalImporter:
                 }
                 yield UnparsedEvent(
                     source=self.id,
-                    source_id=uid,
+                    source_id=source_id,
                     # SUMMARY alone often omits the very details a failed parse
                     # needs, so give the reviewer everything.
                     raw_text=" | ".join(filter(None, [summary, description, location])),
