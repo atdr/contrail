@@ -1,0 +1,19 @@
+name: Lint PR title
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      # On a squash merge the PR title becomes the commit subject, which is what
+      # release-please reads. An unconventional title silently drops the change
+      # from the changelog, so validate it up front.
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
