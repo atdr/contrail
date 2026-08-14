@@ -1,0 +1,25 @@
+# Local configuration and personal data — never commit these.
+# `contrail sync` writes ./flight_emissions.csv by default, and this repo is public.
+config.json
+config.yaml
+config.yml
+flight_emissions.csv
+last_checked.txt
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+venv/
+.venv/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "contrail"
+version = "0.1.0"
+description = "Estimate the CO2e emissions of flights you've taken or booked, and keep a running log."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Andreas Richardson" }]
+keywords = ["emissions", "co2", "flights", "travel", "tripit", "sustainability"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "requests>=2.31",
+    "icalendar>=5.0",
+]
+
+[project.optional-dependencies]
+yaml = ["pyyaml>=6"]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "pyyaml>=6",
+]
+
+[project.urls]
+Homepage = "https://github.com/atdr/contrail"
+Issues = "https://github.com/atdr/contrail/issues"
+Template = "https://github.com/atdr/contrail-gh"
+
+[project.scripts]
+contrail = "contrail.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/contrail"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
