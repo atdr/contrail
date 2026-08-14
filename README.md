@@ -246,13 +246,10 @@ changelog are handled by release-please.
 
 - The TIM API only returns exact emissions for flights that haven't departed yet. Hence the
   route-average fallback. See "How emissions are computed" above.
-- **Departure date comes from the calendar event's start time, in whatever timezone the feed
-  states it in.** If your feed gives times with a timezone (`DTSTART;TZID=...`), the date is the
-  local departure date and this is all fine. If it gives them in UTC (`DTSTART:...Z`), the date is
-  the UTC date — so an evening departure west of Greenwich is recorded as the following day.
-  contrail can't correct for this on its own: recovering the local date needs a mapping from IATA
-  code to timezone, which isn't shipped. A wrong date also means the exact TIM lookup misses and
-  the row falls back to the route average.
+- Departure date is the **local date at the origin airport**, which is what TIM asks for. Feeds
+  that state times in UTC (TripIt's does) are converted using the origin's timezone, so an evening
+  departure from the US is recorded on the day the traveller would say, not the following one.
+  Airports contrail can't identify fall back to the date exactly as the feed gave it.
 - An existing row is never re-fetched or re-priced, only skipped, so historical figures never
   shift under you. The flip side: if you rebook a trip, TripIt reuses the calendar UID and
   contrail keeps the original date, route, and emissions. Delete the row to have it re-imported.

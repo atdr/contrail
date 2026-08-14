@@ -69,6 +69,15 @@ S3/GCS backend inherits the sort-and-derive invariants for free.
 - **`LocalCSVStorage.save` writes to a temp file and `os.replace`s it.** TripIt's
   feed only exposes recent and upcoming trips, so a half-written CSV would lose
   history that cannot be re-fetched.
+- **`flight_date` is the local date at the *origin*, not the UTC date.** TIM's
+  `departureDate` is documented as "the date of the flight in the time zone of
+  the origin airport", and TripIt states times in UTC, so `airports.py` converts.
+  A wrong date costs twice: the row is misdated *and* the exact lookup misses.
+  This is why `parse()` extracts the origin before computing the date.
+- **The test fixture's airport codes are deliberately real** (JFK, LHR, CDG, FRA)
+  so CI exercises that conversion, plus QQQ/ZZZ which are unassigned so the
+  fallback is covered too. An earlier fixture used AAA/BBB/CCC believing them
+  fake; they are Anaa, Benson and Jardines del Rey.
 - **`tripit_ical` accepts a local path or `file://` URL**, which is what lets CI
   run `--dry-run` against the fixture with no network and no mocking.
 - **`--dry-run` deliberately doesn't require `TIM_API_KEY`**, for the same reason.

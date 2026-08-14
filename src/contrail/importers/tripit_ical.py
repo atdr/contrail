@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Iterator
-from datetime import datetime
 from hashlib import sha1
 from pathlib import Path
 from urllib.parse import urlparse
@@ -17,6 +16,7 @@ from urllib.parse import urlparse
 import requests
 from icalendar import Calendar
 
+from contrail.airports import departure_date
 from contrail.models import FlightRecord, UnparsedEvent
 
 # Matches "(SFO)" style airport codes anywhere in text
@@ -154,16 +154,15 @@ class TripItICalImporter:
             location = str(component.get("location", ""))
 
             dtstart = component.get("dtstart")
-            flight_date = None
-            if dtstart is not None:
-                dt = dtstart.dt
-                flight_date = dt.date() if isinstance(dt, datetime) else dt
-
             source_id = _source_id(uid, summary, str(dtstart) if dtstart is not None else "")
 
             carrier_code, flight_number, origin, destination = extract_flight_fields(
                 summary, description, location
             )
+
+            # Origin first: the departure date is the local date *there*, and
+            # TripIt states times in UTC.
+            flight_date = departure_date(dtstart.dt if dtstart is not None else None, origin)
 
             if all([carrier_code, flight_number, origin, destination, flight_date]):
                 yield FlightRecord(

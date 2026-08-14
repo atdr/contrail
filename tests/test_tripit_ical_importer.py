@@ -37,32 +37,37 @@ def test_non_flight_events_are_excluded(parsed):
     ids = {item.source_id for item in parsed}
     assert "item-44444444-dddd@example.invalid" not in ids  # train
     assert "item-55555555-eeee@example.invalid" not in ids  # hotel
-    assert len(parsed) == 4
+    assert len(parsed) == 5
 
 
 def test_parses_clean_summary(flights):
-    """TripIt's usual 'XX123 AAA to BBB' SUMMARY is parsed from SUMMARY alone."""
+    """TripIt's usual 'XX123 JFK to LHR' SUMMARY is parsed from SUMMARY alone."""
     flight = next(f for f in flights if f.source_id == "item-11111111-aaaa@example.invalid")
     assert (flight.carrier_code, flight.flight_number) == ("XX", "123")
-    assert (flight.origin, flight.destination) == ("AAA", "BBB")
-    assert flight.flight_date == date(2026, 3, 4)
+    assert (flight.origin, flight.destination) == ("JFK", "LHR")
     assert flight.source == "tripit_ical"
     assert flight.cabin_class is None  # TripIt's feed never reports cabin
+
+    # DTSTART is 2026-03-05T01:30Z, but that is 20:30 on 2026-03-04 at JFK.
+    # TIM wants the local date at the origin, so this must not be the UTC date.
+    assert flight.flight_date == date(2026, 3, 4)
 
 
 def test_falls_back_to_description_and_location(flights):
     """An unhelpful SUMMARY falls back to the combined description blob."""
     flight = next(f for f in flights if f.source_id == "item-22222222-bbbb@example.invalid")
     assert (flight.carrier_code, flight.flight_number) == ("YY", "456")
-    assert (flight.origin, flight.destination) == ("CCC", "DDD")
-    assert flight.flight_date == date(2026, 6, 10)  # date-only DTSTART
+    assert (flight.origin, flight.destination) == ("CDG", "FRA")
+    assert flight.flight_date == date(2026, 6, 10)  # date-only DTSTART, nothing to convert
 
 
 def test_detects_flight_without_the_tripit_tag(flights):
     """Events from other calendar tools are caught by the regex fallback."""
     flight = next(f for f in flights if f.source_id == "item-66666666-ffff@example.invalid")
     assert (flight.carrier_code, flight.flight_number) == ("ZZ", "7")
-    assert (flight.origin, flight.destination) == ("BBB", "AAA")
+    assert (flight.origin, flight.destination) == ("LHR", "JFK")
+    # London is on GMT in November, so the UTC date is already the local one.
+    assert flight.flight_date == date(2026, 11, 18)
 
 
 def test_unparseable_event_keeps_what_it_recovered(unparsed):
@@ -70,12 +75,21 @@ def test_unparseable_event_keeps_what_it_recovered(unparsed):
     assert len(unparsed) == 1
     event = unparsed[0]
     assert event.source_id == "item-33333333-cccc@example.invalid"
+    # No origin was recovered, so there is nothing to convert against.
     assert event.partial["flight_date"] == date(2026, 7, 22)
     assert "carrier_code" not in event.partial
     # raw_text carries description too, not just SUMMARY — a failed parse usually
     # means the details were somewhere SUMMARY doesn't reach.
     assert "Flight home" in event.raw_text
     assert "QWERTY" in event.raw_text
+
+
+def test_unknown_airport_falls_back_to_the_utc_date(flights):
+    """QQQ/ZZZ are in no database. 23:30Z would roll over for most western
+    zones, so this proves the fallback keeps the date as given."""
+    flight = next(f for f in flights if f.source_id == "item-77777777-gggg@example.invalid")
+    assert (flight.origin, flight.destination) == ("QQQ", "ZZZ")
+    assert flight.flight_date == date(2026, 4, 12)
 
 
 def test_dedup_keys_are_namespaced_by_source(flights):

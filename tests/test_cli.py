@@ -64,19 +64,19 @@ def test_sync_writes_the_default_csv_in_the_cwd(env):
     assert run_sync(["sync"]) == 0
 
     rows = read_csv(env / "flight_emissions.csv")
-    assert len(rows) == 4  # 3 parsed flights + 1 unparsed event
+    assert len(rows) == 5  # 4 parsed flights + 1 unparsed event
     assert rows[0]["flight_date"] <= rows[-1]["flight_date"]  # sorted by date
 
 
-def test_sync_computes_the_cumulative_total(env):
+def test_sync_prices_flights_and_reports_a_total(env):
     run_sync(["sync", "--csv-path", "out.csv"])
     rows = read_csv(env / "out.csv")
 
     priced = [r for r in rows if r["emissions_source"] == "exact"]
-    assert len(priced) == 3
+    assert len(priced) == 4
     assert all(r["emissions_kg_economy"] == "100.0" for r in priced)
     assert all(r["emissions_kg_actual"] == "100.0" for r in priced)  # economy fallback
-    assert total_kg(rows) == 300.0
+    assert total_kg(rows) == 400.0
     # The total is reported, never stored.
     assert "cumulative_kg_actual" not in rows[0]
 
@@ -117,7 +117,7 @@ def test_hand_edits_are_picked_up_on_a_run_with_no_new_flights(env, capsys):
 
     updated = read_csv(env / "out.csv")
     assert updated[unparsed_index]["emissions_kg_actual"] == "250.0"
-    assert total_kg(updated) == 550.0  # 300 priced + 250 by hand
+    assert total_kg(updated) == 650.0  # 400 priced + 250 by hand
     assert "hand-edited" in capsys.readouterr().out
 
 
@@ -140,7 +140,7 @@ def test_dry_run_writes_nothing_and_prices_nothing(env, capsys):
     assert FakeProvider.seen == []
     out = capsys.readouterr().out
     assert "Dry run" in out
-    assert "AAA -> BBB" in out
+    assert "JFK -> LHR" in out
 
 
 def test_dry_run_does_not_need_an_api_key(env, monkeypatch, capsys):
@@ -183,7 +183,7 @@ def test_multiple_sources_run_in_one_invocation(tmp_path, sample_feed_path, monk
     run_sync(["sync", "--csv-path", "out.csv"])
     rows = read_csv(tmp_path / "out.csv")
     # Both sources use the same importer id, so the second pass is deduped away.
-    assert len(rows) == 4
+    assert len(rows) == 5
 
 
 def test_unknown_importer_type_is_reported(tmp_path, monkeypatch, capsys):

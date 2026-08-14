@@ -26,6 +26,12 @@ classifiers = [
 dependencies = [
     "requests>=2.31",
     "icalendar>=5.0",
+    # IATA -> IANA timezone mapping, so a UTC departure time resolves to the
+    # local calendar date TIM asks for. MIT, no dependencies, data bundled in
+    # the wheel, so no network call and CI stays hermetic.
+    "airportsdata>=20240000",
+    # zoneinfo has no system tz database to read on Windows.
+    "tzdata; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
