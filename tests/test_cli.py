@@ -64,7 +64,7 @@ def test_sync_writes_the_default_csv_in_the_cwd(env):
     assert run_sync(["sync"]) == 0
 
     rows = read_csv(env / "flight_emissions.csv")
-    assert len(rows) == 5  # 4 parsed flights + 1 unparsed event
+    assert len(rows) == 6  # 5 parsed flights + 1 unparsed event
     assert rows[0]["flight_date"] <= rows[-1]["flight_date"]  # sorted by date
 
 
@@ -73,12 +73,26 @@ def test_sync_prices_flights_and_reports_a_total(env):
     rows = read_csv(env / "out.csv")
 
     priced = [r for r in rows if r["emissions_source"] == "exact"]
-    assert len(priced) == 4
+    assert len(priced) == 5
     assert all(r["emissions_kg_economy"] == "100.0" for r in priced)
     assert all(r["emissions_kg_actual"] == "100.0" for r in priced)  # economy fallback
-    assert total_kg(rows) == 400.0
+    assert total_kg(rows) == 500.0
     # The total is reported, never stored.
     assert "cumulative_kg_actual" not in rows[0]
+
+
+def test_codeshare_columns_are_recorded(env):
+    """The row records both what was booked and what was actually priced."""
+    run_sync(["sync", "--csv-path", "out.csv"])
+    rows = read_csv(env / "out.csv")
+
+    codeshare = next(r for r in rows if r["flight_number"] == "999")
+    assert codeshare["carrier_code"] == "YY"  # as booked
+    assert codeshare["operating_carrier_code"] == "XX"
+    assert codeshare["operating_flight_number"] == "456"
+
+    direct = next(r for r in rows if r["flight_number"] == "123")
+    assert direct["operating_carrier_code"] == "XX"
 
 
 def test_unparsed_rows_are_written_with_their_raw_text(env):
@@ -117,7 +131,7 @@ def test_hand_edits_are_picked_up_on_a_run_with_no_new_flights(env, capsys):
 
     updated = read_csv(env / "out.csv")
     assert updated[unparsed_index]["emissions_kg_actual"] == "250.0"
-    assert total_kg(updated) == 650.0  # 400 priced + 250 by hand
+    assert total_kg(updated) == 750.0  # 500 priced + 250 by hand
     assert "hand-edited" in capsys.readouterr().out
 
 
@@ -183,7 +197,7 @@ def test_multiple_sources_run_in_one_invocation(tmp_path, sample_feed_path, monk
     run_sync(["sync", "--csv-path", "out.csv"])
     rows = read_csv(tmp_path / "out.csv")
     # Both sources use the same importer id, so the second pass is deduped away.
-    assert len(rows) == 5
+    assert len(rows) == 6
 
 
 def test_unknown_importer_type_is_reported(tmp_path, monkeypatch, capsys):

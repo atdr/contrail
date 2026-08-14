@@ -27,8 +27,10 @@ CSV_FIELDS = [
     "source",  # importer id, e.g. "tripit_ical"
     "source_id",  # importer-specific id
     "flight_date",  # YYYY-MM-DD departure date
-    "carrier_code",  # e.g. "UA"
+    "carrier_code",  # e.g. "UA" — as booked (the marketing carrier)
     "flight_number",  # e.g. "523"
+    "operating_carrier_code",  # who actually flies it; differs on a codeshare
+    "operating_flight_number",  # blank when the source doesn't say
     "origin",  # IATA code
     "destination",  # IATA code
     "cabin_class_known",  # cabin the source reported, else blank

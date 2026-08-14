@@ -37,6 +37,13 @@ sources:
     # late. If they carry a TZID the dates are already correct. See the
     # "Limitations" section of the README.
 
+    # Codeshares: contrail reads the operating flight from the event
+    # description and prices that, since TIM only prices operating flights.
+    # Airline names it can't learn from the feed are looked up on Wikidata.
+    # Set this to false to keep contrail off the network entirely; unresolved
+    # codeshares are then priced as booked.
+    # airline_lookup: true
+
   # A second source would go here. Each entry is passed to its own importer, so
   # different importers can take completely different fields.
 

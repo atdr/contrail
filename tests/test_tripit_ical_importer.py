@@ -9,9 +9,11 @@ from datetime import date
 
 import pytest
 
+from contrail.airlines import AirlineResolver
 from contrail.importers.tripit_ical import (
     TripItICalImporter,
     extract_flight_fields,
+    extract_operating_flight,
     fetch_ical,
 )
 from contrail.models import FlightRecord, UnparsedEvent
@@ -19,7 +21,10 @@ from contrail.models import FlightRecord, UnparsedEvent
 
 @pytest.fixture
 def parsed(sample_feed_bytes):
-    return list(TripItICalImporter().parse(sample_feed_bytes))
+    # lookup disabled: the fixture must resolve from the feed alone, so the
+    # suite (and CI's --dry-run) never touches the network.
+    importer = TripItICalImporter(resolver=AirlineResolver(lookup=False))
+    return list(importer.parse(sample_feed_bytes))
 
 
 @pytest.fixture
@@ -37,7 +42,7 @@ def test_non_flight_events_are_excluded(parsed):
     ids = {item.source_id for item in parsed}
     assert "item-44444444-dddd@example.invalid" not in ids  # train
     assert "item-55555555-eeee@example.invalid" not in ids  # hotel
-    assert len(parsed) == 5
+    assert len(parsed) == 6
 
 
 def test_parses_clean_summary(flights):
@@ -163,3 +168,63 @@ def test_uid_less_keys_are_stable_across_runs():
     first = [r.key for r in TripItICalImporter().parse(UID_LESS_FEED)]
     second = [r.key for r in TripItICalImporter().parse(UID_LESS_FEED)]
     assert first == second
+
+
+def test_codeshare_is_priced_as_the_operating_flight(flights):
+    """YY999 is marketed, but Example Airways 456 actually flies it. TIM only
+    prices the operating flight, so that is what must be sent."""
+    flight = next(f for f in flights if f.source_id == "item-88888888-hhhh@example.invalid")
+
+    assert (flight.carrier_code, flight.flight_number) == ("YY", "999")  # as booked
+    assert (flight.operating_carrier_code, flight.operating_flight_number) == ("XX", "456")
+    assert (flight.pricing_carrier_code, flight.pricing_flight_number) == ("XX", "456")
+    assert flight.is_codeshare
+
+
+def test_codeshare_resolves_without_any_lookup(flights):
+    """The airline code is learned from a direct segment elsewhere in the same
+    feed, so a codeshare on a carrier you also fly directly costs no request."""
+    flight = next(f for f in flights if f.source_id == "item-88888888-hhhh@example.invalid")
+    assert flight.operating_carrier_code == "XX"  # from the XX123 segment
+
+
+def test_direct_flights_are_not_marked_as_codeshares(flights):
+    direct = next(f for f in flights if f.source_id == "item-11111111-aaaa@example.invalid")
+    assert not direct.is_codeshare
+    assert (direct.pricing_carrier_code, direct.pricing_flight_number) == ("XX", "123")
+
+
+def test_unresolvable_codeshare_keeps_the_marketing_flight():
+    """With no way to learn the operating airline's code, pricing falls back to
+    what is on the ticket — the behaviour before codeshares were handled."""
+    feed = b"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//test//EN
+BEGIN:VEVENT
+UID:solo-codeshare@example.invalid
+DTSTART:20260305T120000Z
+SUMMARY:YY999 LHR to CDG
+DESCRIPTION:[Flight] LHR to CDG\\n \\nUnknown Air 456, Terminal 5, Gate A1
+END:VEVENT
+END:VCALENDAR
+"""
+    importer = TripItICalImporter(resolver=AirlineResolver(lookup=False))
+    flight = next(iter(importer.parse(feed)))
+
+    assert flight.operating_carrier_code is None
+    assert (flight.pricing_carrier_code, flight.pricing_flight_number) == ("YY", "999")
+    assert not flight.is_codeshare
+
+
+def test_extract_operating_flight_reads_tripits_layout():
+    description = (
+        "[Flight] LHR to MAD\n \nBritish Airways 458, Terminal TERMINAL 5, Gate \n \n"
+        "11:15 AM CEST\nArrive Madrid (MAD)\nTerminal TERM 4 SATELLITE, Gate "
+    )
+    assert extract_operating_flight(description) == ("British Airways", "458")
+
+
+def test_extract_operating_flight_ignores_terminal_lines():
+    """'Terminal TERM 4 SATELLITE, Gate' must not read as an airline and number."""
+    assert extract_operating_flight("Terminal TERM 4 SATELLITE, Gate ") == (None, None)
+    assert extract_operating_flight("") == (None, None)

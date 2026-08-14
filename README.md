@@ -130,7 +130,8 @@ it.
 | `source` | Importer id, e.g. `tripit_ical` |
 | `source_id` | Importer-specific id. `source:source_id` is the dedup key |
 | `flight_date` | Departure date |
-| `carrier_code` / `flight_number` | e.g. `BA` / `896` |
+| `carrier_code` / `flight_number` | e.g. `BA` / `896` — as booked (the marketing flight) |
+| `operating_carrier_code` / `operating_flight_number` | Who actually flies it. Differs from the above on a codeshare, and is what gets priced |
 | `origin` / `destination` | IATA airport codes |
 | `cabin_class_known` | The cabin flown, if the source reported one, else blank |
 | `emissions_source` | `exact`, `typical_route_average`, `unparsed`, or `no_data` |
@@ -169,6 +170,22 @@ v1 ships one:
 - **`tripit_ical`** — reads a TripIt calendar feed. Finds events tagged `[Flight]` in the
   description (TripIt's own marker), with a regex fallback for other calendar tools. Extracts the
   carrier, flight number, and airports from `SUMMARY` first, then `DESCRIPTION` + `LOCATION`.
+
+### Codeshares
+
+A ticket often shows a marketing flight that someone else actually operates — `IB3643` really
+being `BA458`. TIM's field is `operatingCarrierCode` and it will only price the operating flight,
+so a codeshare priced as booked silently falls back to a route average, typically overstating it.
+
+TripIt names the operating flight in the event description, so contrail reads it from there and
+prices that instead. Turning "British Airways" into `BA` uses two sources, cheapest first:
+
+1. **The feed itself.** On a direct flight the description restates the flight already in the
+   summary, which gives an airline-name-to-code pair for free. If you fly a carrier directly and
+   also hold a codeshare it operates, this resolves with no network call at all.
+2. **[Wikidata](https://www.wikidata.org)** (property `P229`, the IATA airline designator), for
+   names the feed never taught us. Set `"airline_lookup": false` on a source to switch this off;
+   an unresolved airline just leaves the flight priced as booked, exactly as before.
 
 Adding another means writing one module implementing the `Importer` protocol
 (`src/contrail/importers/base.py`) and adding one line to the registry in

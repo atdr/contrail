@@ -21,12 +21,34 @@ class FlightRecord:
     origin: str  # IATA code
     destination: str  # IATA code
     cabin_class: str | None = None  # set only if the source knows what was actually flown
+    # On a codeshare the ticket shows a marketing flight (IB3643) that is really
+    # operated by someone else (BA458). TIM's field is `operatingCarrierCode`,
+    # and it only prices the operating flight, so keep both: carrier_code and
+    # flight_number stay as booked, and these carry who actually flies it.
+    operating_carrier_code: str | None = None
+    operating_flight_number: str | None = None
     raw: dict = field(default_factory=dict)  # original source data, for debugging
 
     @property
     def key(self) -> str:
         """Namespaced dedup key. IDs from different sources can never collide."""
         return f"{self.source}:{self.source_id}"
+
+    @property
+    def pricing_carrier_code(self) -> str:
+        """The carrier to price against: whoever actually operates the flight."""
+        return self.operating_carrier_code or self.carrier_code
+
+    @property
+    def pricing_flight_number(self) -> str:
+        return self.operating_flight_number or self.flight_number
+
+    @property
+    def is_codeshare(self) -> bool:
+        return bool(self.operating_flight_number) and (
+            self.operating_carrier_code,
+            self.operating_flight_number,
+        ) != (self.carrier_code, self.flight_number)
 
 
 @dataclass

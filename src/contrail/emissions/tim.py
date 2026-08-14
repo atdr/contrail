@@ -101,8 +101,10 @@ class TIMEmissionsProvider:
                     {
                         "origin": f.origin,
                         "destination": f.destination,
-                        "operatingCarrierCode": f.carrier_code,
-                        "flightNumber": int(f.flight_number),
+                        # The field means what it says: on a codeshare, TIM only
+                        # prices the operating flight, not the marketing one.
+                        "operatingCarrierCode": f.pricing_carrier_code,
+                        "flightNumber": int(f.pricing_flight_number),
                         "departureDate": {
                             "year": f.flight_date.year,
                             "month": f.flight_date.month,

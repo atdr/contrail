@@ -69,6 +69,11 @@ S3/GCS backend inherits the sort-and-derive invariants for free.
 - **`LocalCSVStorage.save` writes to a temp file and `os.replace`s it.** TripIt's
   feed only exposes recent and upcoming trips, so a half-written CSV would lose
   history that cannot be re-fetched.
+- **`tripit_ical.parse()` is deliberately two-pass.** Resolving a codeshare needs
+  the whole feed first: a direct segment teaches the operating airline's IATA
+  code, which then resolves any codeshare it operates with no network call.
+  Wikidata (`P229`) is only the fallback, and failure there is always soft —
+  the flight stays priced as booked.
 - **`flight_date` is the local date at the *origin*, not the UTC date.** TIM's
   `departureDate` is documented as "the date of the flight in the time zone of
   the origin airport", and TripIt states times in UTC, so `airports.py` converts.
