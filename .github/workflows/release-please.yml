@@ -1,0 +1,25 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      # Maintains a rolling release PR from the conventional commits on main.
+      # Merging it bumps the version in pyproject.toml, updates CHANGELOG.md,
+      # tags the release, and publishes it.
+      #
+      # Note: PRs opened by the default GITHUB_TOKEN do not trigger other
+      # workflows, so the release PR itself shows no CI run. The commits it
+      # releases were already tested on main.
+      - uses: googleapis/release-please-action@v5
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
