@@ -60,6 +60,27 @@ S3/GCS backend inherits the sort-and-derive invariants for free.
   what makes hand-editing the CSV work. `cmd_sync` therefore normalizes and saves
   even when it finds no new flights — but only writes if something actually
   changed, or contrail-gh would produce an empty commit every day.
+- **Mutation is confined to flights that haven't departed** (`resync.py`). That
+  is not only caution: TripIt's feed carries just recent and upcoming trips, so
+  "absent from the feed" is ambiguous between cancelled and aged-out. Restricting
+  changes to future flights removes the ambiguity, because a future flight cannot
+  have aged out.
+- **Open rows are re-priced every single run, including `exact` ones.** TIM's
+  exact figure depends on the aircraft and short-haul equipment swaps right up to
+  departure, so an old `exact` can be wrong. `is_better()` stops a transient API
+  blank from downgrading a good figure.
+- **The file is only written when content actually changed.** Re-pricing runs
+  unconditionally, so `_merge_row` keeps the original `sync_timestamp` on a no-op
+  and `cmd_sync` compares against the rows as loaded. Otherwise contrail-gh would
+  commit every single day for nothing.
+- **A cancelled row keeps its per-cabin figures; only `emissions_kg_actual` is
+  cleared** (via `actual_kg`). That single point is what drops it from every
+  total, including the README's one-liner, with no reader needing to know the
+  `status` column exists.
+- **Don't document a CSV total by column number.** Adding the operating columns
+  silently turned the README's `$16` into `emissions_kg_premium_economy`, a 23%
+  overstatement that looked plausible. The documented command now looks the
+  column up by header name.
 - **The CSV stores no running total, deliberately.** It's a record of flights,
   not an analysis of them. `total_kg()` computes one for display. Don't add a
   cumulative column back: it goes stale against hand edits, and one backfilled

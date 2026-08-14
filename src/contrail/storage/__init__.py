@@ -5,7 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 
 from contrail.storage.base import Storage
-from contrail.storage.local_csv import CSV_FIELDS, LocalCSVStorage, actual_kg
+from contrail.storage.local_csv import (
+    CSV_FIELDS,
+    STATUS_CANCELLED,
+    LocalCSVStorage,
+    actual_kg,
+    is_cancelled,
+)
 
 
 def _sort_key(row: dict):
@@ -58,8 +64,10 @@ def normalize_rows(rows: list[dict]) -> list[dict]:
 
 __all__ = [
     "CSV_FIELDS",
+    "STATUS_CANCELLED",
     "LocalCSVStorage",
     "Storage",
+    "is_cancelled",
     "kg_value",
     "normalize_rows",
     "total_kg",

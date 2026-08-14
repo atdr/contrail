@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 import requests
 
-from contrail import __version__
+from contrail import __version__, resync
 from contrail.config import DEFAULT_CSV_PATH, Config, ConfigError, load_config
 from contrail.emissions import get_provider
 from contrail.importers import IMPORTERS, get_importer
@@ -46,15 +46,67 @@ def collect(config: Config) -> tuple[list[FlightRecord], list[UnparsedEvent]]:
     return flights, unparsed
 
 
-def _drop_known(items, seen: set[str]) -> list:
-    """Filter out anything already stored, and dedup within this run."""
-    fresh = []
+def _dedup(items) -> dict:
+    """Feed items keyed for lookup, first occurrence winning."""
+    seen: dict = {}
     for item in items:
-        if item.key in seen:
+        seen.setdefault(item.key, item)
+    return seen
+
+
+class Reconciliation:
+    """What a sync intends to do, worked out before anything is written."""
+
+    def __init__(self):
+        self.new_flights: list[FlightRecord] = []
+        self.new_unparsed: list[UnparsedEvent] = []
+        self.updates: list[tuple[dict, FlightRecord, list[str]]] = []  # row, flight, changed
+        self.cancellations: list[dict] = []
+        self.restorations: list[dict] = []
+
+    @property
+    def repriceable(self) -> list[FlightRecord]:
+        return self.new_flights + [flight for _, flight, _ in self.updates]
+
+    def __bool__(self) -> bool:
+        return bool(self.new_flights or self.new_unparsed or self.updates or self.cancellations)
+
+
+def reconcile(existing_rows, flights, unparsed, today) -> Reconciliation:
+    """Work out what changes against what is already stored.
+
+    Three outcomes per stored row: unknown to us (new), already departed
+    (frozen, never touched), or still upcoming (open, and contrail's to correct).
+    """
+    plan = Reconciliation()
+    by_key = {row_key(row): row for row in existing_rows}
+
+    feed_flights = _dedup(flights)
+    feed_unparsed = _dedup(unparsed)
+    feed_keys = set(feed_flights) | set(feed_unparsed)
+
+    for key, flight in feed_flights.items():
+        row = by_key.get(key)
+        if row is None:
+            plan.new_flights.append(flight)
+        elif resync.is_open(row, today):
+            changed = resync.differences(row, flight)
+            plan.updates.append((row, flight, changed))
+            if resync.restored(row):
+                plan.restorations.append(row)
+        # else: departed, and therefore settled
+
+    for key, event in feed_unparsed.items():
+        if key not in by_key:
+            plan.new_unparsed.append(event)
+
+    for key, row in by_key.items():
+        if key in feed_keys or resync.is_cancelled(row):
             continue
-        seen.add(item.key)
-        fresh.append(item)
-    return fresh
+        if resync.can_cancel(row, today):
+            plan.cancellations.append(row)
+
+    return plan
 
 
 def _flight_row(flight: FlightRecord, result, now_iso: str) -> dict:
@@ -69,6 +121,7 @@ def _flight_row(flight: FlightRecord, result, now_iso: str) -> dict:
         "operating_flight_number": flight.operating_flight_number or "",
         "origin": flight.origin,
         "destination": flight.destination,
+        "status": "",
         "cabin_class_known": flight.cabin_class or "",
         "emissions_source": result.method if result else "no_data",
         "model_version": (result.model_version if result else "") or "",
@@ -82,6 +135,41 @@ def _flight_row(flight: FlightRecord, result, now_iso: str) -> dict:
     }
     row["emissions_kg_actual"] = actual_kg(row)
     return row
+
+
+def _merge_row(row: dict, flight: FlightRecord, result, now_iso: str, changed: bool) -> dict:
+    """Fold a fresh reading of an upcoming flight into the row already stored.
+
+    Two things survive regardless of what the feed says. ``cabin_class_known``
+    is carried over because no importer can supply it, so overwriting it would
+    destroy the only copy. And a worse emissions figure is refused on an
+    unchanged flight, so a transient TIM miss can't downgrade a good number —
+    unless the flight's details changed, in which case it is a different flight
+    and whatever comes back is the truth.
+    """
+    fresh = _flight_row(flight, result, now_iso)
+    merged = {**row, **{field: fresh[field] for field in resync.FEED_FIELDS}}
+    merged["status"] = ""  # present in the feed, so not cancelled
+    merged["cabin_class_known"] = row.get("cabin_class_known", "")
+
+    method = fresh["emissions_source"]
+    if changed or resync.is_better(method, row.get("emissions_source", "")):
+        for field in (
+            "emissions_source",
+            "model_version",
+            "emissions_kg_first",
+            "emissions_kg_business",
+            "emissions_kg_premium_economy",
+            "emissions_kg_economy",
+        ):
+            merged[field] = fresh[field]
+    merged["emissions_kg_actual"] = actual_kg(merged)
+
+    # The timestamp marks a real change, not merely that a sync looked at the
+    # row. Bumping it every run would rewrite the file daily for nothing.
+    if merged != {**row, "emissions_kg_actual": merged["emissions_kg_actual"]}:
+        merged["sync_timestamp"] = now_iso
+    return merged
 
 
 def _unparsed_row(event: UnparsedEvent, now_iso: str) -> dict:
@@ -98,6 +186,7 @@ def _unparsed_row(event: UnparsedEvent, now_iso: str) -> dict:
         "operating_flight_number": "",
         "origin": partial.get("origin") or "",
         "destination": partial.get("destination") or "",
+        "status": "",
         "cabin_class_known": "",
         "emissions_source": "unparsed",
         "model_version": "",
@@ -110,76 +199,140 @@ def _unparsed_row(event: UnparsedEvent, now_iso: str) -> dict:
     }
 
 
+def _describe(plan: Reconciliation) -> None:
+    if plan.new_flights or plan.new_unparsed:
+        print(
+            f"Found {len(plan.new_flights) + len(plan.new_unparsed)} new flight event(s): "
+            f"{len(plan.new_flights)} parsed, {len(plan.new_unparsed)} could not be parsed."
+        )
+    changed = [u for u in plan.updates if u[2]]
+    if changed:
+        print(f"{len(changed)} upcoming flight(s) changed in the feed:")
+        for row, flight, fields in changed:
+            print(
+                f"  {row['carrier_code']}{row['flight_number']}: "
+                f"{', '.join(fields)} — now {flight.flight_date} "
+                f"{flight.origin}->{flight.destination}"
+            )
+    if plan.restorations:
+        print(f"{len(plan.restorations)} cancelled flight(s) reappeared and were restored.")
+    if plan.cancellations:
+        print(f"{len(plan.cancellations)} upcoming flight(s) left the feed, marking cancelled:")
+        for row in plan.cancellations:
+            print(f"  {row['flight_date']}  {row['carrier_code']}{row['flight_number']}")
+
+
+def _dry_run_report(plan: Reconciliation, csv_path: str) -> int:
+    print(f"\nDry run — nothing written to {csv_path}, no emissions API calls made.\n")
+    for flight in plan.new_flights:
+        print(
+            f"  NEW       {flight.flight_date}  "
+            f"{flight.carrier_code}{flight.flight_number:>5}  "
+            f"{flight.origin} -> {flight.destination}  [{flight.source}]"
+        )
+    for event in plan.new_unparsed:
+        print(f"  UNPARSED  [{event.source}]  {event.raw_text[:100]}")
+    for _row, flight, fields in plan.updates:
+        label = "CHANGED" if fields else "REPRICE"
+        print(
+            f"  {label:<9} {flight.flight_date}  "
+            f"{flight.carrier_code}{flight.flight_number:>5}  "
+            f"{flight.origin} -> {flight.destination}"
+            + (f"  ({', '.join(fields)})" if fields else "")
+        )
+    for row in plan.cancellations:
+        print(f"  CANCEL    {row['flight_date']}  {row['carrier_code']}{row['flight_number']}")
+    return 0
+
+
 def cmd_sync(args) -> int:
     config = load_config(config_path=args.config, csv_path=args.csv_path)
 
     storage = LocalCSVStorage(config.csv_path)
     existing_rows = storage.load()
-    seen = {row_key(r) for r in existing_rows}
+    # Snapshot before anything mutates a row, so the file is only rewritten when
+    # its content genuinely changed. Re-pricing every upcoming flight on every
+    # run would otherwise bump sync_timestamp daily and commit in contrail-gh
+    # even when not one figure moved.
+    snapshot = [dict(row) for row in existing_rows]
 
     flights, unparsed = collect(config)
-    new_flights = _drop_known(flights, seen)
-    new_unparsed = _drop_known(unparsed, seen)
 
-    if not new_flights and not new_unparsed:
-        print("No new flights found.")
-        if args.dry_run:
-            return 0
-        # Still normalize and save: a figure filled in by hand on an `unparsed`
-        # row, or a corrected cabin class, only reaches emissions_kg_actual on a
-        # later run. Identical content rewrites the same bytes, so a no-op run
-        # produces no commit in contrail-gh.
-        before = [dict(row) for row in existing_rows]
-        rows = normalize_rows(existing_rows)
-        if rows != before:
-            storage.save(rows)
-            print(f"  Picked up hand-edited rows. Total: {total_kg(rows):.1f} kg CO2e.")
-        else:
-            print(f"  CSV is already up to date. Total: {total_kg(rows):.1f} kg CO2e.")
-        return 0
+    # A feed that yields nothing is far more likely to be broken than to mean
+    # every trip was called off, and acting on it would mark the lot cancelled.
+    if not flights and not unparsed and existing_rows:
+        print(
+            "The feed returned no flights at all, which usually means a broken or "
+            "expired feed URL rather than a genuinely empty calendar.\n"
+            "Refusing to cancel anything. Nothing was written.",
+            file=sys.stderr,
+        )
+        return 1
 
-    print(
-        f"Found {len(new_flights) + len(new_unparsed)} new flight event(s): "
-        f"{len(new_flights)} parsed, {len(new_unparsed)} could not be parsed."
-    )
+    today = datetime.now(timezone.utc).date()
+    plan = reconcile(existing_rows, flights, unparsed, today)
+
+    if not plan:
+        print("No new or changed flights found.")
+
+    _describe(plan)
 
     if args.dry_run:
-        print(f"\nDry run — nothing written to {config.csv_path}, no emissions API calls made.\n")
-        for flight in new_flights:
-            print(
-                f"  {flight.flight_date}  {flight.carrier_code}{flight.flight_number:>5}  "
-                f"{flight.origin} -> {flight.destination}  [{flight.source}]"
-            )
-        for event in new_unparsed:
-            print(f"  UNPARSED  [{event.source}]  {event.raw_text[:100]}")
-        return 0
+        return _dry_run_report(plan, config.csv_path)
 
     results = {}
-    if new_flights:
+    if plan.repriceable:
         provider_cls = get_provider(config.provider_name)
         provider = provider_cls(config.require_api_key())
-        results = provider.compute(new_flights)
-        fallback_count = sum(1 for r in results.values() if r.method == "typical_route_average")
-        if fallback_count:
-            print(
-                f"{fallback_count} flight(s) had already departed; used the route-average fallback."
-            )
+        results = provider.compute(plan.repriceable)
+        fallback = sum(1 for r in results.values() if r.method == "typical_route_average")
+        if fallback:
+            print(f"{fallback} flight(s) had no exact figure; used the route-average fallback.")
 
     now_iso = datetime.now(timezone.utc).isoformat()
-    new_rows = [_flight_row(f, results.get(f.key), now_iso) for f in new_flights]
-    new_rows += [_unparsed_row(e, now_iso) for e in new_unparsed]
+    replacements: dict[str, dict] = {}
 
-    all_rows = normalize_rows(existing_rows + new_rows)
+    for flight in plan.new_flights:
+        replacements[flight.key] = _flight_row(flight, results.get(flight.key), now_iso)
+    for event in plan.new_unparsed:
+        replacements[event.key] = _unparsed_row(event, now_iso)
+    for row, flight, fields in plan.updates:
+        merged = _merge_row(row, flight, results.get(flight.key), now_iso, bool(fields))
+        if merged.get("cabin_class_known") and fields:
+            print(
+                f"  Kept your cabin_class_known='{merged['cabin_class_known']}' on "
+                f"{merged['carrier_code']}{merged['flight_number']} — no source reports "
+                "cabin, so check it still applies after this change."
+            )
+        replacements[row_key(row)] = merged
+    for row in plan.cancellations:
+        replacements[row_key(row)] = resync.cancel({**row, "sync_timestamp": now_iso})
+
+    added_rows = [replacements[item.key] for item in plan.new_flights + plan.new_unparsed]
+    all_rows = [replacements.get(row_key(row), row) for row in existing_rows]
+    all_rows += added_rows
+
+    all_rows = normalize_rows(all_rows)
+
+    # Only write when something actually moved. Re-pricing runs unconditionally,
+    # so most days produce an identical file — and an identical file must not
+    # become a commit.
+    # Compare against the rows exactly as they were read, not a normalized copy:
+    # re-deriving emissions_kg_actual from a hand-edited figure is itself a
+    # change that has to reach the file.
+    if all_rows == snapshot:
+        print(f"  CSV is already up to date. Total: {total_kg(all_rows):.1f} kg CO2e.")
+        return 0
+
     storage.save(all_rows)
 
-    added_kg = sum(kg_value(row) for row in new_rows)
-
-    print(f"Added {len(new_rows)} row(s) to {config.csv_path}.")
-    print(f"  +{added_kg:.1f} kg CO2e from new flights.")
+    print(f"Wrote {config.csv_path}.")
+    if added_rows:
+        print(f"  +{sum(kg_value(row) for row in added_rows):.1f} kg CO2e from new flights.")
     print(f"  Total across {len(all_rows)} row(s): {total_kg(all_rows):.1f} kg CO2e.")
-    if new_unparsed:
+    if plan.new_unparsed:
         print(
-            f"  {len(new_unparsed)} event(s) could not be parsed automatically — check rows "
+            f"  {len(plan.new_unparsed)} event(s) could not be parsed automatically — check rows "
             "with emissions_source='unparsed' and fill them in manually if you want them counted."
         )
     return 0

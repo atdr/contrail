@@ -133,6 +133,7 @@ it.
 | `carrier_code` / `flight_number` | e.g. `BA` / `896` — as booked (the marketing flight) |
 | `operating_carrier_code` / `operating_flight_number` | Who actually flies it. Differs from the above on a codeshare, and is what gets priced |
 | `origin` / `destination` | IATA airport codes |
+| `status` | Blank normally; `cancelled` if an upcoming flight vanished from the feed |
 | `cabin_class_known` | The cabin flown, if the source reported one, else blank |
 | `emissions_source` | `exact`, `typical_route_average`, `unparsed`, or `no_data` |
 | `model_version` | TIM model version (only set on `exact` rows) |
@@ -140,13 +141,44 @@ it.
 | `emissions_kg_actual` | The cabin actually flown if known, else economy — **the per-flight figure to sum** |
 | `raw_summary` | Original source text, useful for `unparsed` rows |
 
+### What a sync may change
+
+**A flight that hasn't departed is contrail's to correct. One that has is left
+alone.** Concretely, while `flight_date` is today or later:
+
+- Its date, route and flight numbers are updated if TripIt now says something
+  different — a retimed flight, or a destination changed on the same booking.
+- It is **re-priced on every run**, even if it already has an `exact` figure.
+  That figure depends on the aircraft, and short-haul equipment changes right up
+  to departure (A319/A320/A321, ceo against neo), so a number from three weeks
+  ago can be stale on the day. A worse answer is never accepted for an unchanged
+  flight, so a momentary API blank can't undo a good figure.
+- If it disappears from the feed it is marked `cancelled` rather than deleted,
+  keeping its per-cabin figures — TIM will never price a past flight again, so a
+  mistaken cancellation would otherwise destroy them permanently. Only
+  `emissions_kg_actual` is cleared, which is what drops it out of any total. If
+  it reappears, it is restored automatically.
+- `cabin_class_known` is never overwritten, because no source can supply it.
+
+From the day after departure a row is frozen, and only your own edits change it.
+That boundary is also what makes cancellation safe to infer at all: TripIt's
+feed only carries recent and upcoming trips, so a *past* flight leaving it just
+means it aged out, while a *future* one leaving it genuinely means something.
+
+If the feed returns no flights whatsoever, contrail refuses to cancel anything
+and exits non-zero, on the grounds that an empty feed is far more likely to be
+broken than to mean every trip was called off.
+
 **There is deliberately no cumulative column.** The CSV is a record of flights; totalling it is
 the job of whatever reads it. `contrail sync` prints the current total, and one line of your tool
 of choice gets it from the file:
 
 ```bash
-awk -F, 'NR>1 && $16 != "" {t+=$16} END {print t" kg CO2e"}' flight_emissions.csv
+awk -F, 'NR==1{for(i=1;i<=NF;i++)if($i=="emissions_kg_actual")c=i;next} $c!=""{t+=$c} END{printf "%.1f kg CO2e\n",t}' flight_emissions.csv
 ```
+
+(It finds the column by name rather than by position, so it keeps working when
+the schema gains a column.)
 
 A stored running total would go stale the moment you hand-edited a row, and would rewrite every
 later row whenever an older flight was backfilled — noisy in a file that lives in git.

@@ -33,6 +33,7 @@ CSV_FIELDS = [
     "operating_flight_number",  # blank when the source doesn't say
     "origin",  # IATA code
     "destination",  # IATA code
+    "status",  # blank = flown or booked; "cancelled" = dropped from the feed
     "cabin_class_known",  # cabin the source reported, else blank
     "emissions_source",  # exact | typical_route_average | unparsed | no_data
     "model_version",  # TIM model version, only set for `exact` rows
@@ -43,6 +44,9 @@ CSV_FIELDS = [
     "emissions_kg_actual",  # the cabin flown if known, else economy
     "raw_summary",  # original source text, for unparsed rows
 ]
+
+# `status` values. Blank means an ordinary flight, booked or flown.
+STATUS_CANCELLED = "cancelled"
 
 # Columns that identify the prototype's pre-v0.1.0 CSV.
 LEGACY_ID_FIELD = "tripit_uid"
@@ -96,8 +100,22 @@ def extra_fields(rows: Sequence[dict]) -> list[str]:
     return extra
 
 
+def is_cancelled(row: dict) -> bool:
+    return (row.get("status") or "").strip().lower() == STATUS_CANCELLED
+
+
 def actual_kg(row: dict) -> str:
-    """Pick the per-cabin column matching ``cabin_class_known``, else economy."""
+    """Pick the per-cabin column matching ``cabin_class_known``, else economy.
+
+    A cancelled flight yields nothing, which is the whole mechanism for keeping
+    it out of any total: ``normalize_rows`` stops re-deriving the column,
+    ``total_kg`` stops summing it, and so does anything else reading the CSV.
+    The per-cabin figures are deliberately left intact — once a flight is in the
+    past TIM will never price it again, so a figure discarded on a mistaken
+    cancellation could not be recovered.
+    """
+    if is_cancelled(row):
+        return ""
     cabin = (row.get("cabin_class_known") or "").strip().lower()
     if cabin in CABIN_CLASSES:
         value = row.get(f"emissions_kg_{cabin}", "")
