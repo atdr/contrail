@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -61,7 +61,7 @@ class JSONLRawLog:
             if not entries:
                 return 0
 
-        captured_at = captured_at or datetime.now(timezone.utc).isoformat()
+        captured_at = captured_at or datetime.now(UTC).isoformat()
         parent = os.path.dirname(os.path.abspath(self.path))
         os.makedirs(parent, exist_ok=True)
 

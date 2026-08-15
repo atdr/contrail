@@ -1,12 +1,12 @@
 """Tests for airport timezone lookup and local departure-date resolution."""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 
 from contrail.airports import departure_date, timezone_for
 
 
 def utc(y, m, d, hh, mm=0):
-    return datetime(y, m, d, hh, mm, tzinfo=timezone.utc)
+    return datetime(y, m, d, hh, mm, tzinfo=UTC)
 
 
 def test_known_airports_resolve():

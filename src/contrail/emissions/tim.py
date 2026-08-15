@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import requests
 
@@ -141,7 +141,7 @@ class TIMEmissionsProvider:
         # rejects the request with a 400, taking the whole batch down with it.
         # So never ask about a flight that has already gone. The caller passes
         # its own clock so one sync never disagrees with itself about "now".
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         upcoming = [f for f in flights if not f.has_departed(now)]
 
         exact = self._compute_exact(upcoming) if upcoming else {}

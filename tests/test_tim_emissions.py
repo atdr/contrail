@@ -1,6 +1,6 @@
 """Tests for the TIM emissions provider. All HTTP is mocked; nothing hits the network."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from unittest.mock import patch
 
 import pytest
@@ -46,7 +46,7 @@ def mock_post(responses: dict):
 
 
 GRAMS = {"first": 400000, "business": 300000, "premiumEconomy": 200000, "economy": 100000}
-BEFORE_DEPARTURE = datetime(2026, 3, 1, tzinfo=timezone.utc)
+BEFORE_DEPARTURE = datetime(2026, 3, 1, tzinfo=UTC)
 MODEL_VERSION = {"major": 3, "minor": 0, "patch": 0, "dated": "20260814"}
 
 
@@ -306,7 +306,7 @@ def test_departed_flights_never_reach_the_detailed_endpoint():
     """It rejects a past departure date with a 400 and fails the whole batch,
     where the plain endpoint merely returns nothing."""
     post = mock_post({"typical": TYPICAL_PAYLOAD})
-    after = datetime(2026, 6, 1, tzinfo=timezone.utc)  # fixture flights are in March
+    after = datetime(2026, 6, 1, tzinfo=UTC)  # fixture flights are in March
     with patch("contrail.emissions.tim.requests.post", post):
         results = TIMEmissionsProvider("key").compute([flight(1)], now=after)
 

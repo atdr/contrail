@@ -12,7 +12,7 @@ python3.12 -m venv venv && ./venv/bin/pip install -e ".[dev]"
 TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics ./venv/bin/contrail sync --dry-run
 ```
 
-Python 3.10+ (`str | None` annotations). The default `python3` on this machine is
+Python 3.11+. The default `python3` on this machine is
 3.7 — use `/usr/local/bin/python3.12` explicitly.
 
 ## Architecture

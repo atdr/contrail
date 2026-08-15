@@ -3,7 +3,7 @@
 import csv
 import json
 import pathlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
@@ -46,7 +46,7 @@ def reset_provider():
 
 # Pinned so the suite doesn't quietly start failing once the fixture's dates
 # fall into the past: the open/frozen boundary is a comparison against now.
-FROZEN_NOW = datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
+FROZEN_NOW = datetime(2026, 8, 14, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture(autouse=True)

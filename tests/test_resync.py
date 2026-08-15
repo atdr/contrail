@@ -4,7 +4,7 @@ The rule under test throughout: a flight that hasn't departed is contrail's to
 correct; one that has is left alone.
 """
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -14,7 +14,7 @@ from contrail.resync import can_cancel, differences, is_better, is_open
 from contrail.storage import normalize_rows, total_kg
 from contrail.storage.local_csv import CSV_FIELDS, STATUS_CANCELLED, actual_kg
 
-NOW = datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 8, 14, 12, 0, tzinfo=UTC)
 PAST = "2026-05-01"
 FUTURE = "2026-12-01"
 
@@ -386,8 +386,8 @@ def test_a_stored_departure_time_is_exact_to_the_minute():
 
 def test_an_unknown_airport_falls_back_to_the_utc_date():
     unknown = row(flight_date="2026-10-11", origin="QQQ", departure_time="")
-    assert is_open(unknown, datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc))
-    assert not is_open(unknown, datetime(2026, 10, 12, 1, 0, tzinfo=timezone.utc))
+    assert is_open(unknown, datetime(2026, 10, 11, 23, 0, tzinfo=UTC))
+    assert not is_open(unknown, datetime(2026, 10, 12, 1, 0, tzinfo=UTC))
 
 
 def test_a_naive_or_unparseable_departure_time_is_ignored():
@@ -404,14 +404,14 @@ def test_gaining_a_column_is_not_a_flight_change():
     stored = row()
     del stored["departure_time"]  # written before the column existed
 
-    upgraded = flight(departure_time=datetime(2026, 12, 1, 9, 0, tzinfo=timezone.utc))
+    upgraded = flight(departure_time=datetime(2026, 12, 1, 9, 0, tzinfo=UTC))
     assert differences(stored, upgraded) == []
 
 
 def test_an_upgraded_row_keeps_its_exact_figure():
     stored = row(emissions_source="exact", emissions_kg_economy="300.0")
     del stored["departure_time"]
-    upgraded = flight(departure_time=datetime(2026, 12, 1, 9, 0, tzinfo=timezone.utc))
+    upgraded = flight(departure_time=datetime(2026, 12, 1, 9, 0, tzinfo=UTC))
 
     merged = _merge_row(
         stored,

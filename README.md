@@ -18,7 +18,7 @@ pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.1.0"
 ```
 
 Pin a tag rather than tracking `main`, so a change here can never surprise a running instance.
-Python 3.10 or newer.
+Python 3.11 or newer.
 
 For local development:
 

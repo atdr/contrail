@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import requests
 
@@ -25,7 +25,7 @@ def _now():
     against now, and a suite that depends on the real clock quietly starts
     failing once its fixture dates fall into the past.
     """
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _grams_to_kg(grams) -> str:
@@ -373,7 +373,7 @@ def cmd_sync(args) -> int:
         if captured:
             print(f"  Recorded {captured} provider response(s) in {raw_log.path}.")
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     replacements: dict[str, dict] = {}
 
     for flight in plan.new_flights:
