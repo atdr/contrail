@@ -38,7 +38,7 @@ dependencies = [
 yaml = ["pyyaml>=6"]
 dev = [
     "pytest>=8",
-    "ruff>=0.6",
+    "ruff>=0.16.2",
     "pyyaml>=6",
 ]
 
