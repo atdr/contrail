@@ -212,8 +212,13 @@ def main() -> int:
     dropped_names = drop_ambiguous_names(rows)
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUTPUT, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["iata", "icao", "name", "aliases"])
+    # LF, not the csv module's default CRLF: the repo normalizes line endings
+    # (.gitattributes `* text=auto`), so CRLF here leaves the checked-out file
+    # permanently differing from what git stores.
+    with open(OUTPUT, "w", newline="\n") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["iata", "icao", "name", "aliases"], lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(rows)
 
