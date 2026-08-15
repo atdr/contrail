@@ -30,6 +30,8 @@ class Config:
     csv_path: str = DEFAULT_CSV_PATH
     sources: list[dict] = field(default_factory=list)
     emissions: dict = field(default_factory=dict)
+    raw_path: str | None = None
+    raw_log: bool = True
 
     @property
     def provider_name(self) -> str:
@@ -61,6 +63,10 @@ class Config:
                 "Treat it as a secret: anyone holding it can see your itineraries."
             )
         return self.sources
+
+
+def csv_path_or_none(value):
+    return str(value) if value else None
 
 
 def _load_file(path: Path) -> dict:
@@ -142,4 +148,15 @@ def load_config(
         or DEFAULT_CSV_PATH
     )
 
-    return Config(csv_path=resolved_csv, sources=sources, emissions=emissions)
+    raw_path = csv_path_or_none(env.get("RAW_PATH") or file_data.get("raw_path"))
+    raw_log = file_data.get("raw_log", True)
+    if env.get("RAW_LOG"):
+        raw_log = env["RAW_LOG"].strip().lower() not in ("0", "false", "no", "off")
+
+    return Config(
+        csv_path=resolved_csv,
+        sources=sources,
+        emissions=emissions,
+        raw_path=raw_path,
+        raw_log=bool(raw_log),
+    )

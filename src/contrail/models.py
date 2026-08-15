@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 
 # Cabin classes contrail knows about, in the order TIM reports them.
 CABIN_CLASSES = ("first", "business", "premium_economy", "economy")
@@ -20,6 +20,10 @@ class FlightRecord:
     flight_number: str
     origin: str  # IATA code
     destination: str  # IATA code
+    # The departure as an instant, in the origin's own timezone, when the source
+    # states a time. flight_date stays the local calendar date, because that is
+    # what TIM asks for and what the log sorts on.
+    departure_time: datetime | None = None
     cabin_class: str | None = None  # set only if the source knows what was actually flown
     # On a codeshare the ticket shows a marketing flight (IB3643) that is really
     # operated by someone else (BA458). TIM's field is `operatingCarrierCode`,
@@ -42,6 +46,19 @@ class FlightRecord:
     @property
     def pricing_flight_number(self) -> str:
         return self.operating_flight_number or self.flight_number
+
+    def has_departed(self, now: datetime) -> bool:
+        """Whether the flight has already gone, as precisely as the source allows.
+
+        Matters to more than the freeze boundary: TIM's detailed endpoint
+        *rejects* a past departure date outright, so asking about a flown flight
+        fails the whole batch rather than simply returning nothing.
+        """
+        from contrail.airports import today_at
+
+        if self.departure_time is not None and self.departure_time.tzinfo is not None:
+            return now >= self.departure_time
+        return self.flight_date < today_at(self.origin, now)
 
     @property
     def is_codeshare(self) -> bool:
@@ -74,7 +91,13 @@ class UnparsedEvent:
 
 @dataclass
 class EmissionsResult:
-    """Per-passenger CO2e for one flight, in grams, as returned by the provider."""
+    """Per-passenger CO2e for one flight, in grams, as returned by the provider.
+
+    Carries more than the four figures because TIM cannot be asked again: once a
+    flight has departed it will not price it, so whatever was captured at the
+    time is all there will ever be. ``raw`` holds the untouched response for the
+    same reason.
+    """
 
     method: str  # "exact" | "typical_route_average" | "no_data"
     model_version: str | None = None
@@ -82,6 +105,11 @@ class EmissionsResult:
     grams_business: int | None = None
     grams_premium_economy: int | None = None
     grams_economy: int | None = None
+    data_source: str | None = None  # TIM | EASA
+    contrails_impact: str | None = None  # negligible | moderate | severe
+    distance_km: int | None = None
+    aircraft_match: str | None = None  # e.g. AIRCRAFT_MAPPING_EXACT
+    raw: dict = field(default_factory=dict)
 
     def grams_for(self, cabin_class: str) -> int | None:
         """Grams for a named cabin class, or None if unknown/unavailable."""

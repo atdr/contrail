@@ -17,7 +17,7 @@ import requests
 from icalendar import Calendar
 
 from contrail.airlines import AirlineResolver
-from contrail.airports import departure_date
+from contrail.airports import departure_date, departure_datetime
 from contrail.models import FlightRecord, UnparsedEvent
 
 # Matches "(SFO)" style airport codes anywhere in text
@@ -210,6 +210,9 @@ class TripItICalImporter:
             # Origin first: the departure date is the local date *there*, and
             # TripIt states times in UTC.
             "flight_date": departure_date(dtstart.dt if dtstart is not None else None, origin),
+            "departure_time": departure_datetime(
+                dtstart.dt if dtstart is not None else None, origin
+            ),
         }
 
     def _operating_flight(self, item: dict) -> tuple[str | None, str | None]:
@@ -241,6 +244,7 @@ class TripItICalImporter:
                 source=self.id,
                 source_id=item["source_id"],
                 flight_date=flight_date,
+                departure_time=item["departure_time"],
                 carrier_code=item["carrier_code"],
                 flight_number=item["flight_number"],
                 origin=item["origin"],

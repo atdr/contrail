@@ -8,6 +8,8 @@ config.yml
 # data too, and this repo is public.
 flight_emissions*.csv
 *.backup-*.csv
+# The raw provider log holds real itineraries too.
+*.raw.jsonl
 last_checked.txt
 .env
 .env.*

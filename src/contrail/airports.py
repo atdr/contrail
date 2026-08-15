@@ -51,6 +51,33 @@ def timezone_for(iata: str | None) -> ZoneInfo | None:
     return zone
 
 
+def today_at(origin: str | None, now: datetime) -> date:
+    """The current calendar date at an airport.
+
+    The freeze boundary compares a stored ``flight_date`` — which is local to the
+    origin — against "today". Using the UTC date instead is wrong for part of
+    every day by the origin's offset: east of UTC it keeps a departed flight
+    looking upcoming, west of UTC it freezes one that hasn't left yet.
+    """
+    zone = timezone_for(origin)
+    return now.astimezone(zone).date() if zone else now.date()
+
+
+def departure_datetime(dtstart, origin: str | None) -> datetime | None:
+    """The departure as an instant, expressed in the origin's own timezone.
+
+    Stored so the boundary can be exact rather than a date comparison. All-day
+    events have no time and yield None; a naive time is RFC 5545 floating, i.e.
+    already local, so it is left as-is rather than shifted.
+    """
+    if not isinstance(dtstart, datetime):
+        return None
+    if dtstart.tzinfo is None:
+        return dtstart
+    zone = timezone_for(origin)
+    return dtstart.astimezone(zone) if zone else dtstart
+
+
 def departure_date(dtstart, origin: str | None) -> date | None:
     """The local calendar date of a departure at ``origin``.
 

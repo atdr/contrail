@@ -4,7 +4,7 @@ The rule under test throughout: a flight that hasn't departed is contrail's to
 correct; one that has is left alone.
 """
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -14,7 +14,7 @@ from contrail.resync import can_cancel, differences, is_better, is_open
 from contrail.storage import normalize_rows, total_kg
 from contrail.storage.local_csv import CSV_FIELDS, STATUS_CANCELLED, actual_kg
 
-TODAY = date(2026, 8, 14)
+NOW = datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
 PAST = "2026-05-01"
 FUTURE = "2026-12-01"
 
@@ -68,19 +68,19 @@ def result(method="exact", economy=200000):
 
 def test_a_flight_departing_today_is_still_open():
     """TIM still answers for a flight departing today, so it can still improve."""
-    assert is_open(row(flight_date="2026-08-14"), TODAY)
+    assert is_open(row(flight_date="2026-08-14"), NOW)
 
 
 def test_yesterdays_flight_is_frozen():
-    assert not is_open(row(flight_date="2026-08-13"), TODAY)
+    assert not is_open(row(flight_date="2026-08-13"), NOW)
 
 
 def test_a_row_with_no_date_stays_open_but_is_never_cancelled():
     """Usually an unparsed event still in the feed: keep it eligible to upgrade,
     but absence can't be read as cancellation when we can't date it."""
     dateless = row(flight_date="")
-    assert is_open(dateless, TODAY)
-    assert not can_cancel(dateless, TODAY)
+    assert is_open(dateless, NOW)
+    assert not can_cancel(dateless, NOW)
 
 
 # -- reconciliation ----------------------------------------------------------
@@ -90,7 +90,7 @@ def test_departed_flights_are_never_touched():
     stored = [row(flight_date=PAST)]
     changed = flight(flight_date=date(2026, 5, 2), destination="MAD")
 
-    plan = reconcile(stored, [changed], [], TODAY)
+    plan = reconcile(stored, [changed], [], NOW)
 
     assert plan.updates == []
     assert plan.cancellations == []
@@ -101,7 +101,7 @@ def test_an_upcoming_flight_still_in_the_feed_is_repriced():
     """Even with nothing changed. Short-haul aircraft swap right up to
     departure, so an exact figure from weeks ago can be stale."""
     stored = [row(emissions_source="exact")]
-    plan = reconcile(stored, [flight()], [], TODAY)
+    plan = reconcile(stored, [flight()], [], NOW)
 
     assert len(plan.updates) == 1
     _, _, fields = plan.updates[0]
@@ -113,7 +113,7 @@ def test_a_changed_upcoming_flight_reports_which_fields_moved():
     stored = [row()]
     moved = flight(flight_date=date(2026, 12, 3), destination="MAD")
 
-    plan = reconcile(stored, [moved], [], TODAY)
+    plan = reconcile(stored, [moved], [], NOW)
     _, _, fields = plan.updates[0]
 
     assert set(fields) == {"flight_date", "destination"}
@@ -122,7 +122,7 @@ def test_a_changed_upcoming_flight_reports_which_fields_moved():
 def test_an_upcoming_flight_missing_from_the_feed_is_cancelled():
     """The source did report other flights, so this one's absence means something."""
     stored = [row(source_id="gone"), row(source_id="kept")]
-    plan = reconcile(stored, [flight(source_id="kept")], [], TODAY)
+    plan = reconcile(stored, [flight(source_id="kept")], [], NOW)
 
     assert [r["source_id"] for r in plan.cancellations] == ["gone"]
 
@@ -134,13 +134,13 @@ def test_a_source_that_returned_nothing_cancels_none_of_its_rows():
         row(source_id="tripit-a"),
         {**row(source_id="flighty-b"), "source": "flighty_csv"},
     ]
-    plan = reconcile(stored, [flight(source_id="tripit-a")], [], TODAY)
+    plan = reconcile(stored, [flight(source_id="tripit-a")], [], NOW)
 
     assert plan.cancellations == []  # flighty_csv said nothing at all this run
 
 
 def test_an_entirely_empty_feed_cancels_nothing():
-    plan = reconcile([row()], [], [], TODAY)
+    plan = reconcile([row()], [], [], NOW)
     assert plan.cancellations == []
 
 
@@ -148,7 +148,7 @@ def test_a_key_arriving_as_both_parsed_and_unparsed_is_written_once():
     """Two UID-less events can hash alike while only one parses. Writing both
     would duplicate a dedup key forever and discard the priced flight."""
     event = UnparsedEvent(source="tripit_ical", source_id="uid-1", raw_text="same key")
-    plan = reconcile([], [flight()], [event], TODAY)
+    plan = reconcile([], [flight()], [event], NOW)
 
     assert len(plan.new_flights) == 1
     assert plan.new_unparsed == []  # the parsed reading wins
@@ -157,25 +157,25 @@ def test_a_key_arriving_as_both_parsed_and_unparsed_is_written_once():
 def test_a_departed_flight_missing_from_the_feed_is_left_alone():
     """TripIt only exposes recent trips, so a past flight leaving the feed means
     it aged out — not that it was cancelled."""
-    plan = reconcile([row(flight_date=PAST)], [], [], TODAY)
+    plan = reconcile([row(flight_date=PAST)], [], [], NOW)
     assert plan.cancellations == []
 
 
 def test_a_cancelled_flight_that_reappears_is_restored():
     stored = [row(status=STATUS_CANCELLED)]
-    plan = reconcile(stored, [flight()], [], TODAY)
+    plan = reconcile(stored, [flight()], [], NOW)
 
     assert len(plan.restorations) == 1
     assert len(plan.updates) == 1
 
 
 def test_an_already_cancelled_flight_is_not_cancelled_again():
-    plan = reconcile([row(status=STATUS_CANCELLED)], [], [], TODAY)
+    plan = reconcile([row(status=STATUS_CANCELLED)], [], [], NOW)
     assert plan.cancellations == []
 
 
 def test_a_flight_not_yet_stored_is_new():
-    plan = reconcile([], [flight()], [], TODAY)
+    plan = reconcile([], [flight()], [], NOW)
     assert len(plan.new_flights) == 1
     assert plan.updates == []
 
@@ -346,3 +346,52 @@ def test_raw_summary_follows_a_reroute():
     merged = _merge_row(stored, rerouted, result(), "NOW", changed=True)
 
     assert merged["raw_summary"] == "BA896 LHR to MAD"
+
+
+# -- the freeze boundary, in the origin's timezone ---------------------------
+
+
+def at(tzname, y, m, d, hh, mm=0):
+    from zoneinfo import ZoneInfo
+
+    return datetime(y, m, d, hh, mm, tzinfo=ZoneInfo(tzname))
+
+
+def test_a_departed_flight_east_of_utc_is_frozen():
+    """At 08:00 in Tokyo the UTC date is still yesterday. Comparing against it
+    left a flown flight looking upcoming — and therefore cancellable."""
+    flown = row(flight_date="2026-10-11", origin="HND", departure_time="")
+    now = at("Asia/Tokyo", 2026, 10, 12, 8)
+
+    assert not is_open(flown, now)
+    assert not can_cancel(flown, now)
+
+
+def test_an_upcoming_flight_west_of_utc_stays_open():
+    """At 18:00 in Los Angeles the UTC date is already tomorrow, which used to
+    freeze a flight hours before it left."""
+    upcoming = row(flight_date="2026-10-11", origin="LAX", departure_time="")
+    assert is_open(upcoming, at("America/Los_Angeles", 2026, 10, 11, 18))
+
+
+def test_a_stored_departure_time_is_exact_to_the_minute():
+    flight_row = row(
+        flight_date="2026-10-11",
+        origin="LAX",
+        departure_time="2026-10-11T20:00:00-07:00",
+    )
+    assert is_open(flight_row, at("America/Los_Angeles", 2026, 10, 11, 19, 59))
+    assert not is_open(flight_row, at("America/Los_Angeles", 2026, 10, 11, 20, 1))
+
+
+def test_an_unknown_airport_falls_back_to_the_utc_date():
+    unknown = row(flight_date="2026-10-11", origin="QQQ", departure_time="")
+    assert is_open(unknown, datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc))
+    assert not is_open(unknown, datetime(2026, 10, 12, 1, 0, tzinfo=timezone.utc))
+
+
+def test_a_naive_or_unparseable_departure_time_is_ignored():
+    """Falls through to the date comparison rather than guessing at an offset."""
+    for value in ("2026-10-11T20:00:00", "not a timestamp"):
+        r = row(flight_date="2026-10-11", origin="LAX", departure_time=value)
+        assert is_open(r, at("America/Los_Angeles", 2026, 10, 11, 18))

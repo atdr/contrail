@@ -91,6 +91,16 @@ S3/GCS backend inherits the sort-and-derive invariants for free.
   silently turned the README's `$16` into `emissions_kg_premium_economy`, a 23%
   overstatement that looked plausible. The documented command now looks the
   column up by header name.
+- **`computeDetailedFlightEmissions` rejects a past departure date with a 400**,
+  where the plain endpoint merely returns nothing — and one past flight fails the
+  whole batch. `compute()` therefore only asks about flights that haven't
+  departed, and falls back to the plain endpoint if a batch is refused anyway.
+- **The freeze boundary is the departure instant**, from `departure_time` when
+  the source gives one, else the local date *at the origin*. Never the UTC date:
+  that is wrong for part of every day by the origin's offset, in both directions.
+- **The raw sidecar only records an answer that differs from the last one.**
+  Upcoming flights are re-priced every run, so appending unconditionally would
+  grow the file and commit daily for no new information.
 - **The CSV stores no running total, deliberately.** It's a record of flights,
   not an analysis of them. `total_kg()` computes one for display. Don't add a
   cumulative column back: it goes stale against hand edits, and one backfilled

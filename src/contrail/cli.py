@@ -13,18 +13,19 @@ from contrail.config import DEFAULT_CSV_PATH, Config, ConfigError, load_config
 from contrail.emissions import get_provider
 from contrail.importers import IMPORTERS, get_importer
 from contrail.models import FlightRecord, UnparsedEvent
-from contrail.storage import kg_value, normalize_rows, total_kg
+from contrail.storage import JSONLRawLog, kg_value, normalize_rows, total_kg
 from contrail.storage.local_csv import LocalCSVStorage, actual_kg, row_key
+from contrail.storage.raw_log import default_path as default_raw_path
 
 
-def _today():
-    """Today in UTC.
+def _now():
+    """The current instant, in UTC.
 
-    Indirected so tests can pin it: the open/frozen boundary is a date
-    comparison, and a suite that depends on the real clock quietly starts
+    Indirected so tests can pin it: the open/frozen boundary is a comparison
+    against now, and a suite that depends on the real clock quietly starts
     failing once its fixture dates fall into the past.
     """
-    return datetime.now(timezone.utc).date()
+    return datetime.now(timezone.utc)
 
 
 def _grams_to_kg(grams) -> str:
@@ -82,7 +83,7 @@ class Reconciliation:
         return bool(self.new_flights or self.new_unparsed or self.updates or self.cancellations)
 
 
-def reconcile(existing_rows, flights, unparsed, today) -> Reconciliation:
+def reconcile(existing_rows, flights, unparsed, now) -> Reconciliation:
     """Work out what changes against what is already stored.
 
     Three outcomes per stored row: unknown to us (new), already departed
@@ -110,7 +111,7 @@ def reconcile(existing_rows, flights, unparsed, today) -> Reconciliation:
         row = by_key.get(key)
         if row is None:
             plan.new_flights.append(flight)
-        elif resync.is_open(row, today):
+        elif resync.is_open(row, now):
             changed = resync.differences(row, flight)
             plan.updates.append((row, flight, changed))
             if resync.restored(row):
@@ -126,7 +127,7 @@ def reconcile(existing_rows, flights, unparsed, today) -> Reconciliation:
             continue
         if row.get("source") not in contributing:
             continue  # that source told us nothing this run, so absence proves nothing
-        if resync.can_cancel(row, today):
+        if resync.can_cancel(row, now):
             plan.cancellations.append(row)
 
     return plan
@@ -144,10 +145,15 @@ def _flight_row(flight: FlightRecord, result, now_iso: str) -> dict:
         "operating_flight_number": flight.operating_flight_number or "",
         "origin": flight.origin,
         "destination": flight.destination,
+        "departure_time": flight.departure_time.isoformat() if flight.departure_time else "",
         "status": "",
         "cabin_class_known": flight.cabin_class or "",
         "emissions_source": result.method if result else "no_data",
         "model_version": (result.model_version if result else "") or "",
+        "emissions_data_source": (result.data_source if result else "") or "",
+        "contrails_impact": (result.contrails_impact if result else "") or "",
+        "distance_km": str(result.distance_km) if result and result.distance_km else "",
+        "aircraft_match": (result.aircraft_match if result else "") or "",
         "emissions_kg_first": _grams_to_kg(result.grams_first if result else None),
         "emissions_kg_business": _grams_to_kg(result.grams_business if result else None),
         "emissions_kg_premium_economy": _grams_to_kg(
@@ -208,6 +214,10 @@ def _merge_row(row: dict, flight: FlightRecord, result, now_iso: str, changed: b
         for field in (
             "emissions_source",
             "model_version",
+            "emissions_data_source",
+            "contrails_impact",
+            "distance_km",
+            "aircraft_match",
             "emissions_kg_first",
             "emissions_kg_business",
             "emissions_kg_premium_economy",
@@ -237,6 +247,7 @@ def _unparsed_row(event: UnparsedEvent, now_iso: str) -> dict:
         "operating_flight_number": "",
         "origin": partial.get("origin") or "",
         "destination": partial.get("destination") or "",
+        "departure_time": "",
         "status": "",
         "cabin_class_known": "",
         "emissions_source": "unparsed",
@@ -322,8 +333,8 @@ def cmd_sync(args) -> int:
         )
         return 1
 
-    today = _today()
-    plan = reconcile(existing_rows, flights, unparsed, today)
+    now = _now()
+    plan = reconcile(existing_rows, flights, unparsed, now)
 
     if not plan:
         print("No new or changed flights found.")
@@ -337,10 +348,26 @@ def cmd_sync(args) -> int:
     if plan.repriceable:
         provider_cls = get_provider(config.provider_name)
         provider = provider_cls(config.require_api_key())
-        results = provider.compute(plan.repriceable)
+        results = provider.compute(plan.repriceable, now=now)
         fallback = sum(1 for r in results.values() if r.method == "typical_route_average")
         if fallback:
             print(f"{fallback} flight(s) had no exact figure; used the route-average fallback.")
+
+        # Keep everything the provider said, not only what the CSV has columns
+        # for: TIM will not price a departed flight again, so this is the only
+        # chance to record the provenance behind each figure.
+        raw_log = JSONLRawLog(
+            config.raw_path or default_raw_path(config.csv_path), enabled=config.raw_log
+        )
+        captured = raw_log.append(
+            [
+                {"key": key, "method": result.method, "response": result.raw}
+                for key, result in results.items()
+                if result.raw
+            ]
+        )
+        if captured:
+            print(f"  Recorded {captured} provider response(s) in {raw_log.path}.")
 
     now_iso = datetime.now(timezone.utc).isoformat()
     replacements: dict[str, dict] = {}

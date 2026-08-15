@@ -33,10 +33,15 @@ CSV_FIELDS = [
     "operating_flight_number",  # blank when the source doesn't say
     "origin",  # IATA code
     "destination",  # IATA code
+    "departure_time",  # ISO 8601 in the origin's timezone; blank for all-day events
     "status",  # blank = flown or booked; "cancelled" = dropped from the feed
     "cabin_class_known",  # cabin the source reported, else blank
     "emissions_source",  # exact | typical_route_average | unparsed | no_data
-    "model_version",  # TIM model version, only set for `exact` rows
+    "model_version",  # full TIM version, e.g. 3.0.0+20260814
+    "emissions_data_source",  # TIM | EASA (`source` is taken by the importer id)
+    "contrails_impact",  # negligible | moderate | severe
+    "distance_km",
+    "aircraft_match",  # how well TIM matched an airframe; it never names one
     "emissions_kg_first",
     "emissions_kg_business",
     "emissions_kg_premium_economy",

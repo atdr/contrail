@@ -12,6 +12,7 @@ from contrail.storage.local_csv import (
     actual_kg,
     is_cancelled,
 )
+from contrail.storage.raw_log import JSONLRawLog, default_path
 
 
 def _sort_key(row: dict):
@@ -64,6 +65,8 @@ def normalize_rows(rows: list[dict]) -> list[dict]:
 
 __all__ = [
     "CSV_FIELDS",
+    "JSONLRawLog",
+    "default_path",
     "STATUS_CANCELLED",
     "LocalCSVStorage",
     "Storage",

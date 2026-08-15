@@ -3,7 +3,7 @@
 import csv
 import json
 import pathlib
-from datetime import date
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
@@ -22,7 +22,7 @@ class FakeProvider:
     def __init__(self, api_key):
         self.api_key = api_key
 
-    def compute(self, flights):
+    def compute(self, flights, now=None):
         FakeProvider.seen = list(flights)
         return {
             f.key: EmissionsResult(
@@ -36,6 +36,8 @@ class FakeProvider:
             for f in flights
         }
 
+    RAW = {"stub": True}
+
 
 @pytest.fixture(autouse=True)
 def reset_provider():
@@ -43,13 +45,13 @@ def reset_provider():
 
 
 # Pinned so the suite doesn't quietly start failing once the fixture's dates
-# fall into the past: the open/frozen boundary is a comparison against today.
-FROZEN_TODAY = date(2026, 8, 14)
+# fall into the past: the open/frozen boundary is a comparison against now.
+FROZEN_NOW = datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
 
 
 @pytest.fixture(autouse=True)
 def frozen_clock(monkeypatch):
-    monkeypatch.setattr("contrail.cli._today", lambda: FROZEN_TODAY)
+    monkeypatch.setattr("contrail.cli._now", lambda: FROZEN_NOW)
 
 
 @pytest.fixture

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Protocol, runtime_checkable
 
 from contrail.models import EmissionsResult, FlightRecord
@@ -19,6 +20,12 @@ class EmissionsProvider(Protocol):
 
     id: str
 
-    def compute(self, flights: Sequence[FlightRecord]) -> dict[str, EmissionsResult]:
-        """Return results keyed by ``FlightRecord.key``."""
+    def compute(
+        self, flights: Sequence[FlightRecord], now: datetime | None = None
+    ) -> dict[str, EmissionsResult]:
+        """Return results keyed by ``FlightRecord.key``.
+
+        ``now`` lets the caller impose one clock on the whole sync; providers
+        that don't care about time may ignore it.
+        """
         ...

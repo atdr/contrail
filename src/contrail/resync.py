@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
+from contrail.airports import today_at
 from contrail.models import FlightRecord
 from contrail.storage.local_csv import STATUS_CANCELLED, is_cancelled
 
@@ -20,6 +21,7 @@ from contrail.storage.local_csv import STATUS_CANCELLED, is_cancelled
 # loss rather than a correction.
 FEED_FIELDS = (
     "flight_date",
+    "departure_time",
     "carrier_code",
     "flight_number",
     "operating_carrier_code",
@@ -45,32 +47,65 @@ def row_date(row: dict) -> date | None:
         return None
 
 
-def is_open(row: dict, today: date) -> bool:
+def row_departure(row: dict) -> datetime | None:
+    """The stored departure instant, if the source gave a time."""
+    value = (row.get("departure_time") or "").strip()
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else None
+
+
+def has_departed(row: dict, now: datetime) -> bool | None:
+    """Whether the flight has already gone, or None when it can't be told.
+
+    Three levels of confidence, best first:
+
+    1. A stored departure instant answers exactly, with no date fuzz at all.
+    2. Otherwise compare the local date *at the origin* — never the UTC date,
+       which is wrong for part of every day by the origin's offset.
+    3. With no usable origin, fall back to the UTC date.
+    """
+    departure = row_departure(row)
+    if departure is not None:
+        return now >= departure
+
+    flight_date = row_date(row)
+    if flight_date is None:
+        return None
+    return flight_date < today_at(row.get("origin"), now)
+
+
+def is_open(row: dict, now: datetime) -> bool:
     """True while the flight still hasn't departed, so contrail may change it.
 
-    A row with no usable date counts as open: it is almost always an unparsed
-    event still sitting in the feed, and keeping it open is what lets it upgrade
-    once the feed fills the details in.
+    A row we cannot date counts as open: it is almost always an unparsed event
+    still sitting in the feed, and keeping it open is what lets it upgrade once
+    the feed fills the details in.
     """
-    flight_date = row_date(row)
-    return True if flight_date is None else flight_date >= today
+    departed = has_departed(row, now)
+    return True if departed is None else not departed
 
 
-def can_cancel(row: dict, today: date) -> bool:
+def can_cancel(row: dict, now: datetime) -> bool:
     """Whether disappearing from the feed may be read as a cancellation.
 
-    Stricter than :func:`is_open`: this needs a real future date. Without one
-    there is no way to tell a cancellation from a flight that simply aged out,
-    so the row is left alone.
+    Stricter than :func:`is_open`: an undatable row is left alone, because there
+    is no way to tell a cancellation from a flight that simply aged out of a
+    feed that only carries recent trips.
     """
-    flight_date = row_date(row)
-    return flight_date is not None and flight_date >= today
+    departed = has_departed(row, now)
+    return departed is False
 
 
 def feed_view(flight: FlightRecord) -> dict:
     """What the feed says about a flight, in the CSV's own string terms."""
     return {
         "flight_date": flight.flight_date.isoformat(),
+        "departure_time": flight.departure_time.isoformat() if flight.departure_time else "",
         "carrier_code": flight.carrier_code,
         "flight_number": flight.flight_number,
         "operating_carrier_code": flight.operating_carrier_code or "",

@@ -74,6 +74,11 @@ contrail uses a hybrid approach, because of how the TIM API behaves:
    average that works for any date.
 3. The `emissions_source` column records which method produced each row.
 
+There is no point timing a sync to just before departure. TIM serves a **pre-built dataset**,
+identified by the `+dated` part of `model_version`, so a call an hour before takeoff returns
+exactly what a call that morning returns. What matters is landing a sync while the flight is
+still upcoming at all.
+
 **So run it regularly.** A daily sync gives each flight the most chances to be priced exactly
 while it is still upcoming. Flights first discovered *after* they've flown — an initial backfill
 of your history, say — get the route average instead.
@@ -133,10 +138,15 @@ it.
 | `carrier_code` / `flight_number` | e.g. `BA` / `896` — as booked (the marketing flight) |
 | `operating_carrier_code` / `operating_flight_number` | Who actually flies it. Differs from the above on a codeshare, and is what gets priced |
 | `origin` / `destination` | IATA airport codes |
+| `departure_time` | Departure as an instant, in the origin's own timezone. Blank for all-day events |
 | `status` | Blank normally; `cancelled` if an upcoming flight vanished from the feed |
 | `cabin_class_known` | The cabin flown, if the source reported one, else blank |
 | `emissions_source` | `exact`, `typical_route_average`, `unparsed`, or `no_data` |
-| `model_version` | TIM model version (only set on `exact` rows) |
+| `model_version` | Full TIM version, e.g. `3.0.0+20260814`. The `+dated` part identifies the dataset that produced the figure |
+| `emissions_data_source` | `TIM` or `EASA` |
+| `contrails_impact` | TIM's contrails warming bucket: `negligible`, `moderate` or `severe` |
+| `distance_km` | Distance TIM used for the calculation |
+| `aircraft_match` | How well TIM matched an airframe. It never names the aircraft |
 | `emissions_kg_first` / `_business` / `_premium_economy` / `_economy` | Per-passenger CO2e by cabin, in kg |
 | `emissions_kg_actual` | The cabin actually flown if known, else economy — **the per-flight figure to sum** |
 | `raw_summary` | Original source text, useful for `unparsed` rows |
@@ -202,6 +212,20 @@ v1 ships one:
 - **`tripit_ical`** — reads a TripIt calendar feed. Finds events tagged `[Flight]` in the
   description (TripIt's own marker), with a regex fallback for other calendar tools. Extracts the
   carrier, flight number, and airports from `SUMMARY` first, then `DESCRIPTION` + `LOCATION`.
+
+### Everything else TIM said
+
+Alongside the CSV, contrail appends each provider response in full to
+`flight_emissions.raw.jsonl` — the well-to-tank/tank-to-wake split, load factors,
+cargo mass fraction, seat-area ratios, source versions, the calculator permalink.
+
+This exists because **TIM cannot be asked twice.** It refuses to price a flight
+that has departed, so anything not captured while the flight was upcoming is
+gone permanently. The sidecar is append-only and records an answer only when it
+differs from the last one for that flight, so it accumulates the history of what
+changed rather than a copy per run.
+
+Set `"raw_log": false` on a source to switch it off, or `"raw_path"` to move it.
 
 ### Codeshares
 
@@ -298,7 +322,9 @@ changelog are handled by release-please.
 - Departure date is the **local date at the origin airport**, which is what TIM asks for. Feeds
   that state times in UTC (TripIt's does) are converted using the origin's timezone, so an evening
   departure from the US is recorded on the day the traveller would say, not the following one.
-  Airports contrail can't identify fall back to the date exactly as the feed gave it.
+  Airports contrail can't identify fall back to the date exactly as the feed gave it. The same
+  applies to the point a row freezes: it is the moment of departure in the origin's timezone,
+  not a UTC date, which would be a day out for part of every day.
 - An existing row is never re-fetched or re-priced, only skipped, so historical figures never
   shift under you. The flip side: if you rebook a trip, TripIt reuses the calendar UID and
   contrail keeps the original date, route, and emissions. Delete the row to have it re-imported.
