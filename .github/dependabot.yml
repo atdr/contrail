@@ -1,16 +1,19 @@
 version: 2
 updates:
-  # Conventional-commit prefixes so Dependabot's PRs are parsed by release-please
-  # rather than silently dropped from the changelog.
+  # A runtime dependency bump changes what users install, so it has to reach the
+  # changelog and cut a release: `fix` is shown by release-please, `chore` is
+  # hidden by default and would ship the change invisibly. Dev dependencies
+  # affect nobody downstream, so they stay `chore`.
   - package-ecosystem: pip
     directory: /
     schedule:
       interval: weekly
     commit-message:
-      prefix: chore
+      prefix: fix
       prefix-development: chore
       include: scope
 
+  # CI only — nothing here reaches an installed contrail, so it stays hidden.
   - package-ecosystem: github-actions
     directory: /
     schedule:

@@ -66,6 +66,11 @@ The dedup key is `f"{source}:{source_id}"` everywhere.
   loaded from the CSV. Every row builder must set every column.
 - **TIM cannot be asked twice.** It won't price a departed flight, so anything not
   captured while it was upcoming is gone permanently.
+- **A runtime dependency bump must be `fix(deps):`, not `chore(deps):`.**
+  release-please hides `chore` by default and counts only `feat` and breaking
+  changes toward a bump, so a `chore(deps)` bump of a runtime dependency changes
+  what users install with nothing in the changelog and no release. Dev
+  dependencies stay `chore(deps-dev):`.
 - **release-please needs the repo setting "Allow GitHub Actions to create and
   approve pull requests"** (Settings → Actions → General). `permissions:
   pull-requests: write` in the workflow is *not* sufficient on its own, and the
