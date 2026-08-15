@@ -100,6 +100,10 @@ def _collapse(flights: dict) -> tuple[dict, list[tuple[FlightRecord, FlightRecor
         for field in ("cabin_class", "aircraft_type", "flight_reason"):
             if getattr(winner, field) is None and getattr(flight, field) is not None:
                 setattr(winner, field, getattr(flight, field))
+        # A stated cancellation survives the fold. Which record wins is decided by
+        # the order sources happen to sit in the config, and that must not be what
+        # decides whether a called-off flight counts toward the total.
+        winner.cancelled = winner.cancelled or flight.cancelled
 
     return survivors, collapsed
 
@@ -177,7 +181,10 @@ class Reconciliation:
             self.new_flights
             or self.new_unparsed
             or self.updates
-            or self.duplicates
+            # A duplicate that filled nothing in is a link already recorded on a
+            # previous run. Counting it would make every sync look like it had
+            # something to do.
+            or any(fields for _, _, fields in self.duplicates)
             or self.cancellations
         )
 
@@ -208,7 +215,14 @@ def reconcile(existing_rows, flights, unparsed, now) -> Reconciliation:
     feed_unparsed = {
         key: event for key, event in _dedup(unparsed).items() if key not in feed_flights
     }
-    feed_keys = set(feed_flights) | set(feed_unparsed)
+    # Folded keys count as reported. Collapsing removes a record from
+    # ``feed_flights``, but the source did return it, so a row it owns has not
+    # gone anywhere and must never be read as cancelled.
+    feed_keys = (
+        set(feed_flights)
+        | set(feed_unparsed)
+        | {key for flight in feed_flights.values() for key in flight.also_seen}
+    )
 
     # Only an importer that actually returned something this run may have its
     # rows cancelled. Otherwise one silently empty feed — a rotated URL, a
@@ -217,7 +231,12 @@ def reconcile(existing_rows, flights, unparsed, now) -> Reconciliation:
     contributing = {item.source for item in list(flights) + list(unparsed)}
 
     for key, flight in feed_flights.items():
-        row = by_key.get(key)
+        # Every key this record answers to, not just its own: collapsing folded
+        # other records into it, and the stored row may be owned by one of those.
+        # Missing that would treat an upcoming flight as somebody else's row —
+        # never corrected from the feed again, and never re-priced, which is the
+        # whole reason open rows are re-asked about.
+        row = next((by_key[k] for k in (key, *flight.also_seen) if k in by_key), None)
         if row is None:
             # Unknown by key, but the flight itself may already be in the file
             # under whichever source found it first. That source keeps the row;
@@ -415,10 +434,17 @@ def _label(flight: FlightRecord) -> str:
 
 
 def _describe(plan: Reconciliation) -> None:
-    for kept, folded in plan.collapsed:
+    filled = [d for d in plan.duplicates if d[2]]
+
+    if plan.collapsed and (plan.new_flights or filled):
+        # Only when the collapse bears on something the run is actually doing,
+        # and then a summary rather than a line each. Sources overlapping is the
+        # steady state, not news: every flight in a directory of exports
+        # collapses on every run, and repeating that daily would bury whatever
+        # did change. `--dry-run` prints the detail.
         print(
-            f"  {_label(folded)} is the same flight as {_label(kept)}; "
-            f"keeping one row, linked as {folded.key}."
+            f"{len(plan.collapsed)} record(s) matched a flight another source had already "
+            "reported; kept one row each."
         )
     for label, legs, through in plan.conflicts:
         print(
@@ -430,12 +456,8 @@ def _describe(plan: Reconciliation) -> None:
             "single row can't express — so delete whichever you don't want.",
             file=sys.stderr,
         )
-    if plan.duplicates:
-        filled = [d for d in plan.duplicates if d[2]]
-        print(
-            f"{len(plan.duplicates)} stored flight(s) were also known to another source; "
-            f"linked them{f' and filled in {len(filled)}' if filled else ''}."
-        )
+    if filled:
+        print(f"{len(filled)} stored flight(s) gained details from another source:")
         for row, _flight, fields in filled:
             print(f"  {row['carrier_code']}{row['flight_number']}: {', '.join(fields)}")
     if plan.new_flights or plan.new_unparsed:
@@ -462,6 +484,11 @@ def _describe(plan: Reconciliation) -> None:
 
 def _dry_run_report(plan: Reconciliation, csv_path: str) -> int:
     print(f"\nDry run — nothing written to {csv_path}, no emissions API calls made.\n")
+    for kept, folded in plan.collapsed:
+        print(
+            f"  MATCHED   {_label(folded)} is the same flight as {_label(kept)}; "
+            f"keeping one row, linked as {folded.key}."
+        )
     for flight in plan.new_flights:
         print(
             f"  NEW       {flight.flight_date}  "

@@ -425,7 +425,7 @@ def test_a_codeshare_listed_twice_becomes_one_row(both_sources, capsys):
     # The row kept is the first listed, and it takes what the second knew.
     assert (mad[0]["carrier_code"], mad[0]["flight_number"]) == ("IB", "3643")
     assert mad[0]["cabin_class_known"] == "business"
-    assert "is the same flight as" in capsys.readouterr().out
+    assert "matched a flight another source had already reported" in capsys.readouterr().out
 
 
 def test_legs_of_one_flight_number_stay_two_rows(both_sources):
@@ -546,3 +546,38 @@ def test_the_flighty_id_is_always_reachable_for_a_join(env, monkeypatch):
     for row in from_flighty:
         keys = f"{row['source']}:{row['source_id']} {row['also_seen_as']}"
         assert "flighty_csv:00000000-0000-4000-8000-" in keys
+
+
+def test_a_stated_cancellation_survives_being_folded(env, tmp_path, monkeypatch):
+    """Which record wins a collapse is decided by config order. That must not be
+    what decides whether a called-off flight counts toward the total."""
+    rows = list(csv.DictReader(FIXTURE_FLIGHTY.open()))
+    # Same flight as the feed's XX123 JFK->LHR, but Flighty says it was cancelled.
+    rows[8]["Canceled"] = "true"
+    export = tmp_path / "cancelled.csv"
+    with open(export, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(export))
+
+    run_sync(["sync"])
+
+    jfk = next(r for r in read_csv(env / "flight_emissions.csv") if r["origin"] == "JFK")
+    assert jfk["status"] == "cancelled"
+    assert jfk["emissions_kg_actual"] == ""
+
+
+def test_a_settled_rerun_says_nothing_it_did_not_do(both_sources, capsys):
+    """Sources overlapping is the steady state, not news. A line per matched
+    flight every run would bury whatever actually changed."""
+    run_sync(["sync"])
+    capsys.readouterr()
+
+    run_sync(["sync"])
+
+    out = capsys.readouterr().out
+    assert "already up to date" in out
+    assert "gained details" not in out
+    assert "matched a flight" not in out
+    assert "is the same flight as" not in out  # detail belongs to --dry-run

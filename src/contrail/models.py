@@ -64,7 +64,12 @@ class FlightRecord:
         """
         if not (self.flight_date and self.origin and self.destination):
             return None
-        return (self.flight_date.isoformat(), self.origin, self.destination)
+        # Upper-cased to agree with ``resync.identity``, which normalizes what it
+        # reads from the file. TripIt's FROM_TO_RE is IGNORECASE, so a feed
+        # phrasing like "from ... (sfo) to ... (jfk)" really does yield lower
+        # case, and an unnormalized comparison would silently miss the match and
+        # write a second row for the same flight.
+        return (self.flight_date.isoformat(), self.origin.upper(), self.destination.upper())
 
     @property
     def pricing_carrier_code(self) -> str:

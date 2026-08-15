@@ -532,3 +532,43 @@ def test_a_flight_another_source_still_reports_is_not_cancelled():
     stored = [row(source="tripit_ical", flight_date=FUTURE)]
     plan = reconcile(stored, [other()], [], NOW)
     assert plan.cancellations == []
+
+
+def test_a_folded_record_still_finds_the_row_it_owns():
+    """Collapsing removes the loser from the feed, so a row *it* owns has to be
+    found through the winner. Missing it strands an upcoming flight: never
+    corrected from the feed again, and never re-priced."""
+    stored = [row(source="flighty_csv", source_id="uuid-1")]
+    feed = [flight(source="tripit_ical", source_id="t-1"), other(source_id="uuid-1")]
+
+    plan = reconcile(stored, feed, [], NOW)
+
+    assert len(plan.updates) == 1
+    assert [f.key for f in plan.repriceable] == ["tripit_ical:t-1"]
+    assert plan.duplicates == []
+
+
+def test_a_folded_record_does_not_make_its_row_look_cancelled():
+    """Its source did report the flight; collapsing is contrail's own doing."""
+    stored = [row(source="flighty_csv", source_id="uuid-1")]
+    feed = [flight(source="tripit_ical", source_id="t-1"), other(source_id="uuid-1")]
+
+    assert reconcile(stored, feed, [], NOW).cancellations == []
+
+
+def test_a_row_never_lists_its_own_key():
+    """`also_seen_as` means "who else calls this flight something". A row listing
+    itself is counted twice by anything joining on it."""
+    stored = row(source="flighty_csv", source_id="uuid-1")
+    winner = flight(source="tripit_ical", source_id="t-1")
+    winner.also_seen = ["flighty_csv:uuid-1"]
+
+    merged, _ = backfill(stored, winner)
+    assert merged["also_seen_as"] == "tripit_ical:t-1"
+
+
+def test_identity_is_case_insensitive():
+    """TripIt's FROM_TO_RE is IGNORECASE, so a feed really can yield lower-case
+    codes. An unnormalized comparison would write a second row for one flight."""
+    lower = other(origin="lhr", destination="pfo")
+    assert lower.identity == identity(row())

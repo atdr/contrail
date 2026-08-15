@@ -181,10 +181,15 @@ def links(row: dict) -> list[str]:
 def linked(row: dict, keys) -> dict:
     """Record other sources' keys against a row, sorted and without repeats.
 
+    The row's own key is filtered out wherever it appears. The column means "who
+    else calls this flight something", and a row that lists itself would be
+    counted twice by anything joining on it — see ``storage/local_csv.py``.
+
     Sorted so that a row whose content has not changed stays byte-identical
     between runs — otherwise contrail-gh commits a reshuffled column every day.
     """
-    return {**row, "also_seen_as": " ".join(sorted({*links(row), *keys}))}
+    own = row_key(row)
+    return {**row, "also_seen_as": " ".join(sorted({*links(row), *keys} - {own}))}
 
 
 def backfill(row: dict, flight: FlightRecord) -> tuple[dict, list[str]]:
@@ -197,6 +202,12 @@ def backfill(row: dict, flight: FlightRecord) -> tuple[dict, list[str]]:
     correction. What it may do is fill in a blank, and leave its key behind so
     the two can be joined.
 
+    ``status`` is not among the blanks it may fill, deliberately. A second source
+    saying a flight was cancelled is not evidence against the source that owns the
+    row and still reports it — a Flighty export in particular is a snapshot, and
+    can be months stale. Where both sources are read in the same run the question
+    doesn't arise: ``cli._collapse`` keeps a stated cancellation from either.
+
     **This is allowed on a row that has already departed**, which nothing else in
     this module is. The freeze exists because a past flight's absence is
     ambiguous and because TIM will not re-price one; neither applies here. Filling
@@ -205,13 +216,10 @@ def backfill(row: dict, flight: FlightRecord) -> tuple[dict, list[str]]:
     documents — and a Flighty export is almost entirely past flights, so refusing
     it would refuse the point.
     """
-    # Everything folded into this record, plus its own key when it isn't already
-    # the row's. Without the folded keys a codeshare listed twice in one export
-    # would lose one of its two ids.
-    keys = [*flight.also_seen]
-    if flight.key != row_key(row):
-        keys.append(flight.key)
-    merged = linked(row, keys)
+    # Its own key plus everything folded into it. Without the folded keys a
+    # codeshare listed twice in one export would lose one of its two ids.
+    # ``linked`` drops the row's own key, whichever of these it turns out to be.
+    merged = linked(row, [flight.key, *flight.also_seen])
     changed = [] if merged["also_seen_as"] == (row.get("also_seen_as") or "") else ["also_seen_as"]
 
     for field, value in (
