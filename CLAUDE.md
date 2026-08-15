@@ -98,6 +98,15 @@ S3/GCS backend inherits the sort-and-derive invariants for free.
 - **The freeze boundary is the departure instant**, from `departure_time` when
   the source gives one, else the local date *at the origin*. Never the UTC date:
   that is wrong for part of every day by the origin's offset, in both directions.
+- **A column the row doesn't have is back-fill, not a feed change.** `differences()`
+  skips absent fields: gaining a column would otherwise mark every stored row
+  changed on the first sync after an upgrade, and `changed` is what bypasses the
+  no-downgrade guard — silently replacing a whole file of exact figures with
+  route averages, then freezing them that way.
+- **Match TIM results on identity or on position, never a mix.** A partial echo
+  mismatch would otherwise hand an unmatched flight an entry another flight had
+  already claimed.
+- **`raw_log`/`raw_path` are top-level config keys**, not per-source.
 - **The raw sidecar only records an answer that differs from the last one.**
   Upcoming flights are re-priced every run, so appending unconditionally would
   grow the file and commit daily for no new information.

@@ -73,6 +73,8 @@ class JSONLRawLog:
                 # that has already succeeded in every other respect.
                 handle.write(json.dumps(payload, default=str, ensure_ascii=False) + "\n")
                 written += 1
+            handle.flush()
+            os.fsync(handle.fileno())
         return written
 
     def latest_by_key(self) -> dict:
@@ -84,8 +86,22 @@ class JSONLRawLog:
         return latest
 
     def read(self) -> list[dict]:
-        """Every captured entry, oldest first. For inspection and tests."""
+        """Every captured entry, oldest first. For inspection and tests.
+
+        A line that won't parse is skipped rather than raised. This is a plain
+        append, so a crash or a full disk mid-write can leave a partial line —
+        and since every sync reads the file back before appending, raising here
+        would fail every future sync until someone hand-edited the file.
+        """
         if not os.path.exists(self.path):
             return []
+        entries = []
         with open(self.path, encoding="utf-8") as handle:
-            return [json.loads(line) for line in handle if line.strip()]
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        return entries

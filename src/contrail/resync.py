@@ -116,9 +116,19 @@ def feed_view(flight: FlightRecord) -> dict:
 
 
 def differences(row: dict, flight: FlightRecord) -> list[str]:
-    """Fields where the feed now disagrees with the stored row."""
+    """Fields where the feed now disagrees with the stored row.
+
+    A column the row simply doesn't have is back-fill, not disagreement. Gaining
+    a column would otherwise make every stored row look changed on the first sync
+    after an upgrade — and "changed" is what lets a worse figure replace a better
+    one, on the grounds that a rebooked flight is a different flight. Applied to
+    a whole file at once that would quietly downgrade every exact figure still
+    open, then freeze it that way at departure.
+    """
     view = feed_view(flight)
-    return [field for field in FEED_FIELDS if (row.get(field) or "") != view[field]]
+    return [
+        field for field in FEED_FIELDS if field in row and (row.get(field) or "") != view[field]
+    ]
 
 
 def is_better(new_method: str, existing_method: str) -> bool:

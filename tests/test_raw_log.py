@@ -98,3 +98,17 @@ def test_directories_are_created(tmp_path):
     log = JSONLRawLog(str(tmp_path / "nested" / "dir" / "raw.jsonl"))
     log.append([{"key": "a"}])
     assert log.read()
+
+
+def test_a_corrupt_line_does_not_break_every_future_sync(tmp_path):
+    """A plain append can be cut short by a crash or a full disk. Since every
+    sync reads the file back before appending, raising here would fail every
+    later run until someone hand-edited the JSONL."""
+    path = tmp_path / "raw.jsonl"
+    log = JSONLRawLog(str(path))
+    log.append([{"key": "a", "response": {"economy": 100}}])
+    with open(path, "a") as handle:
+        handle.write('{"key": "b", "resp')  # cut off mid-write
+
+    assert [e["key"] for e in log.read()] == ["a"]
+    assert log.append([{"key": "c", "response": {"economy": 5}}]) == 1

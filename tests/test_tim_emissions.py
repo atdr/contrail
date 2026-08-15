@@ -267,3 +267,50 @@ def test_api_key_is_sent_as_a_header_never_in_the_url():
 )
 def test_model_version_formatting(version, expected):
     assert _format_model_version(version) == expected
+
+
+def test_a_partial_identity_mismatch_never_borrows_another_flights_entry():
+    """Mixing identity and position would hand an unmatched flight an entry
+    another flight already claimed — the cross-attribution identity matching
+    exists to prevent."""
+    payload = detailed(
+        [
+            # reversed order, and the AAA->BBB echo is mangled so only CCC matches
+            detailed_entry(origin="CCC", destination="DDD", number=102, grams={"economy": 222000}),
+            {
+                **detailed_entry(
+                    origin="AAA", destination="BBB", number=101, grams={"economy": 111000}
+                ),
+                "flight": {
+                    "origin": "AAA",
+                    "destination": "BBB",
+                    "operatingCarrierCode": "BA/IB",
+                    "flightNumber": 101,
+                    "departureDate": {"year": 2026, "month": 3, "day": 4},
+                },
+            },
+        ]
+    )
+    post = mock_post({"exact": payload, "typical": TYPICAL_PAYLOAD})
+    flights = [flight(1, "AAA", "BBB"), flight(2, "CCC", "DDD")]
+    with patch("contrail.emissions.tim.requests.post", post):
+        results = TIMEmissionsProvider("key").compute(flights, now=BEFORE_DEPARTURE)
+
+    # CCC->DDD matched by identity and keeps its own figure...
+    assert results["tripit_ical:uid-2"].grams_economy == 222000
+    # ...and the unmatched one must not silently inherit it.
+    assert results["tripit_ical:uid-1"].grams_economy != 222000
+
+
+def test_departed_flights_never_reach_the_detailed_endpoint():
+    """It rejects a past departure date with a 400 and fails the whole batch,
+    where the plain endpoint merely returns nothing."""
+    post = mock_post({"typical": TYPICAL_PAYLOAD})
+    after = datetime(2026, 6, 1, tzinfo=timezone.utc)  # fixture flights are in March
+    with patch("contrail.emissions.tim.requests.post", post):
+        results = TIMEmissionsProvider("key").compute([flight(1)], now=after)
+
+    assert [c[0] for c in post.calls] == [
+        "https://travelimpactmodel.googleapis.com/v1/flights:computeTypicalFlightEmissions"
+    ]
+    assert results["tripit_ical:uid-1"].method == "typical_route_average"

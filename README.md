@@ -225,7 +225,8 @@ gone permanently. The sidecar is append-only and records an answer only when it
 differs from the last one for that flight, so it accumulates the history of what
 changed rather than a copy per run.
 
-Set `"raw_log": false` on a source to switch it off, or `"raw_path"` to move it.
+Both are top-level config keys: `"raw_log": false` switches it off, `"raw_path"` moves
+it. (`RAW_LOG` and `RAW_PATH` work as environment variables too.)
 
 ### Codeshares
 

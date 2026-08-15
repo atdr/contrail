@@ -395,3 +395,38 @@ def test_a_naive_or_unparseable_departure_time_is_ignored():
     for value in ("2026-10-11T20:00:00", "not a timestamp"):
         r = row(flight_date="2026-10-11", origin="LAX", departure_time=value)
         assert is_open(r, at("America/Los_Angeles", 2026, 10, 11, 18))
+
+
+def test_gaining_a_column_is_not_a_flight_change():
+    """The first sync after an upgrade must not treat every stored row as
+    changed: `changed` is what lets a worse figure replace a better one, so a
+    whole file of exact figures would be downgraded and then frozen that way."""
+    stored = row()
+    del stored["departure_time"]  # written before the column existed
+
+    upgraded = flight(departure_time=datetime(2026, 12, 1, 9, 0, tzinfo=timezone.utc))
+    assert differences(stored, upgraded) == []
+
+
+def test_an_upgraded_row_keeps_its_exact_figure():
+    stored = row(emissions_source="exact", emissions_kg_economy="300.0")
+    del stored["departure_time"]
+    upgraded = flight(departure_time=datetime(2026, 12, 1, 9, 0, tzinfo=timezone.utc))
+
+    merged = _merge_row(
+        stored,
+        upgraded,
+        result("typical_route_average"),
+        "NOW",
+        changed=bool(differences(stored, upgraded)),
+    )
+
+    assert merged["emissions_source"] == "exact"
+    assert merged["emissions_kg_economy"] == "300.0"
+    assert merged["departure_time"]  # but the new column is back-filled
+
+
+def test_a_real_change_is_still_detected_on_an_upgraded_row():
+    stored = row()
+    del stored["departure_time"]
+    assert differences(stored, flight(destination="MAD")) == ["destination"]

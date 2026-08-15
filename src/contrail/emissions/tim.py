@@ -191,6 +191,37 @@ class TIMEmissionsProvider:
         resp.raise_for_status()
         return resp.json()
 
+    def _post_detailed(self, requests_body: list[dict]) -> dict:
+        """The detailed endpoint, narrowing in on whatever it refuses.
+
+        It validates strictly and rejects an entire batch over one bad entry.
+        Falling the whole batch back to the plain endpoint would keep the figures
+        but lose the provenance for every good flight in it — and provenance
+        cannot be re-fetched once a flight departs. So split and retry, and only
+        drop to the plain endpoint for the single flight that is actually at
+        fault.
+        """
+        try:
+            return self._post("computeDetailedFlightEmissions", {"flights": requests_body})
+        except requests.HTTPError as exc:
+            if exc.response is None or exc.response.status_code != 400:
+                raise
+            if len(requests_body) == 1:
+                return _as_detailed(
+                    self._post("computeFlightEmissions", {"flights": requests_body})
+                )
+
+        half = len(requests_body) // 2
+        left = self._post_detailed(requests_body[:half])
+        right = self._post_detailed(requests_body[half:])
+        return {
+            "modelVersion": left.get("modelVersion") or right.get("modelVersion"),
+            "flightsWithDetailedEmissions": (
+                left.get("flightsWithDetailedEmissions", [])
+                + right.get("flightsWithDetailedEmissions", [])
+            ),
+        }
+
     def _request_for(self, flight: FlightRecord) -> dict:
         return {
             "origin": flight.origin,
@@ -219,16 +250,7 @@ class TIMEmissionsProvider:
         for i in range(0, len(flights), BATCH_SIZE):
             chunk = flights[i : i + BATCH_SIZE]
             requests_by_key = {f.key: self._request_for(f) for f in chunk}
-            body = {"flights": list(requests_by_key.values())}
-            try:
-                data = self._post("computeDetailedFlightEmissions", body)
-            except requests.HTTPError as exc:
-                # The detailed endpoint validates strictly and rejects a whole
-                # batch over one bad entry. Losing the provenance is much better
-                # than losing the figures, so fall back to the plain endpoint.
-                if exc.response is None or exc.response.status_code != 400:
-                    raise
-                data = _as_detailed(self._post("computeFlightEmissions", body))
+            data = self._post_detailed(list(requests_by_key.values()))
             model_version = _format_model_version(data.get("modelVersion"))
             entries = data.get("flightsWithDetailedEmissions", [])
 
@@ -236,10 +258,18 @@ class TIMEmissionsProvider:
             # rather than position — an omitted or reordered entry would
             # otherwise attribute one flight's emissions to another.
             by_identity = {_identity(e.get("flight")): e for e in entries}
+            # Position is only trustworthy when identity tells us nothing at all.
+            # Mixing the two would hand an unmatched flight an entry another
+            # flight has already claimed — the very cross-attribution matching on
+            # identity exists to prevent.
+            positional = not any(
+                _identity(requests_by_key[f.key]) in by_identity for f in chunk
+            ) and len(entries) == len(chunk)
+
             for position, flight in enumerate(chunk):
                 entry = by_identity.get(_identity(requests_by_key[flight.key]))
-                if entry is None and position < len(entries):
-                    entry = entries[position] if len(entries) == len(chunk) else None
+                if entry is None and positional:
+                    entry = entries[position]
                 if entry is None:
                     continue
                 results[flight.key] = {
