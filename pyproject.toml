@@ -25,7 +25,7 @@ classifiers = [
 ]
 dependencies = [
     "requests>=2.34.2",
-    "icalendar>=5.0",
+    "icalendar>=7.2.2",
     # IATA -> IANA timezone mapping, so a UTC departure time resolves to the
     # local calendar date TIM asks for. MIT, no dependencies, data bundled in
     # the wheel, so no network call and CI stays hermetic.
