@@ -66,6 +66,12 @@ The dedup key is `f"{source}:{source_id}"` everywhere.
   loaded from the CSV. Every row builder must set every column.
 - **TIM cannot be asked twice.** It won't price a departed flight, so anything not
   captured while it was upcoming is gone permanently.
+- **release-please needs the repo setting "Allow GitHub Actions to create and
+  approve pull requests"** (Settings → Actions → General). `permissions:
+  pull-requests: write` in the workflow is *not* sufficient on its own, and the
+  API can report the flag as enabled while it is still blocked. Without it the
+  release job fails with "GitHub Actions is not permitted to create or approve
+  pull requests".
 - **`cli._now()` exists to be monkeypatched.** Tests that use the real clock rot
   once the fixture's dates fall into the past.
 
