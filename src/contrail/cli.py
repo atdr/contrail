@@ -406,9 +406,11 @@ def _unparsed_row(event: UnparsedEvent, now_iso: str) -> dict:
 
 
 def _label(flight: FlightRecord) -> str:
+    """How a source labels a flight. The source is part of it: two sources
+    usually agree on the number, so without it a collapse reads as a no-op."""
     return (
         f"{flight.carrier_code}{flight.flight_number} "
-        f"{flight.origin}->{flight.destination} on {flight.flight_date}"
+        f"{flight.origin}->{flight.destination} on {flight.flight_date} [{flight.source}]"
     )
 
 
@@ -416,7 +418,7 @@ def _describe(plan: Reconciliation) -> None:
     for kept, folded in plan.collapsed:
         print(
             f"  {_label(folded)} is the same flight as {_label(kept)}; "
-            f"kept one row, recorded {folded.key} against it."
+            f"keeping one row, linked as {folded.key}."
         )
     for label, legs, through in plan.conflicts:
         print(

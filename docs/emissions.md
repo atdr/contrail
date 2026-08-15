@@ -48,21 +48,31 @@ captures whatever the last pre-departure sync can see. And GitHub's `schedule:`
 is static and best-effort — routinely delayed, occasionally dropped — so
 minute-precision isn't available there whatever TIM does.
 
-## Open: does TIM price a leg of a multi-leg flight number?
+## TIM is leg-based, so contrail must be too
 
-`BA16` flies SYD–SIN–LHR under one number. contrail asks about each leg
-separately — `(SYD, SIN, BA, 16, date)` — and whether TIM answers depends on
-whether its schedule data is per-leg or keyed on the published route `SYD–LHR`.
-**Not yet tested.**
+`BA15` flies LHR–SIN–SYD under one number. Asked about all three routings a month
+out (model `3.0.0+20260815`):
 
-The downside is bounded either way. `computeTypicalFlightEmissions` is
-market-based, so a leg always prices to a route average at worst; the question is
-only whether an *exact* figure is available for an upcoming one.
+| Request | Result |
+|---|---|
+| `(LHR, SIN, BA, 15, 2026-09-15)` | priced, 540.0 kg economy |
+| `(SIN, SYD, BA, 15, 2026-09-16)` | priced, 344.5 kg economy |
+| `(LHR, SYD, BA, 15, 2026-09-15)` — the published through route | **no figures** |
 
-To settle it, needs an API key and a future date, since the detailed endpoint
-refuses past ones. BA15 (LHR–SIN–SYD) runs daily, so ask for all three of
-`(LHR, SIN, BA, 15)`, `(SIN, SYD, BA, 15)` and `(LHR, SYD, BA, 15)` a few weeks
-out and see which come back with figures.
+So a flight number is not a unit TIM prices; a leg is. Asking for the through
+route gets nothing at all, and the two legs are separately priced and additive.
+
+This settles the identity question in [resync.md](resync.md) from the emissions
+side as well as the data-model side: the legs *have* to be separate rows, because
+a single through row could not be priced exactly at all. Note the second leg's
+local departure date is the day after the first's — the date sent is local at
+each leg's own origin, so a leg crossing midnight or the dateline needs its own,
+which `airports.departure_date` already handles.
+
+It also bounds the through-flight clash described in resync.md. A source
+reporting one SYD–LHR segment would fall back to a route average for a market
+nobody flies non-stop, so the risk there is double counting, not a wrong figure
+on the legs.
 
 ## TIM never names the aircraft
 

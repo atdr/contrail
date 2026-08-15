@@ -93,6 +93,11 @@ data. It needs a real capture to settle: **does TripIt emit a through flight as
 one VEVENT or two?** Unknown. Until that is answered, a visible clash beats a
 confident guess.
 
+The legs are the better data whichever way that lands: TIM prices a leg and
+returns nothing at all for a published through route
+(see [emissions.md](emissions.md)), so a through row could never be priced
+exactly. The cost of the clash is double counting, not a wrong figure.
+
 ## Guards worth knowing
 
 - **A column the row doesn't have is back-fill, not a feed change.**
