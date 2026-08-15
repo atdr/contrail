@@ -48,6 +48,22 @@ captures whatever the last pre-departure sync can see. And GitHub's `schedule:`
 is static and best-effort — routinely delayed, occasionally dropped — so
 minute-precision isn't available there whatever TIM does.
 
+## Open: does TIM price a leg of a multi-leg flight number?
+
+`BA16` flies SYD–SIN–LHR under one number. contrail asks about each leg
+separately — `(SYD, SIN, BA, 16, date)` — and whether TIM answers depends on
+whether its schedule data is per-leg or keyed on the published route `SYD–LHR`.
+**Not yet tested.**
+
+The downside is bounded either way. `computeTypicalFlightEmissions` is
+market-based, so a leg always prices to a route average at worst; the question is
+only whether an *exact* figure is available for an upcoming one.
+
+To settle it, needs an API key and a future date, since the detailed endpoint
+refuses past ones. BA15 (LHR–SIN–SYD) runs daily, so ask for all three of
+`(LHR, SIN, BA, 15)`, `(SIN, SYD, BA, 15)` and `(LHR, SYD, BA, 15)` a few weeks
+out and see which come back with figures.
+
 ## TIM never names the aircraft
 
 Not even from the detailed endpoint. The closest signal is
@@ -63,6 +79,12 @@ changes right up to departure (A319/A320/A321, ceo against neo).
 response carrying no figures at all never overwrites one that has them — TIM
 returns nothing for a flight it cannot price, and that is exactly the row users
 are told to fill in by hand.
+
+A Flighty export *does* name the airframe, and it is stored in `aircraft_type`.
+That is a record of what was flown, not an input to any figure: TIM is never told
+about it, and it cannot be, since the API takes no aircraft parameter. Its use is
+the other direction — a stored airframe beside a moving `exact` figure is
+evidence about the equipment-swap question above.
 
 ## Keeping everything it returned
 

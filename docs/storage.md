@@ -2,6 +2,12 @@
 
 **It is a record of flights, not an analysis of them.**
 
+It is also not a copy of its sources. A row carries what contrail needs to price
+a flight and identify it again; seat, PNR, tail number and terminals stay in the
+export they came from. `also_seen_as` is the join back to them — see the README.
+Widening the schema to absorb another source's columns is the thing this file
+exists to argue against.
+
 ## No running total
 
 There is no `cumulative_*` column, and one shouldn't be added. A stored
@@ -29,6 +35,11 @@ column up by header name.
 - **Columns the user added are preserved.** Hand-editing is documented, so a
   `notes` column survives a sync. Columns contrail has retired are dropped on
   read so they don't linger as if hand-added.
+- **`also_seen_as` is space-separated and sorted.** Space rather than comma so
+  the column needs no quoting and survives both hand-editing and the README's
+  `awk` one-liner; sorted so a row whose content hasn't changed stays
+  byte-identical between runs, and contrail-gh doesn't commit a reshuffled
+  column every day.
 - **`save` writes to a temp file and `os.replace`s it**, with an `fsync`. TripIt's
   feed only exposes recent and upcoming trips, so a half-written CSV would lose
   history that cannot be re-fetched.
