@@ -35,7 +35,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-yaml = ["pyyaml>=6"]
+yaml = ["pyyaml>=6.0.3"]
 dev = [
     "pytest>=8",
     # Upper bound deliberate: CI gates on `ruff format --check`, and the
