@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from contrail.importers.base import Importer
+from contrail.importers.flighty_csv import FlightyCSVImporter
 from contrail.importers.tripit_ical import TripItICalImporter
 
 # Adding an importer = one new module + one line here.
 IMPORTERS: dict[str, type[Importer]] = {
     TripItICalImporter.id: TripItICalImporter,
+    FlightyCSVImporter.id: FlightyCSVImporter,
 }
 
 
@@ -22,4 +24,10 @@ def get_importer(type_name: str) -> type[Importer]:
         ) from None
 
 
-__all__ = ["IMPORTERS", "Importer", "TripItICalImporter", "get_importer"]
+__all__ = [
+    "IMPORTERS",
+    "FlightyCSVImporter",
+    "Importer",
+    "TripItICalImporter",
+    "get_importer",
+]

@@ -44,8 +44,29 @@ sources:
     # codeshares are then priced as booked.
     # airline_lookup: true
 
-  # A second source would go here. Each entry is passed to its own importer, so
-  # different importers can take completely different fields.
+  # A Flighty export. This is the only source that reports the cabin you
+  # actually flew, so it is what stops a business-class long-haul being logged
+  # as economy — often a fourfold difference. Uncomment to use it.
+  #
+  # - type: flighty_csv
+  #
+  #   # An exported CSV, a directory of them, or a glob. Export from the Flighty
+  #   # app (Settings -> Export), which emails you the file. A directory is the
+  #   # useful shape: drop each new export in and the newest wins, since Flighty
+  #   # names them FlightyExport-YYYY-MM-DD.csv.
+  #   path: flighty/
+  #
+  #   # An export is your whole flight history in one file. Keep it out of any
+  #   # public repository.
+  #
+  #   # Flighty names airlines by ICAO code (BAW), while the emissions API wants
+  #   # IATA (BA). A table shipped with contrail does almost all of that offline;
+  #   # set this to false to stop it looking up the rest on Wikidata.
+  #   # airline_lookup: true
+
+  # Each entry is passed to its own importer, so different importers can take
+  # completely different fields. Where two sources know the same flight, the
+  # first one listed keeps the row and the second fills in what it is missing.
 
 emissions:
   provider: tim

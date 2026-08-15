@@ -10,7 +10,7 @@ import pytest
 
 from contrail.cli import _merge_row, reconcile
 from contrail.models import EmissionsResult, FlightRecord, UnparsedEvent
-from contrail.resync import can_cancel, differences, is_better, is_open
+from contrail.resync import backfill, can_cancel, differences, identity, is_better, is_open
 from contrail.storage import normalize_rows, total_kg
 from contrail.storage.local_csv import CSV_FIELDS, STATUS_CANCELLED, actual_kg
 
@@ -430,3 +430,105 @@ def test_a_real_change_is_still_detected_on_an_upgraded_row():
     stored = row()
     del stored["departure_time"]
     assert differences(stored, flight(destination="MAD")) == ["destination"]
+
+
+# -- one flight, two sources -------------------------------------------------
+
+
+def other(source_id="flighty-1", **extra):
+    """A record of the same flight, found by a different source."""
+    return flight(source="flighty_csv", source_id=source_id, **extra)
+
+
+def test_identity_ignores_the_carrier_and_number():
+    """Two sources can disagree about how a flight is labelled — one has the
+    marketing number, one the operating one — and still mean the same flight."""
+    assert identity(row()) == ("2026-12-01", "LHR", "PFO")
+    assert identity(row()) == other(carrier_code="IB", flight_number="3643").identity
+
+
+def test_a_row_with_no_route_has_no_identity():
+    """Otherwise every undatable unparsed row would match every other one."""
+    assert identity(row(origin="", destination="")) is None
+    assert identity(row(flight_date="")) is None
+
+
+def test_backfill_records_the_other_sources_key():
+    merged, changed = backfill(row(), other())
+    assert merged["also_seen_as"] == "flighty_csv:flighty-1"
+    assert changed == ["also_seen_as"]
+
+
+def test_backfill_fills_a_blank_but_never_overwrites():
+    stored = row(cabin_class_known="economy", aircraft_type="")
+    merged, changed = backfill(stored, other(cabin_class="business", aircraft_type="A320"))
+
+    assert merged["cabin_class_known"] == "economy"  # a stored value is the only copy
+    assert merged["aircraft_type"] == "A320"
+    assert changed == ["also_seen_as", "aircraft_type"]
+
+
+def test_backfilling_a_cabin_changes_what_the_flight_counts_as():
+    """The whole point of the exercise: the per-cabin figures were already
+    stored, and the cabin decides which one is the flight's actual emissions."""
+    stored = row(emissions_kg_business="600.0")
+    assert actual_kg(stored) == "247.027"
+
+    merged, _ = backfill(stored, other(cabin_class="business"))
+    assert actual_kg(merged) == "600.0"
+
+
+def test_backfill_is_allowed_on_a_frozen_row():
+    """The one exception to the freeze. It re-prices nothing and re-fetches
+    nothing; it only picks a different figure the row already holds."""
+    stored = row(flight_date=PAST, emissions_kg_business="600.0")
+    assert not is_open(stored, NOW)
+
+    merged, changed = backfill(stored, other(flight_date=date(2026, 5, 1), cabin_class="business"))
+    assert "cabin_class_known" in changed
+    assert actual_kg(merged) == "600.0"
+
+
+def test_links_are_sorted_and_never_repeated():
+    """An unchanged row has to stay byte-identical, or contrail-gh commits a
+    reshuffled column every day for nothing."""
+    stored = row(also_seen_as="flighty_csv:b")
+    merged, _ = backfill(stored, other(source_id="a"))
+    twice, changed = backfill(merged, other(source_id="a"))
+
+    assert twice["also_seen_as"] == "flighty_csv:a flighty_csv:b"
+    assert changed == []
+
+
+def test_a_second_source_does_not_create_a_second_row():
+    stored = [row(flight_date=PAST)]
+    plan = reconcile(stored, [other(flight_date=date(2026, 5, 1), cabin_class="business")], [], NOW)
+
+    assert plan.new_flights == []
+    assert len(plan.duplicates) == 1
+    assert plan.duplicates[0][0]["cabin_class_known"] == "business"
+
+
+def test_a_duplicate_is_never_sent_for_pricing():
+    """The row already has its figure from whichever source owns it."""
+    stored = [row(flight_date=PAST)]
+    plan = reconcile(stored, [other(flight_date=date(2026, 5, 1))], [], NOW)
+    assert plan.repriceable == []
+
+
+def test_a_cancelled_row_does_not_claim_its_identity():
+    """One source called it off, another says it flew. The flight that happened
+    deserves a row rather than being filed against one that counts for nothing."""
+    stored = [row(status=STATUS_CANCELLED)]
+    plan = reconcile(stored, [other()], [], NOW)
+
+    assert len(plan.new_flights) == 1
+    assert plan.duplicates == []
+
+
+def test_a_flight_another_source_still_reports_is_not_cancelled():
+    """The owning source going quiet is not evidence the flight vanished when
+    something else is still reporting it."""
+    stored = [row(source="tripit_ical", flight_date=FUTURE)]
+    plan = reconcile(stored, [other()], [], NOW)
+    assert plan.cancellations == []

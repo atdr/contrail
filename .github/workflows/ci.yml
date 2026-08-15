@@ -34,10 +34,13 @@ jobs:
       - run: pip install -e ".[dev]"
       - name: Run tests
         run: pytest -q
-      - name: Dry-run against the fixture feed
+      - name: Dry-run against the fixture sources
         # Catches a broken parser here, before it can reach anyone's production
-        # instance through a version tag. Needs no secrets: --dry-run never calls
-        # the emissions API, and the importer accepts a local path.
+        # instance through a version tag. Both importers, since they also have to
+        # agree with each other about which flights are the same one. Needs no
+        # secrets: --dry-run never calls the emissions API, and both importers
+        # accept a local path.
         env:
           TRIPIT_ICAL_URL: tests/fixtures/sample_feed.ics
+          FLIGHTY_CSV_PATH: tests/fixtures/sample_flighty.csv
         run: contrail sync --dry-run --csv-path "${RUNNER_TEMP}/should-not-be-written.csv"

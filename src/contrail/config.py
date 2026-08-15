@@ -60,13 +60,33 @@ class Config:
                 "Set TRIPIT_ICAL_URL as an environment variable, or add to config.json:\n"
                 '  {"sources": [{"type": "tripit_ical", "url": "https://..."}]}\n'
                 "Find your feed URL in TripIt under Settings -> Calendar Feed. "
-                "Treat it as a secret: anyone holding it can see your itineraries."
+                "Treat it as a secret: anyone holding it can see your itineraries.\n"
+                "\n"
+                "Or point FLIGHTY_CSV_PATH at a Flighty export, which is the only "
+                "source that knows which cabin you actually flew:\n"
+                '  {"sources": [{"type": "flighty_csv", "path": "flighty/"}]}'
             )
         return self.sources
 
 
 def csv_path_or_none(value):
     return str(value) if value else None
+
+
+def _env_source(sources: list[dict], type_name: str, field: str, value: str | None) -> None:
+    """Point a source at what an environment variable says, adding it if absent.
+
+    Updating in place rather than appending matters: a config file that already
+    configures this source should have its other settings kept, and two entries
+    of the same type would import the same flights twice.
+    """
+    if not value:
+        return
+    existing = next((s for s in sources if s.get("type") == type_name), None)
+    if existing is not None:
+        existing[field] = value
+    else:
+        sources.append({"type": type_name, field: value})
 
 
 def _load_file(path: Path) -> dict:
@@ -120,14 +140,11 @@ def load_config(
     emissions = dict(file_data.get("emissions") or {})
 
     # A bare TRIPIT_ICAL_URL is the common case (GitHub Actions, cron), so treat
-    # it as an implicit single source rather than making people write JSON.
-    tripit_url = env.get("TRIPIT_ICAL_URL")
-    if tripit_url:
-        existing = next((s for s in sources if s.get("type") == "tripit_ical"), None)
-        if existing is not None:
-            existing["url"] = tripit_url
-        else:
-            sources.append({"type": "tripit_ical", "url": tripit_url})
+    # it as an implicit single source rather than making people write JSON. The
+    # same goes for a Flighty export, which in a scheduled setup is a path in the
+    # repository rather than a URL.
+    _env_source(sources, "tripit_ical", "url", env.get("TRIPIT_ICAL_URL"))
+    _env_source(sources, "flighty_csv", "path", env.get("FLIGHTY_CSV_PATH"))
 
     if env.get("TIM_API_KEY"):
         emissions["api_key"] = env["TIM_API_KEY"]
