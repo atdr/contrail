@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.2.0](https://github.com/atdr/contrail/compare/v0.1.0...v0.2.0) (2026-08-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* Python 3.10 is no longer supported. requires-python is now >=3.11.
+
+### Features
+
+* require Python 3.11 ([18cdc6e](https://github.com/atdr/contrail/commit/18cdc6ea6251f10870303a9d17fe20e7f7a26d64))
+
+
+### Bug Fixes
+
+* **deps:** declare the pyyaml floor once and bound ruff ([8790755](https://github.com/atdr/contrail/commit/8790755521ace3cdbaf39e4a4e658762e6a28a0a))
+* **deps:** Update icalendar requirement from &gt;=5.0 to &gt;=7.2.2 ([ee39316](https://github.com/atdr/contrail/commit/ee393167748db7b2cabd5d3667eb50b0837ab6e5))
+* **deps:** Update pyyaml requirement from &gt;=6 to &gt;=6.0.3 ([2ed4484](https://github.com/atdr/contrail/commit/2ed4484142c9ef200c743634d54e286a43ca12b9))
+* release runtime dependency bumps instead of hiding them ([68ff550](https://github.com/atdr/contrail/commit/68ff550a4d14db328fe017c235d5e59539767445))
+
+
+### Documentation
+
+* note the Actions setting release-please needs ([5e1778b](https://github.com/atdr/contrail/commit/5e1778b7c0ffde2475b83b00482d21ac8e843446))
+
 ## 0.1.0 (2026-08-15)
 
 
