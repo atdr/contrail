@@ -50,6 +50,8 @@ The dedup key is `f"{source}:{source_id}"` everywhere.
   cancellation
 - [docs/storage.md](docs/storage.md) — CSV invariants and why there's no total
 - [docs/tripit-api.md](docs/tripit-api.md) — investigated, not used, and why
+- [docs/contrail-gh.md](docs/contrail-gh.md) — **what a change here obliges in the
+  template repo**
 
 ## Gotchas most likely to bite
 
@@ -69,5 +71,8 @@ The dedup key is `f"{source}:{source_id}"` everywhere.
 
 ## Related repos
 
-- `atdr/contrail-gh` — public GitHub Actions template. Pins a contrail release tag.
+- `atdr/contrail-gh` — public GitHub Actions template. Pins a contrail release
+  tag and ships a header-only CSV that has to match it. **A schema or output
+  change here needs a matching change there** — see
+  [docs/contrail-gh.md](docs/contrail-gh.md).
 - `atdr/my-contrail` — private, created from that template. Real data and secrets.
