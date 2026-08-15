@@ -75,4 +75,5 @@ The dedup key is `f"{source}:{source_id}"` everywhere.
   tag and ships a header-only CSV that has to match it. **A schema or output
   change here needs a matching change there** — see
   [docs/contrail-gh.md](docs/contrail-gh.md).
-- `atdr/my-contrail` — private, created from that template. Real data and secrets.
+- A **private instance** created from that template (`octocat/my-contrail` in the
+  docs). Real data and secrets — never referenced by name in anything public.

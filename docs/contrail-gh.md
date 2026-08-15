@@ -53,6 +53,7 @@ Real flight data. `flight_emissions.csv` is the header row and nothing else, and
 
 - **atdr/contrail** (public) — this one. All the logic, no data, no secrets.
 - **atdr/contrail-gh** (public) — the template. Scaffolding only.
-- **atdr/my-contrail** (private) — an instance created from the template. Real
-  itineraries, real secrets. Created *through* GitHub's "Use this template" so
-  that path stays exercised, not by copying files.
+- **`octocat/my-contrail`** (private) — an instance created from the template.
+  Real itineraries, real secrets. Created *through* GitHub's "Use this template"
+  so that path stays exercised, rather than by copying files. Instances are
+  personal: don't name a real one in public docs.
