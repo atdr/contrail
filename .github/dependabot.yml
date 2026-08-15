@@ -12,6 +12,14 @@ updates:
       prefix: fix
       prefix-development: chore
       include: scope
+    ignore:
+      # The floor here means "any version that carries tz data", true for years.
+      # Raising it buys nothing — the constraint is `>=`, so a fresh install
+      # already resolves to the newest release the interpreter allows — while
+      # costing a patch release and a changelog line every month this data
+      # package ships. It would also break the 3.10 CI job the moment the floor
+      # passed 20260803, which requires Python 3.11.
+      - dependency-name: airportsdata
 
   # CI only — nothing here reaches an installed contrail, so it stays hidden.
   - package-ecosystem: github-actions

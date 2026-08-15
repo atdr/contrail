@@ -38,8 +38,15 @@ dependencies = [
 yaml = ["pyyaml>=6"]
 dev = [
     "pytest>=8",
-    "ruff>=0.6",
-    "pyyaml>=6",
+    # Upper bound deliberate: CI gates on `ruff format --check`, and the
+    # formatter's output is not stable across minor releases. Without it the
+    # first restyling release turns every unrelated PR red. Bumping past it
+    # should be a deliberate PR that reformats the tree.
+    "ruff>=0.16.2,<0.17",
+    # Self-reference rather than repeating the pyyaml floor: declared once, so
+    # the two can't drift, and Dependabot sees pyyaml for what it is — a runtime
+    # dependency of the `yaml` extra, not a dev tool.
+    "contrail[yaml]",
 ]
 
 [project.urls]
