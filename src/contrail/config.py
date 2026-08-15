@@ -134,7 +134,7 @@ def load_config(
     if env.get("EMISSIONS_PROVIDER"):
         emissions["provider"] = env["EMISSIONS_PROVIDER"]
 
-    # Legacy flat keys, as written by the prototype's config.json.
+    # Flat keys, as written by pre-v0.1.0 config.json files.
     if not emissions.get("api_key") and file_data.get("TIM_API_KEY"):
         emissions["api_key"] = file_data["TIM_API_KEY"]
     if not sources and file_data.get("TRIPIT_ICAL_URL"):

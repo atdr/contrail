@@ -81,7 +81,7 @@ class UnparsedEvent:
 
     source: str
     source_id: str
-    raw_text: str  # for manual review, mirrors the prototype's "unparsed" rows
+    raw_text: str  # the source text, for manual review
     partial: dict = field(default_factory=dict)
 
     @property

@@ -1,6 +1,5 @@
 """Google Travel Impact Model (TIM) emissions provider.
 
-Ported from the prototype's ``compute_exact_emissions`` / ``compute_typical_emissions``.
 The hybrid behaviour is deliberate and correct:
 
 1. Batch every new flight into ``computeFlightEmissions``. This only returns real

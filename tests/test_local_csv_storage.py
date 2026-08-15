@@ -243,8 +243,8 @@ def write_legacy_csv(path):
         )
 
 
-def test_legacy_prototype_csv_is_migrated_on_read(tmp_path):
-    """A prototype CSV must be recognised, not re-imported and re-priced from scratch."""
+def test_older_schema_csv_is_migrated_on_read(tmp_path):
+    """A pre-v0.1.0 CSV must be recognised, not re-imported and re-priced."""
     path = tmp_path / "flight_emissions.csv"
     write_legacy_csv(path)
 

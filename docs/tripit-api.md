@@ -33,13 +33,29 @@ reflect the cabin actually flown instead of assuming economy.
 
 ## Getting in
 
-**OAuth is closed.** TripIt stopped issuing consumer keys around November 2023
-and never resumed — tripit/api#287 and #280 open since 2023-11-04, and #288 where
-a commenter reports support confirming by both email and Twitter that no new
-client IDs are issued. 43 open issues; the docs footer reads "© 2006-2013".
+**OAuth is documented and, as far as anyone can tell, still works.** The docs
+describe the full three-legged OAuth 1.0 flow — request token, user
+authorization, access token — and access tokens are storable "indefinitely",
+which suits unattended running well. If a consumer key is already in hand, this
+is the better route: an OAuth token is scoped and revocable on its own.
 
-**Web Authentication needs no consumer key.** HTTP Basic with a TripIt email and
-password, so the dead developer portal stops mattering. Two conditions:
+**What's unverified is whether a *new* consumer key can still be obtained.** The
+evidence says probably not, but none of it is first-hand:
+
+- tripit/api#287 and #280, both open since 2023-11-04, report the "Register an
+  app" button gone from the developer portal.
+- tripit/api#288 has a commenter reporting that TripIt support confirmed by email
+  and Twitter that no new client IDs are issued. That is a third-party account,
+  not something confirmed here.
+- 43 open issues, and the docs footer reads "© 2006-2013".
+
+`tripit.com/developer` returns HTTP 200, but the page is JS-rendered so its
+contents were never actually inspected — checking it while logged in would settle
+this in a minute and hasn't been done.
+
+**Web Authentication needs no consumer key at all.** HTTP Basic with a TripIt
+email and password, which sidesteps the registration question entirely. Two
+conditions:
 
 - It is **off by default for every account**; enabling it means emailing
   support@tripit.com, an unknown given how unattended the API is.
@@ -68,8 +84,10 @@ reaches a transcript (`--user` with no colon makes curl prompt):
 
 ## If it ever goes ahead
 
+Check the developer portal first, logged in — if a consumer key can still be
+registered, use OAuth and skip the password question entirely.
+
 `/list/trip?past=true&include_objects=true` returns full history with segments in
 one call, and `format=json` avoids XML parsing. Put auth behind a small seam so
-Basic and OAuth 1.0 are interchangeable: OAuth tokens are documented as storable
-"indefinitely", so if consumer keys ever reopen the browser dance happens once
-and the token then lives as a secret, with no code change.
+Basic and OAuth 1.0 are interchangeable either way: the OAuth browser dance
+happens once and the token then lives as a secret, with no code change.

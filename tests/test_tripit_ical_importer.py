@@ -1,8 +1,8 @@
 """Tests for the TripIt iCal importer.
 
-These cover the cases the prototype was manually validated against: flight-event
-detection (including correctly *excluding* trains and hotels), field extraction
-from SUMMARY versus DESCRIPTION, and partial recovery on an unparseable event.
+Flight-event detection (including correctly *excluding* trains and hotels), field
+extraction from SUMMARY versus DESCRIPTION, timezone-correct dates, codeshare
+resolution, and partial recovery on an unparseable event.
 """
 
 from datetime import date

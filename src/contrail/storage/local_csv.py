@@ -1,13 +1,13 @@
 """CSV storage backend.
 
-Ported from the prototype, with two deliberate schema changes:
+Two schema decisions worth knowing:
 
 - ``emissions_kg_actual`` records the cabin actually flown where the source
   knows it, falling back to economy. The per-cabin reference columns are all
   still there beside it, so a future cabin-aware importer improves this number
   without the file gaining a second, competing notion of "the" figure.
-- The prototype's running ``cumulative_kg_economy`` column is **gone**. This
-  file is a record of flights; totalling it is the job of whatever reads it.
+- There is **no** running-total column. This file is a record of flights;
+  totalling it is the job of whatever reads it.
   A stored aggregate would go stale against hand edits and would rewrite every
   row after any backfilled flight.
 """
@@ -53,7 +53,7 @@ CSV_FIELDS = [
 # `status` values. Blank means an ordinary flight, booked or flown.
 STATUS_CANCELLED = "cancelled"
 
-# Columns that identify the prototype's pre-v0.1.0 CSV.
+# Columns that identify a pre-v0.1.0 CSV.
 LEGACY_ID_FIELD = "tripit_uid"
 LEGACY_CUMULATIVE_FIELD = "cumulative_kg_economy"
 
@@ -63,22 +63,22 @@ RETIRED_FIELDS = frozenset({LEGACY_CUMULATIVE_FIELD, "cumulative_kg_actual"})
 
 
 def is_legacy_row(row: dict) -> bool:
-    """True if this row came from the single-file prototype's schema."""
+    """True if this row uses the pre-v0.1.0 schema."""
     return LEGACY_ID_FIELD in row and "source_id" not in row
 
 
 def migrate_legacy_row(row: dict) -> dict:
-    """Bring a prototype row up to the current schema, in memory.
+    """Bring a pre-v0.1.0 row up to the current schema, in memory.
 
-    Without this, pointing contrail at an existing prototype CSV would fail to
-    recognise any of its rows, re-import every flight, and re-price the lot.
+    Without this, pointing contrail at such a CSV would fail to recognise any of
+    its rows, re-import every flight, and re-price the lot.
     """
     migrated = {field: row.get(field, "") for field in CSV_FIELDS}
     migrated["source"] = "tripit_ical"
     migrated["source_id"] = row.get(LEGACY_ID_FIELD, "")
     migrated["cabin_class_known"] = ""
-    # The prototype had no notion of an "actual" cabin, so economy is the
-    # honest carry-over; cumulative gets recomputed from scratch anyway.
+    # That schema had no notion of an "actual" cabin, so economy is the honest
+    # carry-over.
     migrated["emissions_kg_actual"] = row.get("emissions_kg_economy", "")
     return migrated
 

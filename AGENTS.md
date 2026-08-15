@@ -45,7 +45,7 @@ The dedup key is `f"{source}:{source_id}"` everywhere.
 - [docs/parsing.md](docs/parsing.md) — the ported regexes, local dates,
   codeshares, why `parse()` is two-pass
 - [docs/emissions.md](docs/emissions.md) — exact vs route average, the past-date
-  400, why timing a call buys nothing, what gets kept
+  400, what gets kept, and the open question about timing
 - [docs/resync.md](docs/resync.md) — what a sync may change, the freeze boundary,
   cancellation
 - [docs/storage.md](docs/storage.md) — CSV invariants and why there's no total
@@ -53,8 +53,9 @@ The dedup key is `f"{source}:{source_id}"` everywhere.
 
 ## Gotchas most likely to bite
 
-- **The regexes in `importers/tripit_ical.py` are ported verbatim** from a
-  prototype validated against a real feed. Don't tidy them without a failing test.
+- **The regexes in `importers/tripit_ical.py` are validated against real TripIt
+  feeds.** They look untidy because real feeds are. Don't rewrite one without a
+  failing test that proves the current form is wrong.
 - **Mutation is confined to flights that haven't departed.** Past rows are never
   touched — that's what makes "absent from the feed" unambiguous.
 - **The file is written only when content actually changed**, or contrail-gh

@@ -4,7 +4,7 @@
 
 ## No running total
 
-The prototype's `cumulative_kg_economy` is gone and shouldn't come back. A stored
+There is no `cumulative_*` column, and one shouldn't be added. A stored
 aggregate goes stale the moment a row is hand-edited, and one backfilled flight
 rewrites every row after it — noise in a file that lives in git. `total_kg()`
 computes a total for display; readers sum the column themselves.
@@ -33,11 +33,11 @@ column up by header name.
   feed only exposes recent and upcoming trips, so a half-written CSV would lose
   history that cannot be re-fetched.
 
-## Legacy files
+## Older files
 
-A prototype-era CSV (`tripit_uid`, `cumulative_kg_economy`) is migrated in memory
-on read. Without it, pointing contrail at one would fail to recognise any row,
-re-import every flight and re-price the lot.
+A CSV using the pre-v0.1.0 schema (`tripit_uid`, `cumulative_kg_economy`) is
+migrated in memory on read. Without it, pointing contrail at one would fail to
+recognise any row, re-import every flight and re-price the lot.
 
 ## Seams
 

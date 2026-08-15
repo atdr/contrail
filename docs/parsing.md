@@ -1,10 +1,11 @@
 # Reading a TripIt feed
 
-## The regexes are ported, not written
+## The regexes look untidy because real feeds are
 
-`AIRPORT_CODE_RE`, `FROM_TO_RE`, `CODE_PAIR_RE` and `FLIGHT_NO_RE` came verbatim
-from a prototype validated against a real TripIt feed. **Don't tidy them without
-a failing test.**
+`AIRPORT_CODE_RE`, `FROM_TO_RE`, `CODE_PAIR_RE` and `FLIGHT_NO_RE` are validated
+against real TripIt feeds and handle their inconsistencies. **Don't rewrite one
+without a failing test that proves the current form is wrong** — every oddity in
+them is load-bearing for some real event.
 
 `FROM_TO_RE` is compiled with `re.IGNORECASE`, so its `[A-Z]{3}` groups match
 lowercase too. Intentional — real feeds are inconsistent — but surprising.

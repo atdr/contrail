@@ -74,10 +74,10 @@ contrail uses a hybrid approach, because of how the TIM API behaves:
    average that works for any date.
 3. The `emissions_source` column records which method produced each row.
 
-There is no point timing a sync to just before departure. TIM serves a **pre-built dataset**,
-identified by the `+dated` part of `model_version`, so a call an hour before takeoff returns
-exactly what a call that morning returns. What matters is landing a sync while the flight is
-still upcoming at all.
+Responses carry a dataset stamp in `model_version` (the `+dated` part). It doesn't move daily,
+which suggests a call shortly before departure returns what the morning's call returned — though
+whether TIM can refresh a flight's aircraft *within* a stamp hasn't been tested. Either way,
+re-pricing on every run already captures whatever the last sync before departure can see.
 
 **So run it regularly.** A daily sync gives each flight the most chances to be priced exactly
 while it is still upcoming. Flights first discovered *after* they've flown — an initial backfill

@@ -1,8 +1,8 @@
 """TripIt iCal importer.
 
-Ported from the prototype's ``parse_flights_from_ical`` / ``is_flight_event`` /
-``extract_flight_fields``. The regexes below are unchanged: they were validated
-against a real TripIt feed, so resist the urge to "tidy" them.
+The regexes below are validated against real TripIt feeds and handle their
+inconsistencies. They look untidy because the feeds are; resist the urge to
+"tidy" them without a failing test proving the current form wrong.
 """
 
 from __future__ import annotations

@@ -91,8 +91,8 @@ def test_multiple_sources_are_preserved(tmp_path):
     assert len(config.sources) == 2
 
 
-def test_prototype_style_flat_config_still_works(tmp_path):
-    """The single-file prototype's config.json shape shouldn't break on upgrade."""
+def test_flat_config_keys_still_work(tmp_path):
+    """Pre-v0.1.0 config.json used flat keys. Upgrading shouldn't break them."""
     write_config(
         tmp_path,
         {"TRIPIT_ICAL_URL": "https://legacy.invalid/f.ics", "TIM_API_KEY": "legacy-key"},
