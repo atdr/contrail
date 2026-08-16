@@ -4,10 +4,6 @@
     {
       "type": "tripit_ical",
       "url": "https://www.tripit.com/feed/ical/private/YOUR-FEED-ID/tripit.ics"
-    },
-    {
-      "type": "flighty_csv",
-      "path": "flighty/"
     }
   ],
   "emissions": {

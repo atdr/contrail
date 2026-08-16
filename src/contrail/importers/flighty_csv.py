@@ -29,6 +29,7 @@ export rather than assumed:
 from __future__ import annotations
 
 import csv
+import sys
 from collections.abc import Iterable, Iterator
 from datetime import date, datetime
 from glob import glob
@@ -133,6 +134,14 @@ def export_files(path: str) -> list[Path]:
     Ordering is by filename, not modification time: Flighty names its exports
     ``FlightyExport-YYYY-MM-DD.csv``, so the name sorts correctly, and a repo
     checkout gives every file the same mtime anyway.
+
+    **Finding nothing is a warning, not an error**, and an empty directory and a
+    missing one behave alike. An export arrives by hand, so "not there yet" is an
+    ordinary state — the contrail-gh template ships an empty ``flighty/`` for
+    exactly that reason. Raising would let one unconfigured source take down a
+    sync that had a perfectly good TripIt feed alongside it. Nothing else breaks:
+    a source that returns nothing already can't cancel its own rows, and a run
+    where *every* source is empty is refused separately.
     """
     target = Path(path).expanduser()
 
@@ -142,11 +151,14 @@ def export_files(path: str) -> list[Path]:
         matches = [target]
     else:
         matches = [Path(p) for p in glob(str(target))]
-        if not matches:
-            raise ValueError(
-                f"No Flighty export found at {path!r}. Point 'path' at an exported "
-                "CSV, a directory of them, or a glob."
-            )
+
+    if not matches:
+        print(
+            f"No Flighty export found at {path!r} — no cabin classes will be filled in "
+            "from one this run.\n"
+            "  'path' takes an exported CSV, a directory of them, or a glob.",
+            file=sys.stderr,
+        )
 
     return sorted(matches, key=lambda p: p.name, reverse=True)
 

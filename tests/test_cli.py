@@ -581,3 +581,41 @@ def test_a_settled_rerun_says_nothing_it_did_not_do(both_sources, capsys):
     assert "gained details" not in out
     assert "matched a flight" not in out
     assert "is the same flight as" not in out  # detail belongs to --dry-run
+
+
+def test_the_link_is_recorded_on_an_upcoming_flight(env, monkeypatch):
+    """The join has to work before departure, not only after. When the stored row
+    is owned by a record that got folded in, the surviving record's own key is the
+    only new information there is."""
+    monkeypatch.delenv("TRIPIT_ICAL_URL")
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(FIXTURE_FLIGHTY))
+    run_sync(["sync"])  # Flighty alone, so it owns every row
+
+    # Now a feed that also reports the upcoming 2026-03-04 JFK->LHR. It is listed
+    # first, so it wins the collapse while Flighty still owns the stored row.
+    monkeypatch.setenv("TRIPIT_ICAL_URL", str(FIXTURE_FEED))
+    run_sync(["sync"])
+
+    rows = read_csv(env / "flight_emissions.csv")
+    jfk = next(r for r in rows if (r["origin"], r["destination"]) == ("JFK", "LHR"))
+    assert jfk["source"] == "flighty_csv"  # first to find it keeps it
+    assert jfk["also_seen_as"] == "tripit_ical:item-11111111-aaaa@example.invalid"
+
+
+def test_a_through_flight_conflict_survives_a_lower_case_feed(env, tmp_path, monkeypatch, capsys):
+    """TripIt's FROM_TO_RE is IGNORECASE. Comparing raw codes against normalized
+    rows meant the double-count warning silently never fired."""
+    rows = list(csv.DictReader(FIXTURE_FLIGHTY.open()))
+    for r in rows[4:6]:  # the two BA16 legs
+        r["From"], r["To"] = r["From"].lower(), r["To"].lower()
+    through = {**rows[4], "To": "lhr", "Flight Flighty ID": "through-1"}
+    export = tmp_path / "lower.csv"
+    with open(export, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows([*rows, through])
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(export))
+
+    run_sync(["sync"])
+
+    assert "counted about twice" in capsys.readouterr().err

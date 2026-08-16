@@ -160,11 +160,21 @@ def test_an_empty_directory_yields_nothing(tmp_path, importer):
     """What makes the contrail-gh template's empty flighty/ inert rather than an
     error on every scheduled run."""
     assert list(importer.fetch({"path": str(tmp_path)})) == []
+    assert list(export_files(str(tmp_path))) == []
 
 
-def test_a_path_that_matches_nothing_is_an_error(tmp_path, importer):
-    with pytest.raises(ValueError, match="No Flighty export"):
-        list(importer.fetch({"path": str(tmp_path / "nope" / "*.csv")}))
+def test_a_path_that_matches_nothing_warns_rather_than_failing(tmp_path, importer, capsys):
+    """An export arrives by hand, so "not there yet" is ordinary. Raising would
+    let one unconfigured source take down a sync with a good TripIt feed in it."""
+    assert list(importer.fetch({"path": str(tmp_path / "nope" / "*.csv")})) == []
+    assert "No Flighty export found" in capsys.readouterr().err
+
+
+def test_a_missing_path_and_an_empty_directory_behave_alike(tmp_path, importer, capsys):
+    assert list(importer.fetch({"path": str(tmp_path)})) == []
+    empty_dir = capsys.readouterr().err
+    assert list(importer.fetch({"path": str(tmp_path / "gone")})) == []
+    assert bool(empty_dir) == bool(capsys.readouterr().err)
 
 
 def test_a_source_without_a_path_is_an_error(importer):

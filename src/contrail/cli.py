@@ -65,6 +65,32 @@ def _dedup(items) -> dict:
     return seen
 
 
+def _one_flight(a: FlightRecord, b: FlightRecord) -> bool:
+    """Whether two records sharing an identity really are the same flight.
+
+    Route and date normally settle it. The exception is a disagreement about
+    cancellation, where one identity covers two quite different situations:
+
+    - **One source, two different flight numbers.** A flight called off and
+      rebooked the same day on the same route. Two flights, one of them actually
+      flown, and folding them would put the cancellation on the one that flew and
+      zero it out for good.
+    - **Anything else.** One reading of one flight is simply stale — two sources
+      disagreeing, or one source listing the same flight twice. Folding is right,
+      and the cancellation stands, or else which source sits first in the config
+      would decide whether a called-off flight counts.
+
+    Sources are the discriminator rather than the flight number alone, because
+    two sources legitimately label one flight differently: on a codeshare, TripIt
+    may say ``IB3643`` where a Flighty export says ``BA458``.
+    """
+    if a.cancelled == b.cancelled:
+        return True
+    if a.source != b.source:
+        return True
+    return (a.carrier_code, a.flight_number) == (b.carrier_code, b.flight_number)
+
+
 def _collapse(flights: dict) -> tuple[dict, list[tuple[FlightRecord, FlightRecord]]]:
     """Fold records that are the same flight into one, keeping the first.
 
@@ -88,8 +114,13 @@ def _collapse(flights: dict) -> tuple[dict, list[tuple[FlightRecord, FlightRecor
     for key, flight in flights.items():
         identity = flight.identity
         winner = by_identity.get(identity) if identity else None
+        if winner is not None and not _one_flight(winner, flight):
+            winner = None
         if winner is None:
-            if identity:
+            # A record that counts takes the identity over one that doesn't, so a
+            # cancellation seen first can't stop the flight that replaced it from
+            # matching whatever comes next.
+            if identity and (identity not in by_identity or by_identity[identity].cancelled):
                 by_identity[identity] = flight
             survivors[key] = flight
             continue
@@ -97,12 +128,20 @@ def _collapse(flights: dict) -> tuple[dict, list[tuple[FlightRecord, FlightRecor
         collapsed.append((winner, flight))
         if flight.key not in winner.also_seen:
             winner.also_seen.append(flight.key)
-        for field in ("cabin_class", "aircraft_type", "flight_reason"):
+        for field in (
+            "cabin_class",
+            "aircraft_type",
+            "flight_reason",
+            # Whichever record knows who really operates the flight, the survivor
+            # has to end up holding it: TIM prices only the operating flight, and
+            # a codeshare asked about as booked silently falls to a route average.
+            "operating_carrier_code",
+            "operating_flight_number",
+        ):
             if getattr(winner, field) is None and getattr(flight, field) is not None:
                 setattr(winner, field, getattr(flight, field))
-        # A stated cancellation survives the fold. Which record wins is decided by
-        # the order sources happen to sit in the config, and that must not be what
-        # decides whether a called-off flight counts toward the total.
+        # Only reached when the two agree they are one flight, so a stated
+        # cancellation from either is about this flight and has to survive.
         winner.cancelled = winner.cancelled or flight.cancelled
 
     return survivors, collapsed
@@ -131,8 +170,10 @@ def _through_conflicts(flights: dict, rows: dict) -> list[tuple[str, list[Flight
     for (day, carrier, number), entries in by_number.items():
         if len(entries) < 2:
             continue
-        origins = {e.origin for e in entries}
-        destinations = {e.destination for e in entries}
+        # From `identity`, which upper-cases. Comparing raw codes against rows
+        # that were normalized means a lower-case feed never trips the warning.
+        origins = {e.identity[1] for e in entries}
+        destinations = {e.identity[2] for e in entries}
         # The endpoints of a chain a->b->c: the only origin that is nobody's
         # destination, and the only destination that is nobody's origin.
         starts = origins - destinations
@@ -148,10 +189,10 @@ def _through_conflicts(flights: dict, rows: dict) -> list[tuple[str, list[Flight
         # and in the order it is flown.
         legs = [e for e in entries if e.identity != through]
         ordered, at = [], through[1]
-        by_origin = {leg.origin: leg for leg in legs}
+        by_origin = {leg.identity[1]: leg for leg in legs}
         while at in by_origin:
             ordered.append(by_origin.pop(at))
-            at = ordered[-1].destination
+            at = ordered[-1].identity[2]
         conflicts.append((f"{carrier}{number} on {day}", ordered or legs, through))
     return conflicts
 
@@ -197,14 +238,22 @@ def reconcile(existing_rows, flights, unparsed, now) -> Reconciliation:
     """
     plan = Reconciliation()
     by_key = {row_key(row): row for row in existing_rows}
-    # A cancelled row does not claim its identity. If one source called a flight
-    # off and another says it flew, the second is describing something that
-    # happened and deserves a row of its own rather than being filed as a
-    # duplicate of a row that counts for nothing.
+    # Two kinds of row are excluded from claiming an identity.
+    #
+    # A cancelled one: if one source called a flight off and another says it
+    # flew, the second is describing something that happened and deserves a row
+    # of its own rather than being filed against a row that counts for nothing.
+    #
+    # And an unparsed one, which keeps whatever route it could recover — so it
+    # has an identity, and would absorb the properly parsed reading of the same
+    # flight that another source later supplies. That reading is never priced
+    # (duplicates aren't), so the flight would sit at 0 kg until someone noticed.
     by_identity = {
         identity: row
         for row in existing_rows
-        if (identity := resync.identity(row)) and not resync.is_cancelled(row)
+        if (identity := resync.identity(row))
+        and not resync.is_cancelled(row)
+        and row.get("emissions_source") != "unparsed"
     }
 
     feed_flights, plan.collapsed = _collapse(_dedup(flights))
@@ -241,7 +290,11 @@ def reconcile(existing_rows, flights, unparsed, now) -> Reconciliation:
             # Unknown by key, but the flight itself may already be in the file
             # under whichever source found it first. That source keeps the row;
             # this one fills in blanks and leaves its key behind to be joined on.
-            owner = by_identity.get(flight.identity) if flight.identity else None
+            owner = (
+                by_identity.get(flight.identity)
+                if flight.identity and not flight.cancelled
+                else None
+            )
             if owner is not None:
                 merged, filled = resync.backfill(owner, flight)
                 plan.duplicates.append((merged, flight, filled))
@@ -333,7 +386,10 @@ def _merge_row(row: dict, flight: FlightRecord, result, now_iso: str, changed: b
     # Cancellation is the source's to state, and its absence from a feed is the
     # only other way a row gets marked. Present and not called off means open.
     merged["status"] = STATUS_CANCELLED if flight.cancelled else ""
-    merged["also_seen_as"] = resync.linked(row, flight.also_seen)["also_seen_as"]
+    # Its own key as well as the folded ones: when the stored row is owned by a
+    # record that got folded in, the winner's key is the only new information,
+    # and `linked` drops whichever of them is the row's own.
+    merged["also_seen_as"] = resync.linked(row, [flight.key, *flight.also_seen])["also_seen_as"]
     for field in resync.BACKFILL_FIELDS:
         merged[field] = row.get(field) or fresh[field]
     # Keep the source text in step with the details, or a rerouted row reads

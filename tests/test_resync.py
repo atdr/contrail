@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime
 
 import pytest
 
-from contrail.cli import _merge_row, reconcile
+from contrail.cli import _collapse, _dedup, _merge_row, reconcile
 from contrail.models import EmissionsResult, FlightRecord, UnparsedEvent
 from contrail.resync import backfill, can_cancel, differences, identity, is_better, is_open
 from contrail.storage import normalize_rows, total_kg
@@ -572,3 +572,61 @@ def test_identity_is_case_insensitive():
     codes. An unnormalized comparison would write a second row for one flight."""
     lower = other(origin="lhr", destination="pfo")
     assert lower.identity == identity(row())
+
+
+def test_a_cancellation_and_its_rebooking_stay_two_flights():
+    """One source, one day, one route, two flight numbers: a flight called off
+    and the one that replaced it. Folding them would put the cancellation on the
+    flight that actually flew and zero it out for good."""
+    cancelled = other(source_id="u1", cancelled=True, cabin_class="economy")
+    flown = other(source_id="u2", flight_number="898", cabin_class="business")
+
+    survivors, _ = _collapse(_dedup([cancelled, flown]))
+
+    assert len(survivors) == 2
+    assert [f.cancelled for f in survivors.values()] == [True, False]
+
+
+def test_two_sources_disagreeing_about_a_cancellation_are_one_flight():
+    """A stale reading, not a rebooking. The cancellation stands, or else config
+    order would decide whether a called-off flight counts."""
+    booked = flight(source="tripit_ical", source_id="t-1")
+    called_off = other(source_id="u1", cancelled=True)
+
+    survivors, collapsed = _collapse(_dedup([booked, called_off]))
+
+    assert len(survivors) == 1
+    assert next(iter(survivors.values())).cancelled is True
+    assert len(collapsed) == 1
+
+
+def test_an_unparsed_row_does_not_absorb_a_parsed_flight():
+    """An unparsed row keeps whatever route it recovered, so it has an identity.
+    Letting it claim one would file the properly parsed reading another source
+    later supplies as a duplicate — never priced, and stuck at 0 kg."""
+    stored = [row(emissions_source="unparsed", carrier_code="", flight_number="")]
+
+    plan = reconcile(stored, [other()], [], NOW)
+
+    assert len(plan.new_flights) == 1
+    assert plan.duplicates == []
+
+
+def test_a_collapsed_codeshare_keeps_the_operating_flight():
+    """TIM prices only the operating flight. Whichever record knows it, the
+    survivor has to carry it, or the row silently drops to a route average."""
+    marketing = other(source_id="u1", carrier_code="IB", flight_number="3643")
+    operating = flight(
+        source="tripit_ical",
+        source_id="t-1",
+        carrier_code="IB",
+        flight_number="3643",
+        operating_carrier_code="BA",
+        operating_flight_number="458",
+    )
+
+    survivors, _ = _collapse(_dedup([marketing, operating]))
+    kept = next(iter(survivors.values()))
+
+    assert kept.pricing_carrier_code == "BA"
+    assert kept.pricing_flight_number == "458"
