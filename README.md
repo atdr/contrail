@@ -15,7 +15,7 @@ prices each one using Google's [Travel Impact Model](https://travelimpactmodel.o
 
 <!-- x-release-please-start-version -->
 ```bash
-pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.2.0"
+pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.3.0"
 ```
 <!-- x-release-please-end -->
 
@@ -377,7 +377,7 @@ secrets, and it syncs daily and commits the updated CSV back to your own repo.
 <!-- x-release-please-start-version -->
 ```bash
 python3 -m venv ~/contrail-venv
-~/contrail-venv/bin/pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.2.0"
+~/contrail-venv/bin/pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.3.0"
 crontab -e
 ```
 <!-- x-release-please-end -->

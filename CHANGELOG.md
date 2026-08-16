@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/atdr/contrail/compare/v0.2.0...v0.3.0) (2026-08-16)
+
+
+### Features
+
+* add a flighty_csv importer and match flights across sources ([ba0d292](https://github.com/atdr/contrail/commit/ba0d2921f04f6e3b92ec4f6c18c7024206cf9c54))
+
+
+### Bug Fixes
+
+* stop version references drifting from the release ([429507c](https://github.com/atdr/contrail/commit/429507c8d3d121c20c62e67b883cdaeb44776ffb))
+
+
+### Documentation
+
+* note the new way to reach the per-source identity gap ([941db88](https://github.com/atdr/contrail/commit/941db88d90a1b203aed0e5e7ce1905df389d4ef0))
+
 ## [0.2.0](https://github.com/atdr/contrail/compare/v0.1.0...v0.2.0) (2026-08-15)
 
 
