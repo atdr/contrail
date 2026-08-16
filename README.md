@@ -13,9 +13,11 @@ prices each one using Google's [Travel Impact Model](https://travelimpactmodel.o
 
 ## Install
 
+<!-- x-release-please-start-version -->
 ```bash
-pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.1.0"
+pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.2.0"
 ```
+<!-- x-release-please-end -->
 
 Pin a tag rather than tracking `main`, so a change here can never surprise a running instance.
 Python 3.11 or newer.
@@ -344,7 +346,7 @@ prices that instead. Turning "British Airways" into `BA` uses three sources, che
 2. **A table shipped with contrail** (`src/contrail/data/airline_codes.csv`), generated from
    [Wikidata](https://www.wikidata.org) and covering around 2,200 airlines by name, alias and ICAO
    code. Offline, so it costs nothing to consult. Regenerate it with
-   `python scripts/refresh_airline_codes.py`.
+   `./venv/bin/python scripts/refresh_airline_codes.py`.
 3. **Wikidata live** (property `P229`, the IATA airline designator), for names neither the feed nor
    the table knows. Set `"airline_lookup": false` on a source to switch **this step** off — the
    shipped table needs no network and keeps working. An unresolved airline just leaves the flight
@@ -372,11 +374,13 @@ secrets, and it syncs daily and commits the updated CSV back to your own repo.
 
 ### Raspberry Pi, VPS, or any host with cron
 
+<!-- x-release-please-start-version -->
 ```bash
 python3 -m venv ~/contrail-venv
-~/contrail-venv/bin/pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.1.0"
+~/contrail-venv/bin/pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.2.0"
 crontab -e
 ```
+<!-- x-release-please-end -->
 
 ```cron
 0 6 * * * TRIPIT_ICAL_URL="..." TIM_API_KEY="..." ~/contrail-venv/bin/contrail sync --csv-path ~/flight_emissions.csv >> ~/contrail.log 2>&1
@@ -421,9 +425,9 @@ That last one is also run in CI: both importers accept a local file path, so a b
 caught here before it can reach anyone's production instance through a version tag. Running both
 also exercises the matching between them, which is the part with no single source of truth.
 
-`python scripts/refresh_airline_codes.py` regenerates the bundled airline table from Wikidata. It
-needs network, so CI never runs it — do it by hand when the table looks stale, and commit the
-result. Don't hand-edit the CSV: fix it upstream in Wikidata and re-run, or the next refresh
+`./venv/bin/python scripts/refresh_airline_codes.py` regenerates the bundled airline table from
+Wikidata. Run it from the dev venv — it imports contrail for its version. It needs network, so CI
+never runs it — do it by hand when the table looks stale, and commit the result. Don't hand-edit the CSV: fix it upstream in Wikidata and re-run, or the next refresh
 silently reverts you.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/); releases and the

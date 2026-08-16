@@ -20,6 +20,11 @@ page is the list of things that break it.
 | A release is cut | Bump the `@vX.Y.Z` pin in `sync.yml` |
 | `requires-python` rises above the workflow's version | Raise `python-version` in `sync.yml` |
 
+The release row is the one release-please can't take off your hands. It rewrites
+the `@vX.Y.Z` pins in this repo's README, because they're listed under
+`extra-files`, but it has no reach into another repository. `sync.yml` stays a
+hand edit after every release.
+
 The `flighty_csv` importer is the first of the file-reading kind, and it is the
 reason that third row exists. An export is a manual file rather than a feed URL,
 so an instance commits its exports to `flighty/` and points `FLIGHTY_CSV_PATH` at

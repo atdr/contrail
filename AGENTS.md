@@ -44,7 +44,9 @@ Two keys, and the difference matters:
 - Conventional commits. release-please owns versions, tags and `CHANGELOG.md` —
   never hand-edit the changelog or the version in `pyproject.toml`.
 - `__version__` is read from installed package metadata, so `pyproject.toml` is
-  the single source of truth and release-please edits one file.
+  the single source of truth. Code that needs the version imports `__version__`
+  rather than spelling it out — see the gotcha on version pins for the two
+  literals that remain.
 - **No test may make a real network call.** Mock `requests` in both directions.
 - This repo is public. Never commit a real CSV, a raw log, or `config.json` —
   all are gitignored.
@@ -100,6 +102,13 @@ Two keys, and the difference matters:
   changes toward a bump, so a `chore(deps)` bump of a runtime dependency changes
   what users install with nothing in the changelog and no release. Dev
   dependencies stay `chore(deps-dev):`.
+- **The two install pins in `README.md` are rewritten by release-please**, not by
+  hand. They sit inside `<!-- x-release-please-start-version -->` /
+  `<!-- x-release-please-end -->` comments, and `README.md` is listed under
+  `extra-files` in `release-please-config.json` — both halves are needed. Delete
+  a comment and the pin quietly rots to whatever release it was written against,
+  which is exactly how it drifted before. A *new* literal version anywhere else
+  is a bug: import `__version__`.
 - **release-please needs the repo setting "Allow GitHub Actions to create and
   approve pull requests"** (Settings → Actions → General). `permissions:
   pull-requests: write` in the workflow is *not* sufficient on its own, and the
