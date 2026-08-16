@@ -8,6 +8,11 @@ from datetime import date, datetime
 # Cabin classes contrail knows about, in the order TIM reports them.
 CABIN_CLASSES = ("first", "business", "premium_economy", "economy")
 
+# Why the trip was taken, where a source says. Not every source does, and no
+# figure depends on it — it is there so business travel can be split out of a
+# total by whatever reads the CSV.
+FLIGHT_REASONS = ("business", "leisure")
+
 
 @dataclass
 class FlightRecord:
@@ -31,12 +36,40 @@ class FlightRecord:
     # flight_number stay as booked, and these carry who actually flies it.
     operating_carrier_code: str | None = None
     operating_flight_number: str | None = None
+    aircraft_type: str | None = None  # as the source names it; TIM never names one
+    flight_reason: str | None = None  # "business" | "leisure", if the source says
+    # Stated by the source, as opposed to inferred from a flight disappearing.
+    cancelled: bool = False
+    # Keys of other entries found to be this same flight. Populated when two
+    # sources both report it, or when one source lists it twice.
+    also_seen: list[str] = field(default_factory=list)
     raw: dict = field(default_factory=dict)  # original source data, for debugging
 
     @property
     def key(self) -> str:
         """Namespaced dedup key. IDs from different sources can never collide."""
         return f"{self.source}:{self.source_id}"
+
+    @property
+    def identity(self) -> tuple[str, str, str] | None:
+        """What makes this the *same flight* regardless of which source found it.
+
+        Deliberately not the flight number. ``BA16`` can be two legs on one day —
+        SYD-SIN-LHR, flown in different cabins — and they are two flights, two
+        emissions figures, and two rows. Route and date separate them; a flight
+        number would collapse them and lose one.
+
+        None when a field is missing, which keeps a half-parsed record from
+        matching anything.
+        """
+        if not (self.flight_date and self.origin and self.destination):
+            return None
+        # Upper-cased to agree with ``resync.identity``, which normalizes what it
+        # reads from the file. TripIt's FROM_TO_RE is IGNORECASE, so a feed
+        # phrasing like "from ... (sfo) to ... (jfk)" really does yield lower
+        # case, and an unnormalized comparison would silently miss the match and
+        # write a second row for the same flight.
+        return (self.flight_date.isoformat(), self.origin.upper(), self.destination.upper())
 
     @property
     def pricing_carrier_code(self) -> str:

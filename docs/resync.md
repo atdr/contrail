@@ -27,13 +27,76 @@ tomorrow, so a flight departing that evening would freeze before it left.
 - Date, route and flight numbers are corrected from the feed.
 - It is re-priced on every run — see [emissions.md](emissions.md) for why even an
   `exact` figure is worth re-asking.
-- `cabin_class_known` is never overwritten. No importer can supply it, so
-  overwriting would destroy the only copy; a warning names the row when a
-  re-synced flight had one set.
+- `cabin_class_known`, `aircraft_type` and `flight_reason` are only ever filled
+  in, never overwritten. A stored value is either a hand edit or the one source
+  that reports it, and in both cases it is the only copy; a warning names the row
+  when a re-synced flight had a cabin set.
 - Disappearing from the feed marks it `cancelled` rather than deleting it. The
   per-cabin figures stay because TIM will never price a past flight again; only
   `emissions_kg_actual` is cleared, which is the single point that drops it out
   of every total. Reappearing restores it.
+
+## The one thing a past row will accept
+
+`resync.backfill()` may fill a **blank** `cabin_class_known`, `aircraft_type` or
+`flight_reason`, and add to `also_seen_as`, on a row of any age. Nothing else in
+this module touches a departed flight.
+
+It is safe because it isn't what the freeze protects against. The freeze exists
+for two reasons — absence from a feed is ambiguous for a past flight, and TIM
+will not re-price one — and neither is in play. A back-fill re-prices nothing and
+re-fetches nothing. Setting a cabin only changes which of the per-cabin figures
+the row *already holds* feeds `emissions_kg_actual`, which is precisely the hand
+edit the README documents.
+
+And refusing it would refuse the point. A Flighty export is typically two decades
+of flights, essentially all in the past; if the correction only applied to
+upcoming ones, adding an export to an existing log would fix nothing.
+
+## One flight, two sources
+
+Identity is `(flight_date, origin, destination)`. The first source to report a
+flight owns its row; a second one reporting the same flight never creates a
+second row.
+
+- **Within a run**, two records with one identity are collapsed before
+  reconciliation, keeping the first. The winner takes any field the loser knew
+  and it didn't, and records the loser's key. This is what stops a Flighty export
+  that lists a codeshare under both its marketing and operating number from
+  counting the flight twice.
+- **Against the file**, a record whose key is unknown but whose identity is
+  already stored back-fills that row instead of adding one. It is never sent for
+  pricing: the row already has its figure.
+- **A cancelled row does not claim its identity.** If one source called a flight
+  off and another says it flew, the flight that happened deserves a row rather
+  than being filed against one that counts for nothing.
+- **A row another source still reports is never cancelled**, even if the source
+  that owns it went quiet.
+
+Ordering decides ownership, so it is the order sources appear in `sources:`. That
+is deterministic and stable, which matters more than which source is "better":
+the row is the same flight either way, and `also_seen_as` reaches the rest.
+
+**Not the flight number.** `BA16` can be SYD–SIN and SIN–LHR on one day, in two
+different cabins. See [parsing.md](parsing.md).
+
+## Open: a through flight alongside its legs
+
+If a source reports `BA16` as one SYD–LHR segment while another reports the two
+legs, nothing matches them and the journey is counted about twice. contrail
+detects the chain and prints a warning naming both, then changes nothing.
+
+Deliberately not resolved automatically. Which representation is right depends on
+what actually happened, and the legs can carry two cabins that a single through
+row cannot express — so an automatic answer would sometimes destroy the better
+data. It needs a real capture to settle: **does TripIt emit a through flight as
+one VEVENT or two?** Unknown. Until that is answered, a visible clash beats a
+confident guess.
+
+The legs are the better data whichever way that lands: TIM prices a leg and
+returns nothing at all for a published through route
+(see [emissions.md](emissions.md)), so a through row could never be priced
+exactly. The cost of the clash is double counting, not a wrong figure.
 
 ## Guards worth knowing
 

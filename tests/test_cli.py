@@ -228,8 +228,8 @@ def test_unknown_importer_type_is_reported(tmp_path, monkeypatch, capsys):
 def test_sources_command_marks_what_is_configured(env, capsys):
     assert main(["sources"]) == 0
     out = capsys.readouterr().out
-    assert "tripit_ical" in out
-    assert "not configured" not in out
+    assert "tripit_ical      configured" in out
+    assert "flighty_csv      not configured" in out
 
 
 # -- re-sync at the CLI level -------------------------------------------------
@@ -364,3 +364,258 @@ def test_dry_run_reports_cancellations_without_writing(env, monkeypatch, capsys)
 
     assert (env / "out.csv").read_text() == before
     assert "CANCEL" in capsys.readouterr().out
+
+
+# -- two sources describing the same flights ---------------------------------
+
+FIXTURE_FLIGHTY = pathlib.Path(__file__).parent / "fixtures" / "sample_flighty.csv"
+
+
+@pytest.fixture
+def both_sources(env, monkeypatch):
+    """The iCal feed and the Flighty export, in that order.
+
+    They overlap on one flight: the feed's `XX123 JFK to LHR` departs
+    2026-03-05T01:30Z, which is the evening of 2026-03-04 in New York, and the
+    export lists a JFK-LHR on that date. The carrier and number differ between
+    them on purpose — identity is route and date, not how a source labels it.
+    """
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(FIXTURE_FLIGHTY))
+    return env
+
+
+def test_the_same_flight_from_two_sources_is_one_row(both_sources, capsys):
+    assert run_sync(["sync"]) == 0
+    rows = read_csv(both_sources / "flight_emissions.csv")
+
+    jfk = [r for r in rows if (r["origin"], r["destination"]) == ("JFK", "LHR")]
+    assert len(jfk) == 1
+    assert jfk[0]["source"] == "tripit_ical"  # the first source listed owns it
+    assert jfk[0]["also_seen_as"] == "flighty_csv:00000000-0000-4000-8000-000000000009"
+
+
+def test_a_duplicate_backfills_the_owning_row(both_sources):
+    """The feed cannot report a cabin; the export can. The row is frozen — the
+    flight is months past — and this is the one thing allowed to change on it."""
+    run_sync(["sync"])
+    rows = read_csv(both_sources / "flight_emissions.csv")
+    jfk = next(r for r in rows if r["origin"] == "JFK")
+
+    assert jfk["cabin_class_known"] == "business"
+    assert jfk["aircraft_type"] == "Boeing 777-300 ER"
+    assert jfk["flight_reason"] == "business"
+    # The per-cabin figures were already stored; the cabin decides which counts.
+    assert jfk["emissions_kg_actual"] == jfk["emissions_kg_business"] == "300.0"
+
+
+def test_a_duplicate_is_never_priced_again(both_sources):
+    run_sync(["sync"])
+    assert not [f for f in FakeProvider.seen if f.origin == "JFK" and f.source == "flighty_csv"]
+
+
+def test_a_codeshare_listed_twice_becomes_one_row(both_sources, capsys):
+    """The export has 2023-04-02 LHR-MAD as both IB3643 and BA458 — one flight,
+    entered twice. Two rows would count it twice."""
+    run_sync(["sync"])
+    rows = read_csv(both_sources / "flight_emissions.csv")
+
+    mad = [r for r in rows if r["destination"] == "MAD"]
+    assert len(mad) == 1
+    assert mad[0]["also_seen_as"] == "flighty_csv:00000000-0000-4000-8000-000000000008"
+    # The row kept is the first listed, and it takes what the second knew.
+    assert (mad[0]["carrier_code"], mad[0]["flight_number"]) == ("IB", "3643")
+    assert mad[0]["cabin_class_known"] == "business"
+    assert "matched a flight another source had already reported" in capsys.readouterr().out
+
+
+def test_legs_of_one_flight_number_stay_two_rows(both_sources):
+    """BA16 SYD-SIN-LHR, flown in different cabins. Collapsing them would lose a
+    first-class leg and its emissions figure."""
+    run_sync(["sync"])
+    rows = read_csv(both_sources / "flight_emissions.csv")
+
+    legs = [r for r in rows if r["flight_number"] == "16"]
+    assert [(r["origin"], r["destination"]) for r in legs] == [("SYD", "SIN"), ("SIN", "LHR")]
+    assert {r["cabin_class_known"] for r in legs} == {"business", "first"}
+    assert [r["emissions_kg_actual"] for r in legs] == ["300.0", "400.0"]
+
+
+def test_a_cancelled_flight_the_source_reports_counts_for_nothing(both_sources):
+    run_sync(["sync"])
+    rows = read_csv(both_sources / "flight_emissions.csv")
+
+    cancelled = next(r for r in rows if r["destination"] == "EDI")
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["emissions_kg_actual"] == ""
+    assert cancelled["emissions_kg_economy"] == "100.0"  # kept: TIM won't say again
+
+
+def test_a_second_sync_changes_nothing(both_sources, capsys):
+    """Two sources reporting the same flight must not make the file churn."""
+    run_sync(["sync"])
+    before = (both_sources / "flight_emissions.csv").read_text()
+
+    capsys.readouterr()
+    run_sync(["sync"])
+    assert (both_sources / "flight_emissions.csv").read_text() == before
+    assert "already up to date" in capsys.readouterr().out
+
+
+def test_a_through_flight_alongside_its_legs_is_reported(env, tmp_path, monkeypatch, capsys):
+    """A source that reports BA16 as one SYD-LHR segment describes the same
+    journey as the two legs, and nothing matches them up. contrail can't pick a
+    winner — the legs were two different cabins, which one row can't express — so
+    it says so loudly and keeps both."""
+    rows = list(csv.DictReader(FIXTURE_FLIGHTY.open()))
+    through = {**rows[4], "To": "LHR", "Flight Flighty ID": "through-1"}
+    export = tmp_path / "with-through-flight.csv"
+    with open(export, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows([*rows, through])
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(export))
+
+    assert run_sync(["sync"]) == 0
+
+    err = capsys.readouterr().err
+    assert "BA16 on 2022-09-01" in err
+    assert "SYD-SIN + SIN-LHR" in err
+    assert "counted about twice" in err
+
+    written = read_csv(env / "flight_emissions.csv")
+    assert len([r for r in written if r["flight_number"] == "16"]) == 3  # nothing removed
+
+
+def test_the_dry_run_lists_what_it_would_link(env, monkeypatch, capsys):
+    """The link is only visible before it happens, so the dry run has to show it."""
+    run_sync(["sync"])  # the feed alone, so the JFK row exists and is owned by it
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(FIXTURE_FLIGHTY))
+    capsys.readouterr()
+
+    run_sync(["sync", "--dry-run"])
+
+    out = capsys.readouterr().out
+    assert "LINKED" in out
+    assert "already stored as tripit_ical" in out
+    assert "fills also_seen_as, cabin_class_known, aircraft_type, flight_reason" in out
+
+
+def test_adding_an_export_later_fills_in_frozen_rows(env, monkeypatch, capsys):
+    """The upgrade path, and the whole point of the feature: a log built from
+    TripIt over months has every past row assuming economy. Pointing contrail at
+    a Flighty export has to correct them, even though they are frozen."""
+    run_sync(["sync"])
+    before = read_csv(env / "flight_emissions.csv")
+    jfk_before = next(r for r in before if r["origin"] == "JFK")
+    assert jfk_before["cabin_class_known"] == ""
+    assert jfk_before["emissions_kg_actual"] == "100.0"  # economy, assumed
+
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(FIXTURE_FLIGHTY))
+    assert run_sync(["sync"]) == 0
+
+    after = read_csv(env / "flight_emissions.csv")
+    jfk = next(r for r in after if r["origin"] == "JFK")
+    assert jfk["source"] == "tripit_ical"  # still owned by the source that found it
+    assert jfk["cabin_class_known"] == "business"
+    assert jfk["emissions_kg_actual"] == "300.0"  # a figure it already had
+    assert jfk["also_seen_as"] == "flighty_csv:00000000-0000-4000-8000-000000000009"
+
+
+def test_a_frozen_row_is_not_repriced_when_it_is_filled_in(env, monkeypatch):
+    """Filling a blank must not become an excuse to re-ask about a past flight —
+    TIM refuses, and the stored figures are all there will ever be."""
+    run_sync(["sync"])
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(FIXTURE_FLIGHTY))
+    run_sync(["sync"])
+
+    assert not [f for f in FakeProvider.seen if (f.origin, f.destination) == ("JFK", "LHR")]
+
+
+def test_the_flighty_id_is_always_reachable_for_a_join(env, monkeypatch):
+    """Whichever source owns a row, the Flighty id is in source_id or in
+    also_seen_as — which is what the README's join recipe relies on."""
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(FIXTURE_FLIGHTY))
+    run_sync(["sync"])
+
+    rows = read_csv(env / "flight_emissions.csv")
+    from_flighty = [
+        r for r in rows if r["source"] == "flighty_csv" or "flighty_csv:" in r["also_seen_as"]
+    ]
+    assert len(from_flighty) == 10  # 9 rows of its own + the one it linked to
+
+    for row in from_flighty:
+        keys = f"{row['source']}:{row['source_id']} {row['also_seen_as']}"
+        assert "flighty_csv:00000000-0000-4000-8000-" in keys
+
+
+def test_a_stated_cancellation_survives_being_folded(env, tmp_path, monkeypatch):
+    """Which record wins a collapse is decided by config order. That must not be
+    what decides whether a called-off flight counts toward the total."""
+    rows = list(csv.DictReader(FIXTURE_FLIGHTY.open()))
+    # Same flight as the feed's XX123 JFK->LHR, but Flighty says it was cancelled.
+    rows[8]["Canceled"] = "true"
+    export = tmp_path / "cancelled.csv"
+    with open(export, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(export))
+
+    run_sync(["sync"])
+
+    jfk = next(r for r in read_csv(env / "flight_emissions.csv") if r["origin"] == "JFK")
+    assert jfk["status"] == "cancelled"
+    assert jfk["emissions_kg_actual"] == ""
+
+
+def test_a_settled_rerun_says_nothing_it_did_not_do(both_sources, capsys):
+    """Sources overlapping is the steady state, not news. A line per matched
+    flight every run would bury whatever actually changed."""
+    run_sync(["sync"])
+    capsys.readouterr()
+
+    run_sync(["sync"])
+
+    out = capsys.readouterr().out
+    assert "already up to date" in out
+    assert "gained details" not in out
+    assert "matched a flight" not in out
+    assert "is the same flight as" not in out  # detail belongs to --dry-run
+
+
+def test_the_link_is_recorded_on_an_upcoming_flight(env, monkeypatch):
+    """The join has to work before departure, not only after. When the stored row
+    is owned by a record that got folded in, the surviving record's own key is the
+    only new information there is."""
+    monkeypatch.delenv("TRIPIT_ICAL_URL")
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(FIXTURE_FLIGHTY))
+    run_sync(["sync"])  # Flighty alone, so it owns every row
+
+    # Now a feed that also reports the upcoming 2026-03-04 JFK->LHR. It is listed
+    # first, so it wins the collapse while Flighty still owns the stored row.
+    monkeypatch.setenv("TRIPIT_ICAL_URL", str(FIXTURE_FEED))
+    run_sync(["sync"])
+
+    rows = read_csv(env / "flight_emissions.csv")
+    jfk = next(r for r in rows if (r["origin"], r["destination"]) == ("JFK", "LHR"))
+    assert jfk["source"] == "flighty_csv"  # first to find it keeps it
+    assert jfk["also_seen_as"] == "tripit_ical:item-11111111-aaaa@example.invalid"
+
+
+def test_a_through_flight_conflict_survives_a_lower_case_feed(env, tmp_path, monkeypatch, capsys):
+    """TripIt's FROM_TO_RE is IGNORECASE. Comparing raw codes against normalized
+    rows meant the double-count warning silently never fired."""
+    rows = list(csv.DictReader(FIXTURE_FLIGHTY.open()))
+    for r in rows[4:6]:  # the two BA16 legs
+        r["From"], r["To"] = r["From"].lower(), r["To"].lower()
+    through = {**rows[4], "To": "lhr", "Flight Flighty ID": "through-1"}
+    export = tmp_path / "lower.csv"
+    with open(export, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows([*rows, through])
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(export))
+
+    run_sync(["sync"])
+
+    assert "counted about twice" in capsys.readouterr().err

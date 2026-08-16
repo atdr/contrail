@@ -62,10 +62,12 @@ def test_first_learned_code_wins():
 
 
 def test_falls_back_to_wikidata():
-    session = wikidata_session(["Q8766"], {"Q8766": {"claims": claim("BA")}})
+    """A name the bundled table has never heard of is the only one that reaches
+    the network, so the fixtures here use an invented airline throughout."""
+    session = wikidata_session(["Q8766"], {"Q8766": {"claims": claim("AZ")}})
     resolver = AirlineResolver(session=session)
 
-    assert resolver.resolve("British Airways") == "BA"
+    assert resolver.resolve("Albatross Airways") == "AZ"
     assert session.calls[0]["action"] == "wbsearchentities"
     assert session.calls[1]["action"] == "wbgetentities"
 
@@ -95,10 +97,20 @@ def test_results_are_cached_including_misses():
 
 
 def test_lookup_can_be_disabled():
-    session = wikidata_session(["Q8766"], {"Q8766": {"claims": claim("BA")}})
+    session = wikidata_session(["Q8766"], {"Q8766": {"claims": claim("AZ")}})
     resolver = AirlineResolver(lookup=False, session=session)
 
-    assert resolver.resolve("British Airways") is None
+    assert resolver.resolve("Albatross Airways") is None
+    assert session.calls == []
+
+
+def test_disabling_lookup_leaves_the_bundled_table_working():
+    """``airline_lookup: false`` opts out of the *network*, not of resolution."""
+    session = wikidata_session([], {})
+    resolver = AirlineResolver(lookup=False, session=session)
+
+    assert resolver.resolve("British Airways") == "BA"
+    assert resolver.resolve_icao("BAW") == "BA"
     assert session.calls == []
 
 
@@ -107,7 +119,7 @@ def test_network_failure_never_breaks_a_sync():
         def get(self, *a, **kw):
             raise requests.ConnectionError("wikidata unreachable")
 
-    assert AirlineResolver(session=Failing()).resolve("British Airways") is None
+    assert AirlineResolver(session=Failing()).resolve("Albatross Airways") is None
 
 
 def test_blank_names_resolve_to_nothing():

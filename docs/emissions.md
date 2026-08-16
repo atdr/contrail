@@ -48,6 +48,32 @@ captures whatever the last pre-departure sync can see. And GitHub's `schedule:`
 is static and best-effort — routinely delayed, occasionally dropped — so
 minute-precision isn't available there whatever TIM does.
 
+## TIM is leg-based, so contrail must be too
+
+`BA15` flies LHR–SIN–SYD under one number. Asked about all three routings a month
+out (model `3.0.0+20260815`):
+
+| Request | Result |
+|---|---|
+| `(LHR, SIN, BA, 15, 2026-09-15)` | priced, 540.0 kg economy |
+| `(SIN, SYD, BA, 15, 2026-09-16)` | priced, 344.5 kg economy |
+| `(LHR, SYD, BA, 15, 2026-09-15)` — the published through route | **no figures** |
+
+So a flight number is not a unit TIM prices; a leg is. Asking for the through
+route gets nothing at all, and the two legs are separately priced and additive.
+
+This settles the identity question in [resync.md](resync.md) from the emissions
+side as well as the data-model side: the legs *have* to be separate rows, because
+a single through row could not be priced exactly at all. Note the second leg's
+local departure date is the day after the first's — the date sent is local at
+each leg's own origin, so a leg crossing midnight or the dateline needs its own,
+which `airports.departure_date` already handles.
+
+It also bounds the through-flight clash described in resync.md. A source
+reporting one SYD–LHR segment would fall back to a route average for a market
+nobody flies non-stop, so the risk there is double counting, not a wrong figure
+on the legs.
+
 ## TIM never names the aircraft
 
 Not even from the detailed endpoint. The closest signal is
@@ -63,6 +89,12 @@ changes right up to departure (A319/A320/A321, ceo against neo).
 response carrying no figures at all never overwrites one that has them — TIM
 returns nothing for a flight it cannot price, and that is exactly the row users
 are told to fill in by hand.
+
+A Flighty export *does* name the airframe, and it is stored in `aircraft_type`.
+That is a record of what was flown, not an input to any figure: TIM is never told
+about it, and it cannot be, since the API takes no aircraft parameter. Its use is
+the other direction — a stored airframe beside a moving `exact` figure is
+evidence about the equipment-swap question above.
 
 ## Keeping everything it returned
 

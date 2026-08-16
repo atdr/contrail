@@ -1,11 +1,18 @@
 """CSV storage backend.
 
-Two schema decisions worth knowing:
+Three schema decisions worth knowing:
 
 - ``emissions_kg_actual`` records the cabin actually flown where the source
   knows it, falling back to economy. The per-cabin reference columns are all
-  still there beside it, so a future cabin-aware importer improves this number
+  still there beside it, so a cabin-aware importer improves this number
   without the file gaining a second, competing notion of "the" figure.
+- ``also_seen_as`` carries the keys *other* sources use for the same flight, not
+  the row's own — that is already in ``source``/``source_id``. It is there to be
+  joined on: the row keeps only what contrail needs to price a flight, and the
+  link is what reaches everything else the original export holds (seat, PNR, tail
+  number). Space-separated rather than comma, so the column survives hand editing
+  and the README's ``awk`` one-liner; sorted, so an unchanged row stays
+  byte-identical between runs.
 - There is **no** running-total column. This file is a record of flights;
   totalling it is the job of whatever reads it.
   A stored aggregate would go stale against hand edits and would rewrite every
@@ -26,6 +33,7 @@ CSV_FIELDS = [
     "sync_timestamp",  # when the row was added (UTC ISO)
     "source",  # importer id, e.g. "tripit_ical"
     "source_id",  # importer-specific id
+    "also_seen_as",  # other sources' keys for this same flight, space-separated
     "flight_date",  # YYYY-MM-DD departure date
     "carrier_code",  # e.g. "UA" — as booked (the marketing carrier)
     "flight_number",  # e.g. "523"
@@ -36,6 +44,8 @@ CSV_FIELDS = [
     "departure_time",  # ISO 8601 in the origin's timezone; blank for all-day events
     "status",  # blank = flown or booked; "cancelled" = dropped from the feed
     "cabin_class_known",  # cabin the source reported, else blank
+    "aircraft_type",  # airframe as the source names it; TIM never names one
+    "flight_reason",  # business | leisure, if the source says
     "emissions_source",  # exact | typical_route_average | unparsed | no_data
     "model_version",  # full TIM version, e.g. 3.0.0+20260814
     "emissions_data_source",  # TIM | EASA (`source` is taken by the importer id)

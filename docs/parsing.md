@@ -1,6 +1,10 @@
-# Reading a TripIt feed
+# Reading a source
 
-## The regexes look untidy because real feeds are
+Two importers, and most of what follows is about the messier one. The Flighty
+section near the end is short because its format is fixed columns rather than
+free text.
+
+## TripIt: the regexes look untidy because real feeds are
 
 `AIRPORT_CODE_RE`, `FROM_TO_RE`, `CODE_PAIR_RE` and `FLIGHT_NO_RE` are validated
 against real TripIt feeds and handle their inconsistencies. **Don't rewrite one
@@ -50,10 +54,64 @@ PyPI dataset offers one. Two sources, cheapest first:
    Ten direct BA segments yield `{"British Airways": "BA"}`, which resolves both
    Iberia codeshares with no network call at all. This is what makes `parse()`
    two-pass: the whole feed has to be read before any record is built.
-2. **Wikidata property `P229`.** Only for names the feed never taught. Searching
-   "Iberia" surfaces the Iberian Peninsula first; filtering on the presence of a
-   P229 is what disambiguates. Failure is always soft — the flight stays priced
-   as booked. `airline_lookup: false` disables it.
+2. **The bundled table** (`src/contrail/data/airline_codes.csv`), generated from
+   Wikidata by `scripts/refresh_airline_codes.py` and shipped in the wheel. It
+   carries `iata,icao,name,aliases`, so the same file answers the ICAO lookup
+   Flighty needs.
+3. **Wikidata live, property `P229`.** Only for names neither the feed nor the
+   table knows. Searching "Iberia" surfaces the Iberian Peninsula first;
+   filtering on the presence of a P229 is what disambiguates. Failure is always
+   soft — the flight stays priced as booked. `airline_lookup: false` disables
+   this step and only this step: it exists to opt out of the network, and the
+   table needs none.
+
+The generator drops ambiguity rather than guessing. A name that maps to two IATA
+codes — "easyJet" covers U2, EC and DS — is blanked, because resolving it to
+whichever sorted first would price a flight confidently against the wrong airline,
+which is worse than not resolving it at all.
+
+## Reading a Flighty export
+
+Fixed columns, no free text, so there is nothing to regex. Three things still
+need care, all verified against a real export rather than assumed:
+
+- **`Airline` is ICAO** (`BAW`), while TIM wants IATA (`BA`). Hence the shared
+  table above. An unresolved code is left as-is and costs an exact figure, not
+  the row: the route-average fallback is market-based and needs no carrier code.
+- **`Date` is already the local date at the origin**, matching the scheduled gate
+  departure on every row of a 261-flight export. No conversion is applied to it.
+- **Times are naive local wall-clock** (`2026-09-02T07:50`), with no offset.
+  `departure_datetime` attaches the origin's zone, which is what lets the freeze
+  boundary be exact to the minute rather than a date comparison.
+
+`PRIVATE` appears as a cabin class and is deliberately not mapped. TIM's
+per-cabin figures describe a seat on a scheduled airliner and say nothing useful
+about a charter, so the honest answer is that the cabin is unknown.
+
+An export is a full-history snapshot rather than a rolling window, so a
+re-export repeats everything. Flighty's own UUID keeps each flight's key stable
+across exports, which is what makes a re-import idempotent. Multiple export files
+are read newest first, by filename, because the CLI keeps the first record it
+sees for a key — Flighty names them `FlightyExport-YYYY-MM-DD.csv`, and a repo
+checkout gives every file the same mtime.
+
+## One flight number, two legs
+
+`BA16` flies SYD–SIN–LHR: two legs on one day, under one number, and they can be
+two different cabins. Flighty exports them as two rows, which is the only
+representation that can express that, and contrail keeps them as two rows.
+
+This is why identity is `(flight_date, origin, destination)` and **not** the
+flight number. Matching on the number would fold the legs into one row and lose
+an emissions figure — and, in the case that motivated the check, a first-class
+leg. Two flights on the same route on the same calendar day is a thing one person
+cannot do, so route and date are safe.
+
+The reverse case is not resolvable and so is not resolved: a source that reports
+the published route SYD–LHR as a single segment describes the same journey as the
+legs, and nothing matches them up. contrail detects the chain, warns that the
+journey is counted about twice, and changes nothing — see
+[resync.md](resync.md).
 
 ## Identity
 
@@ -65,6 +123,12 @@ DTSTART + SUMMARY. Without it every such event would share the key
 
 A key that parsed is never also queued as unparsed — that would write two rows
 under one key and discard the priced flight.
+
+Flighty's `Flight Flighty ID` is a UUID, present and unique on every row of a
+real export, so it needs no fallback in practice — but there is one, for the same
+reason TripIt has one. It is also the join key: `also_seen_as` carries it onto
+whichever row ends up owning the flight, so a contrail row can be joined back to
+the seat, PNR and tail number that only the export holds. See the README.
 
 ## The test fixture's airport codes are real
 

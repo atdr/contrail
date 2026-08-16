@@ -2,7 +2,7 @@
 
 Estimate the CO2e emissions of flights you've taken or booked, and keep a running log of them.
 
-contrail pulls flights from one or more *sources* (a TripIt calendar feed today, more later),
+contrail pulls flights from one or more *sources* (a TripIt calendar feed, a Flighty export),
 prices each one using Google's [Travel Impact Model](https://travelimpactmodel.org/about-tim)
 (TIM) API, and writes the result to a CSV.
 
@@ -83,17 +83,17 @@ re-pricing on every run already captures whatever the last sync before departure
 while it is still upcoming. Flights first discovered *after* they've flown — an initial backfill
 of your history, say — get the route average instead.
 
-Note that a row is priced once and never re-priced, so a flight that TIM didn't recognise on the
-day it was first seen keeps its route average even if TIM would recognise it later. In practice a
-long-haul on a major carrier tends to resolve to `exact`; a codeshare or a flight several weeks
-out may not.
+A row is re-priced on every run until it departs, so a flight TIM didn't recognise the day it was
+first seen can still improve later. Once it has departed the figure is frozen, because TIM will not
+price a past flight again. In practice a long-haul on a major carrier tends to resolve to `exact`;
+a codeshare or a flight several weeks out may not.
 
 ## Configuration
 
 Resolution order, highest priority first:
 
 1. CLI flags (`--csv-path`, `--config`)
-2. Environment variables (`TRIPIT_ICAL_URL`, `TIM_API_KEY`, `CSV_PATH`)
+2. Environment variables (`TRIPIT_ICAL_URL`, `FLIGHTY_CSV_PATH`, `TIM_API_KEY`, `CSV_PATH`)
 3. `config.json` or `config.yaml` in the current directory
 4. Built-in defaults
 
@@ -113,7 +113,8 @@ Both are gitignored once renamed. A config file also lets you run several source
 {
   "csv_path": "flight_emissions.csv",
   "sources": [
-    { "type": "tripit_ical", "url": "https://www.tripit.com/feed/ical/private/.../tripit.ics" }
+    { "type": "tripit_ical", "url": "https://www.tripit.com/feed/ical/private/.../tripit.ics" },
+    { "type": "flighty_csv", "path": "flighty/" }
   ],
   "emissions": { "provider": "tim", "api_key": "..." }
 }
@@ -134,13 +135,16 @@ it.
 | `sync_timestamp` | When the row was added |
 | `source` | Importer id, e.g. `tripit_ical` |
 | `source_id` | Importer-specific id. `source:source_id` is the dedup key |
+| `also_seen_as` | Other sources' keys for this same flight, space-separated. See "Joining to a Flighty export" |
 | `flight_date` | Departure date |
 | `carrier_code` / `flight_number` | e.g. `BA` / `896` — as booked (the marketing flight) |
 | `operating_carrier_code` / `operating_flight_number` | Who actually flies it. Differs from the above on a codeshare, and is what gets priced |
 | `origin` / `destination` | IATA airport codes |
 | `departure_time` | Departure as an instant, in the origin's own timezone. Blank for all-day events |
 | `status` | Blank normally; `cancelled` if an upcoming flight vanished from the feed |
-| `cabin_class_known` | The cabin flown, if the source reported one, else blank |
+| `cabin_class_known` | The cabin flown, if a source reported one, else blank |
+| `aircraft_type` | The airframe, as the source names it. TIM never names one |
+| `flight_reason` | `business` or `leisure`, if the source says |
 | `emissions_source` | `exact`, `typical_route_average`, `unparsed`, or `no_data` |
 | `model_version` | Full TIM version, e.g. `3.0.0+20260814`. The `+dated` part identifies the dataset that produced the figure |
 | `emissions_data_source` | `TIM` or `EASA` |
@@ -168,9 +172,19 @@ alone.** Concretely, while `flight_date` is today or later:
   mistaken cancellation would otherwise destroy them permanently. Only
   `emissions_kg_actual` is cleared, which is what drops it out of any total. If
   it reappears, it is restored automatically.
-- `cabin_class_known` is never overwritten, because no source can supply it.
+- `cabin_class_known`, `aircraft_type` and `flight_reason` are filled in when
+  blank and never overwritten. A stored value is either your own edit or the
+  one source that reports it, so it is the only copy.
 
-From the day after departure a row is frozen, and only your own edits change it.
+From the day after departure a row is frozen, and only your own edits change it
+— with one exception. If a *second* source turns out to know a flight already in
+the log, it may fill in a blank `cabin_class_known`, `aircraft_type` or
+`flight_reason`, and record its own key in `also_seen_as`. That re-prices nothing
+and re-fetches nothing: setting the cabin only decides which of the per-cabin
+figures the row already holds counts as its actual emissions, which is the same
+hand edit described below. It is what lets a log built from TripIt over months
+have its past rows corrected the day you first point contrail at a Flighty
+export.
 That boundary is also what makes cancellation safe to infer at all: TripIt's
 feed only carries recent and upcoming trips, so a *past* flight leaving it just
 means it aged out, while a *future* one leaving it genuinely means something.
@@ -202,16 +216,103 @@ row was first written.
 Columns you add yourself (a `notes` column, say) are preserved across syncs. Rows are kept sorted
 by flight date.
 
-`emissions_kg_actual` falls back to economy whenever the source doesn't know the cabin. TripIt's
-feed never does; a future Flighty importer will.
+`emissions_kg_actual` falls back to economy whenever no source knows the cabin. TripIt's feed
+never does; a Flighty export does, which is what the `flighty_csv` importer is for.
 
 ## Importers
 
-v1 ships one:
+Two ship today:
 
 - **`tripit_ical`** — reads a TripIt calendar feed. Finds events tagged `[Flight]` in the
   description (TripIt's own marker), with a regex fallback for other calendar tools. Extracts the
   carrier, flight number, and airports from `SUMMARY` first, then `DESCRIPTION` + `LOCATION`.
+- **`flighty_csv`** — reads a CSV exported from the [Flighty](https://flighty.com) app. The only
+  source that reports **the cabin you actually flew**, which on a long-haul business seat is
+  roughly a fourfold difference against the economy assumption. It also carries your whole flight
+  history, where TripIt's feed only exposes recent and upcoming trips.
+
+### Using a Flighty export
+
+Export from the app (Settings → export), which emails you a CSV. Then either:
+
+```bash
+# One-off: price the lot and write the log
+FLIGHTY_CSV_PATH=~/Downloads/FlightyExport-2026-08-15.csv contrail sync
+
+# Or keep exports in a directory and re-export whenever you like
+FLIGHTY_CSV_PATH=flighty/ contrail sync
+```
+
+`path` takes a file, a directory, or a glob. A directory is the useful shape: drop each new export
+in and the newest wins, since Flighty names them `FlightyExport-YYYY-MM-DD.csv` and contrail reads
+them newest-first. Re-importing the same flight is free — Flighty's own id keeps its key stable, so
+nothing is re-priced and nothing is rewritten.
+
+**An export is your entire flight history in one file.** Keep it out of any public repository.
+
+Two details worth knowing:
+
+- Flighty names airlines by ICAO code (`BAW`); TIM wants IATA (`BA`). A table shipped with contrail
+  does that offline, falling back to [Wikidata](https://www.wikidata.org) for anything it doesn't
+  know. `"airline_lookup": false` disables only the network fallback.
+- `PRIVATE` isn't a cabin contrail records. TIM's per-cabin figures describe a seat on a scheduled
+  airliner and say nothing useful about a charter, so those rows are left blank and fall back to
+  economy — worth correcting by hand if you have a better number.
+
+### Running more than one source
+
+Sources overlap. Flighty and TripIt will both know your upcoming trips, so contrail matches them
+up rather than logging the flight twice.
+
+- **A flight is identified by its date, origin and destination** — not its flight number. `BA16`
+  can be SYD–SIN and SIN–LHR on the same day, flown in two different cabins, and those are two
+  flights, two figures and two rows.
+- **The first source listed owns the row.** A second source reporting the same flight never adds a
+  row and is never priced; it fills in blanks and leaves its key in `also_seen_as`.
+- If one source lists a flight twice — a codeshare entered under both its marketing and operating
+  number, say — the same matching collapses it, and says so.
+- If one source reports a journey as a single through segment while another reports its legs,
+  contrail **can't** tell which is right, warns that the journey is being counted twice, and leaves
+  both. Delete whichever you don't want.
+
+### Joining to a Flighty export
+
+contrail stores what it needs to price a flight and no more, so seat, PNR, tail number and
+terminals stay in the export. `also_seen_as` is what joins the two back together — whichever
+source ended up owning a row, its Flighty id is in either `source_id` or `also_seen_as`:
+
+```sql
+-- DuckDB: emissions by seat, cabin and airframe
+SELECT c.flight_date, c.carrier_code || c.flight_number AS flight,
+       c.cabin_class_known, c.emissions_kg_actual,
+       f.Seat, f."Seat Type", f."Tail Number"
+FROM 'flight_emissions.csv' c
+JOIN 'FlightyExport-2026-08-15.csv' f
+  ON f."Flight Flighty ID" = regexp_extract(
+       c.source || ':' || c.source_id || ' ' || c.also_seen_as,
+       'flighty_csv:([0-9a-f-]{36})', 1)
+ORDER BY c.flight_date;
+```
+
+```python
+# pandas, same idea
+import pandas as pd
+
+log = pd.read_csv("flight_emissions.csv", keep_default_na=False)
+export = pd.read_csv("FlightyExport-2026-08-15.csv", keep_default_na=False)
+
+keys = log["source"] + ":" + log["source_id"] + " " + log["also_seen_as"]
+log["flighty_id"] = keys.str.extract(r"flighty_csv:([0-9a-f-]{36})")
+
+joined = log.merge(export, left_on="flighty_id", right_on="Flight Flighty ID")
+```
+
+`BA16` is the example that shows why this is worth having: its two legs join to seat 13K in
+business and seat 1A in first, against two separate emissions figures.
+
+A collapsed codeshare puts one Flighty id in `source_id` and the other in `also_seen_as`. Both
+describe the same physical flight, so either joins to the same seat and PNR — taking the first
+match is correct.
 
 ### Everything else TIM said
 
@@ -235,26 +336,31 @@ being `BA458`. TIM's field is `operatingCarrierCode` and it will only price the 
 so a codeshare priced as booked silently falls back to a route average, typically overstating it.
 
 TripIt names the operating flight in the event description, so contrail reads it from there and
-prices that instead. Turning "British Airways" into `BA` uses two sources, cheapest first:
+prices that instead. Turning "British Airways" into `BA` uses three sources, cheapest first:
 
 1. **The feed itself.** On a direct flight the description restates the flight already in the
    summary, which gives an airline-name-to-code pair for free. If you fly a carrier directly and
    also hold a codeshare it operates, this resolves with no network call at all.
-2. **[Wikidata](https://www.wikidata.org)** (property `P229`, the IATA airline designator), for
-   names the feed never taught us. Set `"airline_lookup": false` on a source to switch this off;
-   an unresolved airline just leaves the flight priced as booked, exactly as before.
+2. **A table shipped with contrail** (`src/contrail/data/airline_codes.csv`), generated from
+   [Wikidata](https://www.wikidata.org) and covering around 2,200 airlines by name, alias and ICAO
+   code. Offline, so it costs nothing to consult. Regenerate it with
+   `python scripts/refresh_airline_codes.py`.
+3. **Wikidata live** (property `P229`, the IATA airline designator), for names neither the feed nor
+   the table knows. Set `"airline_lookup": false` on a source to switch **this step** off — the
+   shipped table needs no network and keeps working. An unresolved airline just leaves the flight
+   priced as booked, exactly as before.
+
+The same table answers the ICAO codes a Flighty export uses, which is why it carries both.
+Wikidata is CC0.
 
 Adding another means writing one module implementing the `Importer` protocol
 (`src/contrail/importers/base.py`) and adding one line to the registry in
 `src/contrail/importers/__init__.py`. Nothing else changes.
 
-Two are anticipated but not built:
+One more is anticipated but not built:
 
 - **`tripit_api`** — TripIt's official API instead of the calendar feed. Needs OAuth, which the
   per-source config dict can already express.
-- **`flighty_csv`** — a CSV exported from the Flighty app. Flighty exports include the cabin
-  actually flown, so this one would populate `cabin_class` and make `emissions_kg_actual` reflect
-  reality instead of assuming economy.
 
 ## Running it on a schedule
 
@@ -306,12 +412,19 @@ using contrail already has a Google Cloud project for the TIM API key.
 ./venv/bin/pytest              # no test makes a real network call
 ./venv/bin/ruff check .
 ./venv/bin/ruff format .
-TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics ./venv/bin/contrail sync --dry-run
+TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics \
+FLIGHTY_CSV_PATH=tests/fixtures/sample_flighty.csv \
+  ./venv/bin/contrail sync --dry-run
 ```
 
-That last one is also run in CI: `tripit_ical` accepts a local file path or `file://` URL as well
-as an http(s) URL, so a broken parser is caught here before it can reach anyone's production
-instance through a version tag.
+That last one is also run in CI: both importers accept a local file path, so a broken parser is
+caught here before it can reach anyone's production instance through a version tag. Running both
+also exercises the matching between them, which is the part with no single source of truth.
+
+`python scripts/refresh_airline_codes.py` regenerates the bundled airline table from Wikidata. It
+needs network, so CI never runs it — do it by hand when the table looks stale, and commit the
+result. Don't hand-edit the CSV: fix it upstream in Wikidata and re-run, or the next refresh
+silently reverts you.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/); releases and the
 changelog are handled by release-please.
@@ -326,12 +439,21 @@ changelog are handled by release-please.
   Airports contrail can't identify fall back to the date exactly as the feed gave it. The same
   applies to the point a row freezes: it is the moment of departure in the origin's timezone,
   not a UTC date, which would be a day out for part of every day.
-- An existing row is never re-fetched or re-priced, only skipped, so historical figures never
-  shift under you. The flip side: if you rebook a trip, TripIt reuses the calendar UID and
-  contrail keeps the original date, route, and emissions. Delete the row to have it re-imported.
+- A row that has departed is never re-fetched or re-priced, so historical figures never shift
+  under you. Rows that haven't departed are corrected and re-priced on every run, since a flight
+  can be retimed, rerouted, or flown by different equipment right up to departure.
 - Flight detection leans on TripIt's `[Flight]` description tag, with a regex fallback for other
   calendar tools. Anything it can't confidently parse is written as an `unparsed` row rather than
   guessed at.
+- Matching a flight across sources uses its date, origin and destination. Two flights on the same
+  route on the same day would be treated as one — not something one person can do, but worth
+  knowing it is the assumption.
+- A journey reported as a single through segment by one source and as separate legs by another is
+  counted twice. contrail says so and leaves both, because the legs may have been flown in
+  different cabins, which one row can't express.
+- Flighty's `PRIVATE` cabin is recorded as unknown, so those rows fall back to economy. TIM's
+  per-cabin figures describe a seat on a scheduled airliner; a charter is a different question
+  contrail can't answer.
 
 ## License
 

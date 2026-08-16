@@ -273,3 +273,38 @@ def test_migrated_rows_survive_a_save_and_reload(tmp_path):
     assert reloaded[0]["emissions_kg_actual"] == "200"
     assert reloaded[0]["source_id"] == "item-legacy@tripit.com"
     assert "cumulative_kg_economy" not in reloaded[0]
+
+
+def test_the_new_columns_round_trip(tmp_path):
+    """also_seen_as holds space-separated keys, so it survives a CSV round trip
+    without quoting and stays readable to `awk` and to a person editing it."""
+    storage = LocalCSVStorage(str(tmp_path / "out.csv"))
+    row = {field: "" for field in CSV_FIELDS}
+    row.update(
+        source="tripit_ical",
+        source_id="uid-1",
+        also_seen_as="flighty_csv:a flighty_csv:b",
+        aircraft_type="Airbus A321neo",
+        flight_reason="business",
+    )
+    storage.save([row])
+
+    assert "flighty_csv:a flighty_csv:b" in (tmp_path / "out.csv").read_text()
+    assert storage.load()[0] == row
+
+
+def test_a_csv_written_before_the_new_columns_still_loads(tmp_path):
+    """An instance may sit on an older schema until it bumps its pinned version,
+    so a file without these columns has to keep working."""
+    path = tmp_path / "out.csv"
+    older = [f for f in CSV_FIELDS if f not in ("also_seen_as", "aircraft_type", "flight_reason")]
+    path.write_text(
+        ",".join(older)
+        + "\n"
+        + ",".join("tripit_ical" if f == "source" else "" for f in older)
+        + "\n"
+    )
+
+    loaded = LocalCSVStorage(str(path)).load()
+    assert loaded[0]["source"] == "tripit_ical"
+    assert "also_seen_as" not in loaded[0]  # absent, not blank: back-fill, not a change

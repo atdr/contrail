@@ -1,7 +1,8 @@
 # contrail
 
 Estimates the CO2e of flights taken or booked and keeps a log. Reads a TripIt
-iCal feed, prices each flight with Google's Travel Impact Model, writes a CSV.
+iCal feed and Flighty CSV exports, prices each flight with Google's Travel Impact
+Model, writes a CSV.
 
 ## Commands
 
@@ -9,7 +10,9 @@ iCal feed, prices each flight with Google's Travel Impact Model, writes a CSV.
 python3.12 -m venv venv && ./venv/bin/pip install -e ".[dev]"
 ./venv/bin/pytest -q
 ./venv/bin/ruff check . && ./venv/bin/ruff format .
-TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics ./venv/bin/contrail sync --dry-run
+TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics \
+  FLIGHTY_CSV_PATH=tests/fixtures/sample_flighty.csv ./venv/bin/contrail sync --dry-run
+./venv/bin/python scripts/refresh_airline_codes.py   # needs network; run by hand
 ```
 
 Python 3.11+. The default `python3` on this machine is
@@ -17,18 +20,24 @@ Python 3.11+. The default `python3` on this machine is
 
 ## Architecture
 
-Three protocol seams, one implementation each today:
+Three protocol seams:
 
-| Seam | Protocol | Implementation |
+| Seam | Protocol | Implementations |
 |---|---|---|
-| `importers/` | `Importer.fetch(config) -> Iterable[FlightRecord \| UnparsedEvent]` | `tripit_ical` |
+| `importers/` | `Importer.fetch(config) -> Iterable[FlightRecord \| UnparsedEvent]` | `tripit_ical`, `flighty_csv` |
 | `emissions/` | `EmissionsProvider.compute(flights, now) -> dict[key, EmissionsResult]` | `tim` |
 | `storage/` | `Storage.load() -> list[dict]`, `save(rows)` | `local_csv` |
 
 `cli.py` owns the flow: load config → load storage → collect from every source →
-reconcile against what's stored → price → build rows → normalize → save.
+collapse records that are the same flight → reconcile against what's stored →
+price → build rows → normalize → save.
 
-The dedup key is `f"{source}:{source_id}"` everywhere.
+Two keys, and the difference matters:
+
+- **`f"{source}:{source_id}"`** identifies a *record*. It is the dedup key and
+  what `also_seen_as` stores.
+- **`(flight_date, origin, destination)`** identifies a *flight*, across sources.
+  `resync.identity()`. Never the flight number — see the gotchas.
 
 ## Conventions
 
@@ -43,11 +52,11 @@ The dedup key is `f"{source}:{source_id}"` everywhere.
 ## Depth
 
 - [docs/parsing.md](docs/parsing.md) — the ported regexes, local dates,
-  codeshares, why `parse()` is two-pass
+  codeshares, why `parse()` is two-pass, reading a Flighty export
 - [docs/emissions.md](docs/emissions.md) — exact vs route average, the past-date
   400, what gets kept, and the open question about timing
 - [docs/resync.md](docs/resync.md) — what a sync may change, the freeze boundary,
-  cancellation
+  cancellation, matching one flight across two sources
 - [docs/storage.md](docs/storage.md) — CSV invariants and why there's no total
 - [docs/tripit-api.md](docs/tripit-api.md) — investigated, not used, and why
 - [docs/contrail-gh.md](docs/contrail-gh.md) — **what a change here obliges in the
@@ -59,7 +68,13 @@ The dedup key is `f"{source}:{source_id}"` everywhere.
   feeds.** They look untidy because real feeds are. Don't rewrite one without a
   failing test that proves the current form is wrong.
 - **Mutation is confined to flights that haven't departed.** Past rows are never
-  touched — that's what makes "absent from the feed" unambiguous.
+  touched — that's what makes "absent from the feed" unambiguous. One exception:
+  `resync.backfill()` fills a *blank* cabin, aircraft or reason on a row of any
+  age, because a Flighty export is almost entirely past flights and it re-prices
+  nothing.
+- **A flight is identified by route and date, never by flight number.** `BA16` is
+  SYD-SIN-LHR on one day: two legs, two cabins, two rows. Any "dedup by flight
+  number" idea silently merges them and loses a figure.
 - **The file is written only when content actually changed**, or contrail-gh
   commits every day for nothing.
 - **Every value in a row dict is a string**, so a fresh row compares equal to one
@@ -79,6 +94,12 @@ The dedup key is `f"{source}:{source_id}"` everywhere.
   pull requests".
 - **`cli._now()` exists to be monkeypatched.** Tests that use the real clock rot
   once the fixture's dates fall into the past.
+- **`src/contrail/data/airline_codes.csv` is generated, never hand-edited.** Fix
+  it upstream in Wikidata and re-run the script, or the next refresh reverts you.
+  It must be written with LF: `.gitattributes` normalizes, and the csv module
+  defaults to CRLF.
+- **`tests/fixtures/sample_flighty.csv` is synthetic.** This repo is public and a
+  real export is someone's entire travel history.
 
 ## Related repos
 

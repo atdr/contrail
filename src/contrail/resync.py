@@ -6,6 +6,11 @@ TripIt's feed only exposes recent and upcoming trips, so "absent from the feed"
 is ambiguous between *cancelled* and *aged out of the window*. Confining every
 change to future flights removes the ambiguity, because a future flight cannot
 have aged out.
+
+There is exactly one exception, and it is narrow: :func:`backfill` may fill a
+*blank* field on a past row when a second source turns out to know the same
+flight. Its docstring explains why that doesn't reopen anything the freeze is
+there to protect.
 """
 
 from __future__ import annotations
@@ -14,11 +19,9 @@ from datetime import date, datetime
 
 from contrail.airports import today_at
 from contrail.models import FlightRecord
-from contrail.storage.local_csv import STATUS_CANCELLED, is_cancelled
+from contrail.storage.local_csv import STATUS_CANCELLED, is_cancelled, row_key
 
-# The fields a source is authoritative about. cabin_class_known is deliberately
-# absent: no importer can currently supply it, so overwriting it would be data
-# loss rather than a correction.
+# The fields a source is authoritative about, and may correct on every sync.
 FEED_FIELDS = (
     "flight_date",
     "departure_time",
@@ -29,6 +32,20 @@ FEED_FIELDS = (
     "origin",
     "destination",
 )
+
+# Fields a source may *fill in* but never overwrite. Only one source reports any
+# of them today, so a stored value is either that source's or a hand edit, and in
+# both cases it is the only copy — replacing it would be loss, not correction.
+BACKFILL_FIELDS = ("cabin_class_known", "aircraft_type", "flight_reason")
+
+# What makes two entries the same flight, whichever source found them.
+#
+# Route and date, deliberately not the flight number. One number can be two legs
+# on one day — BA16 flies SYD-SIN-LHR, and they can be different cabins — so
+# matching on the number would fold two flights into one and lose an emissions
+# figure. Two flights on the same route on the same calendar day, on the other
+# hand, is a thing one person cannot do.
+IDENTITY_FIELDS = ("flight_date", "origin", "destination")
 
 # How good a figure is, so a transient miss can never downgrade a stored one.
 QUALITY = {
@@ -142,6 +159,79 @@ def is_better(new_method: str, existing_method: str) -> bool:
 # right up to departure — A319/A320/A321, ceo against neo. A figure captured
 # weeks out can be stale by departure day, and letting it keep catching up is
 # the entire point of freezing only once the flight goes.
+
+
+def identity(row: dict) -> tuple[str, str, str] | None:
+    """What makes a stored row the *same flight* as a record from any source.
+
+    None when a field is blank, which is what keeps an ``unparsed`` row — which
+    routinely has no route — from matching every other undatable row in the file.
+    """
+    values = [(row.get(field) or "").strip() for field in IDENTITY_FIELDS]
+    if not all(values):
+        return None
+    return (values[0], values[1].upper(), values[2].upper())
+
+
+def links(row: dict) -> list[str]:
+    """The other sources' keys stored against a row."""
+    return (row.get("also_seen_as") or "").split()
+
+
+def linked(row: dict, keys) -> dict:
+    """Record other sources' keys against a row, sorted and without repeats.
+
+    The row's own key is filtered out wherever it appears. The column means "who
+    else calls this flight something", and a row that lists itself would be
+    counted twice by anything joining on it — see ``storage/local_csv.py``.
+
+    Sorted so that a row whose content has not changed stays byte-identical
+    between runs — otherwise contrail-gh commits a reshuffled column every day.
+    """
+    own = row_key(row)
+    return {**row, "also_seen_as": " ".join(sorted({*links(row), *keys} - {own}))}
+
+
+def backfill(row: dict, flight: FlightRecord) -> tuple[dict, list[str]]:
+    """Fold a second reading of a flight into the row that already owns it.
+
+    Something else knows a flight this row already covers — another source
+    reporting it, or a record that had another source's reading folded into it
+    upstream. It does not get to restate the route, the date or the emissions:
+    the owning source is authoritative for those, and a second opinion is not a
+    correction. What it may do is fill in a blank, and leave its key behind so
+    the two can be joined.
+
+    ``status`` is not among the blanks it may fill, deliberately. A second source
+    saying a flight was cancelled is not evidence against the source that owns the
+    row and still reports it — a Flighty export in particular is a snapshot, and
+    can be months stale. Where both sources are read in the same run the question
+    doesn't arise: ``cli._collapse`` keeps a stated cancellation from either.
+
+    **This is allowed on a row that has already departed**, which nothing else in
+    this module is. The freeze exists because a past flight's absence is
+    ambiguous and because TIM will not re-price one; neither applies here. Filling
+    in a cabin only changes which already-stored per-cabin figure
+    ``emissions_kg_actual`` reads from — precisely the hand edit the README
+    documents — and a Flighty export is almost entirely past flights, so refusing
+    it would refuse the point.
+    """
+    # Its own key plus everything folded into it. Without the folded keys a
+    # codeshare listed twice in one export would lose one of its two ids.
+    # ``linked`` drops the row's own key, whichever of these it turns out to be.
+    merged = linked(row, [flight.key, *flight.also_seen])
+    changed = [] if merged["also_seen_as"] == (row.get("also_seen_as") or "") else ["also_seen_as"]
+
+    for field, value in (
+        ("cabin_class_known", flight.cabin_class),
+        ("aircraft_type", flight.aircraft_type),
+        ("flight_reason", flight.flight_reason),
+    ):
+        if value and not (row.get(field) or "").strip():
+            merged[field] = value
+            changed.append(field)
+
+    return merged, changed
 
 
 def restored(row: dict) -> bool:
