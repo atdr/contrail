@@ -13,9 +13,11 @@ prices each one using Google's [Travel Impact Model](https://travelimpactmodel.o
 
 ## Install
 
+<!-- x-release-please-start-version -->
 ```bash
-pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.1.0"
+pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.2.0"
 ```
+<!-- x-release-please-end -->
 
 Pin a tag rather than tracking `main`, so a change here can never surprise a running instance.
 Python 3.11 or newer.
@@ -372,11 +374,13 @@ secrets, and it syncs daily and commits the updated CSV back to your own repo.
 
 ### Raspberry Pi, VPS, or any host with cron
 
+<!-- x-release-please-start-version -->
 ```bash
 python3 -m venv ~/contrail-venv
-~/contrail-venv/bin/pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.1.0"
+~/contrail-venv/bin/pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.2.0"
 crontab -e
 ```
+<!-- x-release-please-end -->
 
 ```cron
 0 6 * * * TRIPIT_ICAL_URL="..." TIM_API_KEY="..." ~/contrail-venv/bin/contrail sync --csv-path ~/flight_emissions.csv >> ~/contrail.log 2>&1
