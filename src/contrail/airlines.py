@@ -50,7 +50,7 @@ SEARCH_LIMIT = 8
 REQUEST_TIMEOUT = 15
 
 # Wikimedia asks for a descriptive User-Agent identifying the tool. Built from
-# the installed version so it can't drift away from what's actually running.
+# the installed version so there's no second literal to keep in step.
 USER_AGENT = f"contrail/{__version__} (https://github.com/atdr/contrail)"
 
 _BY_ICAO: dict[str, str] | None = None

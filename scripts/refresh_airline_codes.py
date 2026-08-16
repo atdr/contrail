@@ -36,7 +36,9 @@ SPARQL_URL = "https://query.wikidata.org/sparql"
 OUTPUT = Path(__file__).resolve().parent.parent / "src" / "contrail" / "data" / "airline_codes.csv"
 
 # Wikimedia asks for a descriptive User-Agent identifying the tool. Built from
-# the installed version so it can't drift away from what's actually running.
+# the installed version so there's no second literal to keep in step. Note it's
+# the version recorded when contrail was installed, so an editable install made
+# a few releases ago reports that one until it's reinstalled.
 USER_AGENT = f"contrail/{__version__} (https://github.com/atdr/contrail)"
 REQUEST_TIMEOUT = 180
 
