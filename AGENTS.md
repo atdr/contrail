@@ -48,6 +48,20 @@ Two keys, and the difference matters:
 - **No test may make a real network call.** Mock `requests` in both directions.
 - This repo is public. Never commit a real CSV, a raw log, or `config.json` —
   all are gitignored.
+- **When updating docs at the end of a change, skim the open issues** (`gh issue
+  list`) for any the change touched. Cheap, and it catches both directions: an
+  issue quietly fixed, and one made easier to hit.
+
+  **Findings about your own change belong in the same PR** — that is not two
+  things in one PR, it is one change described accurately. A doc line your change
+  just made wrong, or an issue whose shape it altered, is part of that change; a
+  reviewer needs it in front of them, and splitting it out means `main` is briefly
+  wrong on purpose. Only a finding that stands entirely apart from what you built
+  earns its own PR; note it on the issue either way.
+
+  The one exception is the release PR: `chore(main): release X.Y.Z` is generated
+  by release-please from commit subjects, so anything hand-added there is
+  clobbered on the next regeneration.
 
 ## Depth
 
