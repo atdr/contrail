@@ -106,10 +106,18 @@ exactly. The cost of the clash is double counting, not a wrong figure.
   what bypasses the no-downgrade guard, which would replace a whole file of exact
   figures with route averages and then freeze them that way.
 - **Only a source that returned something may cancel its own rows.** With several
-  sources configured, one silently empty feed would otherwise cancel every flight
-  it owns while the others kept a global guard happy. Granularity is the importer
-  id, so two feeds of the same *type* still cannot be told apart — known, not
-  solved; it needs a per-source identity in the row.
+  sources configured, one silently empty source would otherwise cancel every
+  flight it owns while the others kept a global guard happy. Granularity is the
+  importer id, so two sources of the same *type* still cannot be told apart —
+  known, not solved; it needs a per-source identity in the row
+  ([#10](https://github.com/atdr/contrail/issues/10)).
+
+  Two sources of *different* types — the ordinary `tripit_ical` plus
+  `flighty_csv` pairing — are told apart correctly, so the common case is safe.
+  The trap is two of a kind, and `flighty_csv` makes that easier to reach than it
+  used to be: a path matching no export warns and yields nothing rather than
+  raising, so "this source returned nothing" is now an ordinary state instead of
+  a hard failure.
 - **A feed yielding no flights at all refuses to cancel anything** and exits
   non-zero. `--dry-run` is exempt: it can neither write nor cancel.
 - **The file is written only when content actually changed.** Re-pricing runs
