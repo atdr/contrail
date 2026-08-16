@@ -41,14 +41,17 @@ from importlib.resources import files
 
 import requests
 
+from contrail import __version__
+
 WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 IATA_PROPERTY = "P229"  # IATA airline designator
 ICAO_PROPERTY = "P230"  # ICAO airline designator
 SEARCH_LIMIT = 8
 REQUEST_TIMEOUT = 15
 
-# Wikimedia asks for a descriptive User-Agent identifying the tool.
-USER_AGENT = "contrail/0.1 (https://github.com/atdr/contrail)"
+# Wikimedia asks for a descriptive User-Agent identifying the tool. Built from
+# the installed version so it can't drift away from what's actually running.
+USER_AGENT = f"contrail/{__version__} (https://github.com/atdr/contrail)"
 
 _BY_ICAO: dict[str, str] | None = None
 _BY_NAME: dict[str, str] | None = None

@@ -30,11 +30,14 @@ from pathlib import Path
 
 import requests
 
+from contrail import __version__
+
 SPARQL_URL = "https://query.wikidata.org/sparql"
 OUTPUT = Path(__file__).resolve().parent.parent / "src" / "contrail" / "data" / "airline_codes.csv"
 
-# Wikimedia asks for a descriptive User-Agent identifying the tool.
-USER_AGENT = "contrail/0.2 (https://github.com/atdr/contrail)"
+# Wikimedia asks for a descriptive User-Agent identifying the tool. Built from
+# the installed version so it can't drift away from what's actually running.
+USER_AGENT = f"contrail/{__version__} (https://github.com/atdr/contrail)"
 REQUEST_TIMEOUT = 180
 
 # Aliases exist to catch the spellings a calendar feed actually uses, not to
