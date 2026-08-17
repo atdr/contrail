@@ -13,8 +13,9 @@ An instance gets a second check, `check-instance.yml`, which dry-runs the sync o
 every pull request against that repo's own log. It's the first place a contrail
 release meets someone's real data before it is committed to, so a change here that
 breaks a real feed or export surfaces there rather than in a scheduled run. It
-installs the tag `sync.yml` pins and never calls the emissions API, so nothing it
-does can consume an exact figure.
+installs the tag `sync.yml` pins and runs `--dry-run`, so it never reaches the
+emissions API — which keeps it to a few seconds and means it says nothing about
+whether an instance's TIM key still works.
 
 ## Changes here that require a change there
 
