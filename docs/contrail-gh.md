@@ -9,13 +9,20 @@ Nothing in this repo can enforce that, because it's a separate repository. The
 coupling is enforced from the other side by `check-template.yml` there, and this
 page is the list of things that break it.
 
+An instance gets a second check, `check-instance.yml`, which dry-runs the sync on
+every pull request against that repo's own log. It's the first place a contrail
+release meets someone's real data before it is committed to, so a change here that
+breaks a real feed or export surfaces there rather than in a scheduled run. It
+installs the tag `sync.yml` pins and never calls the emissions API, so nothing it
+does can consume an exact figure.
+
 ## Changes here that require a change there
 
 | Change in contrail | What contrail-gh needs |
 |---|---|
 | `CSV_FIELDS` gains, loses or reorders a column | Regenerate `flight_emissions.csv` (header row only) |
 | contrail writes a new output file | Add it to the `git add` line in `sync.yml` |
-| contrail gains an importer that reads a **file** | A directory for it, an env var in `sync.yml`, and a guard in `check-template.yml` that the public template never carries one |
+| contrail gains an importer that reads a **file** | A directory for it, the env var in *both* `sync.yml` and `check-instance.yml`, and a guard in `check-template.yml` that the public template never carries one |
 | A new column or behaviour users should know about | Update the template's README |
 | A release is cut | Bump the `@vX.Y.Z` pin in `sync.yml` |
 | `requires-python` rises above the workflow's version | Raise `python-version` in `sync.yml` |
