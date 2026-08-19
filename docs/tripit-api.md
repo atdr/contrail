@@ -21,14 +21,14 @@ operating_airline, operating_airline_code, operating_flight_number
 
 It would retire most of the iCal guesswork:
 
-| field | replaces |
-|---|---|
-| `start_airport_code` / `end_airport_code` | the airport-code regexes |
-| `marketing_flight_number` + codes | `FLIGHT_NO_RE` |
-| `StartDateTime` (`date`, `timezone`, `utc_offset`) | the whole `airports.py` conversion — already local |
-| `service_class` | **cabin class**, which nothing else can currently supply |
-| `id` / `uuid` | the UID-less content-hash fallback |
-| `aircraft`, `distance`, `stops` | not captured at all today |
+| field                                              | replaces                                                 |
+| -------------------------------------------------- | -------------------------------------------------------- |
+| `start_airport_code` / `end_airport_code`          | the airport-code regexes                                 |
+| `marketing_flight_number` + codes                  | `FLIGHT_NO_RE`                                           |
+| `StartDateTime` (`date`, `timezone`, `utc_offset`) | the whole `airports.py` conversion — already local       |
+| `service_class`                                    | **cabin class**, which nothing else can currently supply |
+| `id` / `uuid`                                      | the UID-less content-hash fallback                       |
+| `aircraft`, `distance`, `stops`                    | not captured at all today                                |
 
 `service_class` is the interesting one: it would make `emissions_kg_actual`
 reflect the cabin actually flown instead of assuming economy.
@@ -41,7 +41,7 @@ authorization, access token — and access tokens are storable "indefinitely",
 which suits unattended running well. If a consumer key is already in hand, this
 is the better route: an OAuth token is scoped and revocable on its own.
 
-**What's unverified is whether a *new* consumer key can still be obtained.** The
+**What's unverified is whether a _new_ consumer key can still be obtained.** The
 evidence says probably not, but none of it is first-hand:
 
 - tripit/api#287 and #280, both open since 2023-11-04, report the "Register an
@@ -69,7 +69,7 @@ invalid Basic credentials get `HTTP 400 {"error": "access_denied"}` rather than
 a rejection of the scheme, so Basic auth is still processed server-side.
 
 **The security trade is the real objection.** An OAuth token is scoped and
-revocable on its own; a Basic credential is the *account password*, and the docs
+revocable on its own; a Basic credential is the _account password_, and the docs
 are explicit that web auth carries "the exact same permissions a user has when
 logged in to TripIt via the web" — strictly more than OAuth would grant. contrail
 needs read-only and there is no way to ask for only that. A leak is full account

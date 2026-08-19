@@ -24,7 +24,7 @@ chance of a false match) before the noisier SUMMARY + DESCRIPTION + LOCATION blo
 TIM's `departureDate` is documented to mean. TripIt states every time in UTC, so
 `airports.py` converts using an IATA→IANA mapping (`airportsdata`).
 
-A wrong date costs twice: the row is misdated *and* the exact lookup misses,
+A wrong date costs twice: the row is misdated _and_ the exact lookup misses,
 silently downgrading to a route average. This is why `parse()` extracts the
 origin **before** computing the date.
 
@@ -34,7 +34,7 @@ so it is left as-is rather than shifted.
 
 ## Codeshares, and why parse() is two-pass
 
-TripIt's DESCRIPTION names the *operating* flight even when SUMMARY shows only
+TripIt's DESCRIPTION names the _operating_ flight even when SUMMARY shows only
 the marketing one:
 
 ```text

@@ -4,8 +4,8 @@
 alone.** (`resync.py`)
 
 That is not only caution. TripIt's feed carries only recent and upcoming trips,
-so "absent from the feed" is ambiguous between *cancelled* and *aged out of the
-window*. Confining every change to future flights removes the ambiguity
+so "absent from the feed" is ambiguous between _cancelled_ and _aged out of the
+window_. Confining every change to future flights removes the ambiguity
 outright: a future flight cannot have aged out.
 
 ## The freeze boundary
@@ -46,7 +46,7 @@ It is safe because it isn't what the freeze protects against. The freeze exists
 for two reasons — absence from a feed is ambiguous for a past flight, and TIM
 will not re-price one — and neither is in play. A back-fill re-prices nothing and
 re-fetches nothing. Setting a cabin only changes which of the per-cabin figures
-the row *already holds* feeds `emissions_kg_actual`, which is precisely the hand
+the row _already holds_ feeds `emissions_kg_actual`, which is precisely the hand
 edit the README documents.
 
 And refusing it would refuse the point. A Flighty export is typically two decades
@@ -108,16 +108,17 @@ exactly. The cost of the clash is double counting, not a wrong figure.
 - **Only a source that returned something may cancel its own rows.** With several
   sources configured, one silently empty source would otherwise cancel every
   flight it owns while the others kept a global guard happy. Granularity is the
-  importer id, so two sources of the same *type* still cannot be told apart —
+  importer id, so two sources of the same _type_ still cannot be told apart —
   known, not solved; it needs a per-source identity in the row
   ([#10](https://github.com/atdr/contrail/issues/10)).
 
-  Two sources of *different* types — the ordinary `tripit_ical` plus
+  Two sources of _different_ types — the ordinary `tripit_ical` plus
   `flighty_csv` pairing — are told apart correctly, so the common case is safe.
   The trap is two of a kind, and `flighty_csv` makes that easier to reach than it
   used to be: a path matching no export warns and yields nothing rather than
   raising, so "this source returned nothing" is now an ordinary state instead of
   a hard failure.
+
 - **A feed yielding no flights at all refuses to cancel anything** and exits
   non-zero. `--dry-run` is exempt: it can neither write nor cancel.
 - **The file is written only when content actually changed.** Re-pricing runs

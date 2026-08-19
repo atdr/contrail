@@ -15,7 +15,7 @@ aggregate goes stale the moment a row is hand-edited, and one backfilled flight
 rewrites every row after it — noise in a file that lives in git. `total_kg()`
 computes a total for display; readers sum the column themselves.
 
-Never document that sum by column *number*. Adding the operating columns once
+Never document that sum by column _number_. Adding the operating columns once
 turned the README's `$16` into `emissions_kg_premium_economy`, a 23%
 overstatement that looked entirely plausible. The documented one-liner looks the
 column up by header name.
