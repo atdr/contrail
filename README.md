@@ -52,7 +52,7 @@ contrail sync
 That writes `./flight_emissions.csv` in the current directory. Running it again only adds flights
 it hasn't seen before — nothing is ever double-counted or re-priced.
 
-```
+```text
 contrail sync [--config PATH] [--csv-path PATH] [--dry-run]
 contrail sources
 ```
@@ -427,8 +427,8 @@ also exercises the matching between them, which is the part with no single sourc
 
 `./venv/bin/python scripts/refresh_airline_codes.py` regenerates the bundled airline table from
 Wikidata. Run it from the dev venv — it imports contrail for its version. It needs network, so CI
-never runs it — do it by hand when the table looks stale, and commit the result. Don't hand-edit the CSV: fix it upstream in Wikidata and re-run, or the next refresh
-silently reverts you.
+never runs it — do it by hand when the table looks stale, and commit the result. Don't hand-edit the
+CSV: fix it upstream in Wikidata and re-run, or the next refresh silently reverts you.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/); releases and the
 changelog are handled by release-please.
@@ -462,3 +462,8 @@ changelog are handled by release-please.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+<!-- This file is wrapped at 100, not the 80 the rest of the repo uses. -->
+<!-- markdownlint-configure-file {
+  "MD013": { "line_length": 100, "tables": false, "code_blocks": false }
+} -->

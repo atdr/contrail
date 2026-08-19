@@ -73,6 +73,18 @@ hold no CSV. All three are guarded by CI in that repo.
 flight history in one file, and unlike the log it is a file a user puts there by
 hand, so nothing else would catch it.
 
+## The Markdown config is duplicated, not shared
+
+`.markdownlint-cli2.yaml`, `.prettierrc.json` and `.prettierignore` exist in this
+repo, in the template, and in every instance created from it. They are copies:
+three separate repositories can't share a config file, and neither tool reads one
+from a package. Change a rule here and the same edit has to be made in the
+template, or the two repos start disagreeing about what correct Markdown is.
+
+The template's copies ship to instances through "Use this template", so its
+`README.md` names them in the recipe for pulling template updates — the workflow
+that runs markdownlint and the config it reads have to arrive together.
+
 ## Three repos, briefly
 
 - **atdr/contrail** (public) — this one. All the logic, no data, no secrets.

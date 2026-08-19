@@ -15,3 +15,17 @@ repos:
       - id: check-yaml
       - id: check-json
       - id: check-added-large-files
+
+  # Markdown. Keep these two in step with the pins in .github/workflows/ci.yml —
+  # a hook that lints to a different version than CI is worse than no hook.
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.23.2
+    hooks:
+      - id: markdownlint-cli2
+
+  # The maintained fork; pre-commit/mirrors-prettier is archived.
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.9.6
+    hooks:
+      - id: prettier
+        types_or: [markdown]

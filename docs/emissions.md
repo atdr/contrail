@@ -31,12 +31,13 @@ refreshed input data".
 **What is actually observed:** `dated` read `20260814` on both 14 and 15 August,
 so the stamp does not move daily.
 
-**What is not:** whether a flight-level input — the assigned aircraft above all —
-can change *within* a dataset stamp. If the aircraft is baked in at rebuild, then
-a call an hour before departure returns exactly what the morning's call returned
-and timing a sync is pointless. If TIM refreshes schedule data more often than it
-bumps `dated`, a late run could catch a swap. **This has not been tested**, and
-it's the question that decides whether a pre-departure run is worth scheduling.
+**What is not:** whether a flight-level input — the assigned aircraft above
+all — can change *within* a dataset stamp. If the aircraft is baked in at
+rebuild, then a call an hour before departure returns exactly what the morning's
+call returned and timing a sync is pointless. If TIM refreshes schedule data
+more often than it bumps `dated`, a late run could catch a swap. **This has not
+been tested**, and it's the question that decides whether a pre-departure run is
+worth scheduling.
 
 The raw sidecar is the instrument for settling it: it records each *distinct*
 answer per flight, so a figure that moves while `dated` holds steady is exactly

@@ -48,11 +48,16 @@ Two keys, and the difference matters:
   rather than spelling it out — see the gotcha on version pins for the two
   literals that remain.
 - **No test may make a real network call.** Mock `requests` in both directions.
+- **Markdown is formatted, not hand-aligned.** Prettier owns table padding and
+  whitespace; markdownlint-cli2 owns line length and the rest. Run
+  `npx prettier@3.9.6 --write "**/*.md"` rather than lining a table up by
+  hand. Prose wraps at 80, except `README.md`, which wraps at 100 and says so
+  in a `markdownlint-configure-file` comment at its foot.
 - This repo is public. Never commit a real CSV, a raw log, or `config.json` —
   all are gitignored.
-- **When updating docs at the end of a change, skim the open issues** (`gh issue
-  list`) for any the change touched. Cheap, and it catches both directions: an
-  issue quietly fixed, and one made easier to hit.
+- **When updating docs at the end of a change, skim the open issues**
+  (`gh issue list`) for any the change touched. Cheap, and it catches both
+  directions: an issue quietly fixed, and one made easier to hit.
 
   **Findings about your own change belong in the same PR** — that is not two
   things in one PR, it is one change described accurately. A doc line your change
@@ -115,14 +120,20 @@ Two keys, and the difference matters:
   API can report the flag as enabled while it is still blocked. Without it the
   release job fails with "GitHub Actions is not permitted to create or approve
   pull requests".
+- **`CHANGELOG.md` and `CLAUDE.md` are excluded from both Markdown tools.**
+  release-please regenerates the changelog from commit subjects, so a
+  reformat there is undone on the next release and can desync the manifest;
+  `CLAUDE.md` is a symlink to `AGENTS.md`, so linting it reports every line
+  twice and formatting it writes the same file twice. Both are named in
+  `.markdownlint-cli2.yaml` and `.prettierignore`.
 - **`cli._now()` exists to be monkeypatched.** Tests that use the real clock rot
   once the fixture's dates fall into the past.
 - **`src/contrail/data/airline_codes.csv` is generated, never hand-edited.** Fix
   it upstream in Wikidata and re-run the script, or the next refresh reverts you.
   It must be written with LF: `.gitattributes` normalizes, and the csv module
   defaults to CRLF.
-- **`tests/fixtures/sample_flighty.csv` is synthetic.** This repo is public and a
-  real export is someone's entire travel history.
+- **`tests/fixtures/sample_flighty.csv` is synthetic.** This repo is public and
+  a real export is someone's entire travel history.
 
 ## Related repos
 

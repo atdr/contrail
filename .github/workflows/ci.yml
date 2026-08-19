@@ -44,3 +44,19 @@ jobs:
           TRIPIT_ICAL_URL: tests/fixtures/sample_feed.ics
           FLIGHTY_CSV_PATH: tests/fixtures/sample_flighty.csv
         run: contrail sync --dry-run --csv-path "${RUNNER_TEMP}/should-not-be-written.csv"
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # An action rather than `npx`, so the github-actions dependabot ecosystem
+      # already configured for this repo keeps it current. Prettier has no
+      # first-party action, so its pin below is a hand edit — the same deal as
+      # the `rev:` pins in .pre-commit-config.yaml.
+      - uses: DavidAnson/markdownlint-cli2-action@v9
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      # Prettier owns table alignment and whitespace; markdownlint owns the
+      # rules it can't express. Neither is redundant.
+      - run: npx prettier@3.9.6 --check "**/*.md"

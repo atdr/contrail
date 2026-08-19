@@ -14,8 +14,10 @@ stands if a future importer wants what only the API offers.
 pairs, and the `operating_*` fields sit on the core object, **not** inside the
 `FlightStatus` block the schema marks TripIt Pro only:
 
-    marketing_airline, marketing_airline_code, marketing_flight_number
-    operating_airline, operating_airline_code, operating_flight_number
+```text
+marketing_airline, marketing_airline_code, marketing_flight_number
+operating_airline, operating_airline_code, operating_flight_number
+```
 
 It would retire most of the iCal guesswork:
 
@@ -58,13 +60,13 @@ email and password, which sidesteps the registration question entirely. Two
 conditions:
 
 - It is **off by default for every account**; enabling it means emailing
-  support@tripit.com, an unknown given how unattended the API is.
+  <support@tripit.com>, an unknown given how unattended the API is.
 - The docs restrict it to "testing and development" and warn it "may be limited
   or turned off by default in future versions".
 
 The service is alive: `GET /v1/list/trip` returns 401 rather than failing, and
-invalid Basic credentials get `HTTP 400 {"error": "access_denied"}` rather than a
-rejection of the scheme, so Basic auth is still processed server-side.
+invalid Basic credentials get `HTTP 400 {"error": "access_denied"}` rather than
+a rejection of the scheme, so Basic auth is still processed server-side.
 
 **The security trade is the real objection.** An OAuth token is scoped and
 revocable on its own; a Basic credential is the *account password*, and the docs
@@ -76,9 +78,11 @@ takeover, not a revocable token.
 To check whether it's already enabled, in a terminal so the password never
 reaches a transcript (`--user` with no colon makes curl prompt):
 
-    curl -s -o /dev/null -w "%{http_code}\n" \
-      --user 'you@example.com' \
-      'https://api.tripit.com/v1/list/trip?format=json'
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  --user 'you@example.com' \
+  'https://api.tripit.com/v1/list/trip?format=json'
+```
 
 `200` means enabled. `401` means it isn't — as of 2026-08-14, it isn't.
 

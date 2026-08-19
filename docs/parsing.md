@@ -37,8 +37,10 @@ so it is left as-is rather than shifted.
 TripIt's DESCRIPTION names the *operating* flight even when SUMMARY shows only
 the marketing one:
 
-    SUMMARY:      IB3643 LHR to MAD
-    DESCRIPTION:  ... British Airways 458, Terminal TERMINAL 5, Gate ...
+```text
+SUMMARY:      IB3643 LHR to MAD
+DESCRIPTION:  ... British Airways 458, Terminal TERMINAL 5, Gate ...
+```
 
 TIM's field is `operatingCarrierCode` and it will only price the operating
 flight, so a codeshare priced as booked falls back to a route average — which
