@@ -2,7 +2,7 @@
 
 Estimate the CO2e emissions of flights you've taken or booked, and keep a running log of them.
 
-contrail pulls flights from one or more *sources* (a TripIt calendar feed, a Flighty export),
+contrail pulls flights from one or more _sources_ (a TripIt calendar feed, a Flighty export),
 prices each one using Google's [Travel Impact Model](https://travelimpactmodel.org/about-tim)
 (TIM) API, and writes the result to a CSV.
 
@@ -14,9 +14,11 @@ prices each one using Google's [Travel Impact Model](https://travelimpactmodel.o
 ## Install
 
 <!-- x-release-please-start-version -->
+
 ```bash
 pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.3.0"
 ```
+
 <!-- x-release-please-end -->
 
 Pin a tag rather than tracking `main`, so a change here can never surprise a running instance.
@@ -52,12 +54,12 @@ contrail sync
 That writes `./flight_emissions.csv` in the current directory. Running it again only adds flights
 it hasn't seen before — nothing is ever double-counted or re-priced.
 
-```
+```text
 contrail sync [--config PATH] [--csv-path PATH] [--dry-run]
 contrail sources
 ```
 
-`--dry-run` fetches and parses flights and prints what *would* be written, without calling the
+`--dry-run` fetches and parses flights and prints what _would_ be written, without calling the
 emissions API or touching the CSV. Use it when testing a parsing change, or when you'd rather not
 spend API calls. It doesn't need `TIM_API_KEY` set.
 
@@ -78,11 +80,11 @@ contrail uses a hybrid approach, because of how the TIM API behaves:
 
 Responses carry a dataset stamp in `model_version` (the `+dated` part). It doesn't move daily,
 which suggests a call shortly before departure returns what the morning's call returned — though
-whether TIM can refresh a flight's aircraft *within* a stamp hasn't been tested. Either way,
+whether TIM can refresh a flight's aircraft _within_ a stamp hasn't been tested. Either way,
 re-pricing on every run already captures whatever the last sync before departure can see.
 
 **So run it regularly.** A daily sync gives each flight the most chances to be priced exactly
-while it is still upcoming. Flights first discovered *after* they've flown — an initial backfill
+while it is still upcoming. Flights first discovered _after_ they've flown — an initial backfill
 of your history, say — get the route average instead.
 
 A row is re-priced on every run until it departs, so a flight TIM didn't recognise the day it was
@@ -132,30 +134,30 @@ it.
 
 ## CSV columns
 
-| Column | Meaning |
-|---|---|
-| `sync_timestamp` | When the row was added |
-| `source` | Importer id, e.g. `tripit_ical` |
-| `source_id` | Importer-specific id. `source:source_id` is the dedup key |
-| `also_seen_as` | Other sources' keys for this same flight, space-separated. See "Joining to a Flighty export" |
-| `flight_date` | Departure date |
-| `carrier_code` / `flight_number` | e.g. `BA` / `896` — as booked (the marketing flight) |
-| `operating_carrier_code` / `operating_flight_number` | Who actually flies it. Differs from the above on a codeshare, and is what gets priced |
-| `origin` / `destination` | IATA airport codes |
-| `departure_time` | Departure as an instant, in the origin's own timezone. Blank for all-day events |
-| `status` | Blank normally; `cancelled` if an upcoming flight vanished from the feed |
-| `cabin_class_known` | The cabin flown, if a source reported one, else blank |
-| `aircraft_type` | The airframe, as the source names it. TIM never names one |
-| `flight_reason` | `business` or `leisure`, if the source says |
-| `emissions_source` | `exact`, `typical_route_average`, `unparsed`, or `no_data` |
-| `model_version` | Full TIM version, e.g. `3.0.0+20260814`. The `+dated` part identifies the dataset that produced the figure |
-| `emissions_data_source` | `TIM` or `EASA` |
-| `contrails_impact` | TIM's contrails warming bucket: `negligible`, `moderate` or `severe` |
-| `distance_km` | Distance TIM used for the calculation |
-| `aircraft_match` | How well TIM matched an airframe. It never names the aircraft |
-| `emissions_kg_first` / `_business` / `_premium_economy` / `_economy` | Per-passenger CO2e by cabin, in kg |
-| `emissions_kg_actual` | The cabin actually flown if known, else economy — **the per-flight figure to sum** |
-| `raw_summary` | Original source text, useful for `unparsed` rows |
+| Column                                                               | Meaning                                                                                                    |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `sync_timestamp`                                                     | When the row was added                                                                                     |
+| `source`                                                             | Importer id, e.g. `tripit_ical`                                                                            |
+| `source_id`                                                          | Importer-specific id. `source:source_id` is the dedup key                                                  |
+| `also_seen_as`                                                       | Other sources' keys for this same flight, space-separated. See "Joining to a Flighty export"               |
+| `flight_date`                                                        | Departure date                                                                                             |
+| `carrier_code` / `flight_number`                                     | e.g. `BA` / `896` — as booked (the marketing flight)                                                       |
+| `operating_carrier_code` / `operating_flight_number`                 | Who actually flies it. Differs from the above on a codeshare, and is what gets priced                      |
+| `origin` / `destination`                                             | IATA airport codes                                                                                         |
+| `departure_time`                                                     | Departure as an instant, in the origin's own timezone. Blank for all-day events                            |
+| `status`                                                             | Blank normally; `cancelled` if an upcoming flight vanished from the feed                                   |
+| `cabin_class_known`                                                  | The cabin flown, if a source reported one, else blank                                                      |
+| `aircraft_type`                                                      | The airframe, as the source names it. TIM never names one                                                  |
+| `flight_reason`                                                      | `business` or `leisure`, if the source says                                                                |
+| `emissions_source`                                                   | `exact`, `typical_route_average`, `unparsed`, or `no_data`                                                 |
+| `model_version`                                                      | Full TIM version, e.g. `3.0.0+20260814`. The `+dated` part identifies the dataset that produced the figure |
+| `emissions_data_source`                                              | `TIM` or `EASA`                                                                                            |
+| `contrails_impact`                                                   | TIM's contrails warming bucket: `negligible`, `moderate` or `severe`                                       |
+| `distance_km`                                                        | Distance TIM used for the calculation                                                                      |
+| `aircraft_match`                                                     | How well TIM matched an airframe. It never names the aircraft                                              |
+| `emissions_kg_first` / `_business` / `_premium_economy` / `_economy` | Per-passenger CO2e by cabin, in kg                                                                         |
+| `emissions_kg_actual`                                                | The cabin actually flown if known, else economy — **the per-flight figure to sum**                         |
+| `raw_summary`                                                        | Original source text, useful for `unparsed` rows                                                           |
 
 ### What a sync may change
 
@@ -179,7 +181,7 @@ alone.** Concretely, while `flight_date` is today or later:
   one source that reports it, so it is the only copy.
 
 From the day after departure a row is frozen, and only your own edits change it
-— with one exception. If a *second* source turns out to know a flight already in
+— with one exception. If a _second_ source turns out to know a flight already in
 the log, it may fill in a blank `cabin_class_known`, `aircraft_type` or
 `flight_reason`, and record its own key in `also_seen_as`. That re-prices nothing
 and re-fetches nothing: setting the cabin only decides which of the per-cabin
@@ -188,8 +190,8 @@ hand edit described below. It is what lets a log built from TripIt over months
 have its past rows corrected the day you first point contrail at a Flighty
 export.
 That boundary is also what makes cancellation safe to infer at all: TripIt's
-feed only carries recent and upcoming trips, so a *past* flight leaving it just
-means it aged out, while a *future* one leaving it genuinely means something.
+feed only carries recent and upcoming trips, so a _past_ flight leaving it just
+means it aged out, while a _future_ one leaving it genuinely means something.
 
 If the feed returns no flights whatsoever, contrail refuses to cancel anything
 and exits non-zero, on the grounds that an empty feed is far more likely to be
@@ -375,11 +377,13 @@ secrets, and it syncs daily and commits the updated CSV back to your own repo.
 ### Raspberry Pi, VPS, or any host with cron
 
 <!-- x-release-please-start-version -->
+
 ```bash
 python3 -m venv ~/contrail-venv
 ~/contrail-venv/bin/pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.3.0"
 crontab -e
 ```
+
 <!-- x-release-please-end -->
 
 ```cron
@@ -427,8 +431,8 @@ also exercises the matching between them, which is the part with no single sourc
 
 `./venv/bin/python scripts/refresh_airline_codes.py` regenerates the bundled airline table from
 Wikidata. Run it from the dev venv — it imports contrail for its version. It needs network, so CI
-never runs it — do it by hand when the table looks stale, and commit the result. Don't hand-edit the CSV: fix it upstream in Wikidata and re-run, or the next refresh
-silently reverts you.
+never runs it — do it by hand when the table looks stale, and commit the result. Don't hand-edit the
+CSV: fix it upstream in Wikidata and re-run, or the next refresh silently reverts you.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/); releases and the
 changelog are handled by release-please.
@@ -462,3 +466,8 @@ changelog are handled by release-please.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+<!-- This file is wrapped at 100, not the 80 the rest of the repo uses. -->
+<!-- markdownlint-configure-file {
+  "MD013": { "line_length": 100, "tables": false, "code_blocks": false }
+} -->

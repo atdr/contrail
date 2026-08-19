@@ -19,14 +19,14 @@ whether an instance's TIM key still works.
 
 ## Changes here that require a change there
 
-| Change in contrail | What contrail-gh needs |
-|---|---|
-| `CSV_FIELDS` gains, loses or reorders a column | Regenerate `flight_emissions.csv` (header row only) |
-| contrail writes a new output file | Add it to the `git add` line in `sync.yml` |
-| contrail gains an importer that reads a **file** | A directory for it, the env var in *both* `sync.yml` and `check-instance.yml`, and a guard in `check-template.yml` that the public template never carries one |
-| A new column or behaviour users should know about | Update the template's README |
-| A release is cut | Bump the `@vX.Y.Z` pin in `sync.yml` |
-| `requires-python` rises above the workflow's version | Raise `python-version` in `sync.yml` |
+| Change in contrail                                   | What contrail-gh needs                                                                                                                                        |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CSV_FIELDS` gains, loses or reorders a column       | Regenerate `flight_emissions.csv` (header row only)                                                                                                           |
+| contrail writes a new output file                    | Add it to the `git add` line in `sync.yml`                                                                                                                    |
+| contrail gains an importer that reads a **file**     | A directory for it, the env var in _both_ `sync.yml` and `check-instance.yml`, and a guard in `check-template.yml` that the public template never carries one |
+| A new column or behaviour users should know about    | Update the template's README                                                                                                                                  |
+| A release is cut                                     | Bump the `@vX.Y.Z` pin in `sync.yml`                                                                                                                          |
+| `requires-python` rises above the workflow's version | Raise `python-version` in `sync.yml`                                                                                                                          |
 
 The release row is the one release-please can't take off your hands. It rewrites
 the `@vX.Y.Z` pins in this repo's README, because they're listed under
@@ -73,11 +73,23 @@ hold no CSV. All three are guarded by CI in that repo.
 flight history in one file, and unlike the log it is a file a user puts there by
 hand, so nothing else would catch it.
 
+## The Markdown config is duplicated, not shared
+
+`.markdownlint-cli2.yaml`, `.prettierrc.json` and `.prettierignore` exist in this
+repo, in the template, and in every instance created from it. They are copies:
+three separate repositories can't share a config file, and neither tool reads one
+from a package. Change a rule here and the same edit has to be made in the
+template, or the two repos start disagreeing about what correct Markdown is.
+
+The template's copies ship to instances through "Use this template", so its
+`README.md` names them in the recipe for pulling template updates — the workflow
+that runs markdownlint and the config it reads have to arrive together.
+
 ## Three repos, briefly
 
 - **atdr/contrail** (public) — this one. All the logic, no data, no secrets.
 - **atdr/contrail-gh** (public) — the template. Scaffolding only.
 - **`octocat/my-contrail`** (private) — an instance created from the template.
-  Real itineraries, real secrets. Created *through* GitHub's "Use this template"
+  Real itineraries, real secrets. Created _through_ GitHub's "Use this template"
   so that path stays exercised, rather than by copying files. Instances are
   personal: don't name a real one in public docs.

@@ -31,14 +31,15 @@ refreshed input data".
 **What is actually observed:** `dated` read `20260814` on both 14 and 15 August,
 so the stamp does not move daily.
 
-**What is not:** whether a flight-level input — the assigned aircraft above all —
-can change *within* a dataset stamp. If the aircraft is baked in at rebuild, then
-a call an hour before departure returns exactly what the morning's call returned
-and timing a sync is pointless. If TIM refreshes schedule data more often than it
-bumps `dated`, a late run could catch a swap. **This has not been tested**, and
-it's the question that decides whether a pre-departure run is worth scheduling.
+**What is not:** whether a flight-level input — the assigned aircraft above
+all — can change _within_ a dataset stamp. If the aircraft is baked in at
+rebuild, then a call an hour before departure returns exactly what the morning's
+call returned and timing a sync is pointless. If TIM refreshes schedule data
+more often than it bumps `dated`, a late run could catch a swap. **This has not
+been tested**, and it's the question that decides whether a pre-departure run is
+worth scheduling.
 
-The raw sidecar is the instrument for settling it: it records each *distinct*
+The raw sidecar is the instrument for settling it: it records each _distinct_
 answer per flight, so a figure that moves while `dated` holds steady is exactly
 what would show up. Worth checking after a few upcoming flights have been through
 several syncs.
@@ -53,17 +54,17 @@ minute-precision isn't available there whatever TIM does.
 `BA15` flies LHR–SIN–SYD under one number. Asked about all three routings a month
 out (model `3.0.0+20260815`):
 
-| Request | Result |
-|---|---|
-| `(LHR, SIN, BA, 15, 2026-09-15)` | priced, 540.0 kg economy |
-| `(SIN, SYD, BA, 15, 2026-09-16)` | priced, 344.5 kg economy |
-| `(LHR, SYD, BA, 15, 2026-09-15)` — the published through route | **no figures** |
+| Request                                                        | Result                   |
+| -------------------------------------------------------------- | ------------------------ |
+| `(LHR, SIN, BA, 15, 2026-09-15)`                               | priced, 540.0 kg economy |
+| `(SIN, SYD, BA, 15, 2026-09-16)`                               | priced, 344.5 kg economy |
+| `(LHR, SYD, BA, 15, 2026-09-15)` — the published through route | **no figures**           |
 
 So a flight number is not a unit TIM prices; a leg is. Asking for the through
 route gets nothing at all, and the two legs are separately priced and additive.
 
 This settles the identity question in [resync.md](resync.md) from the emissions
-side as well as the data-model side: the legs *have* to be separate rows, because
+side as well as the data-model side: the legs _have_ to be separate rows, because
 a single through row could not be priced exactly at all. Note the second leg's
 local departure date is the day after the first's — the date sent is local at
 each leg's own origin, so a leg crossing midnight or the dateline needs its own,
@@ -79,7 +80,7 @@ on the legs.
 Not even from the detailed endpoint. The closest signal is
 `fuelBurnEeaStrategy` (stored as `aircraft_match`), which says how well TIM
 matched an airframe without saying which. An equipment swap can therefore only
-ever be *inferred* from a changed figure.
+ever be _inferred_ from a changed figure.
 
 This is why open rows are re-priced on **every** run, including ones already
 priced `exact`: the figure depends on the aircraft, and short-haul equipment
@@ -90,7 +91,7 @@ response carrying no figures at all never overwrites one that has them — TIM
 returns nothing for a flight it cannot price, and that is exactly the row users
 are told to fill in by hand.
 
-A Flighty export *does* name the airframe, and it is stored in `aircraft_type`.
+A Flighty export _does_ name the airframe, and it is stored in `aircraft_type`.
 That is a record of what was flown, not an input to any figure: TIM is never told
 about it, and it cannot be, since the API takes no aircraft parameter. Its use is
 the other direction — a stored airframe beside a moving `exact` figure is

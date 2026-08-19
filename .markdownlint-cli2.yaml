@@ -1,0 +1,39 @@
+# Prettier owns whitespace and table alignment. These are the rules it cannot
+# express. Kept in step by hand across contrail, contrail-gh and any instance
+# created from it — the three files are copies, not a shared package.
+#
+# .prettierrc.json carries two settings and no room to explain them:
+# `proseWrap: preserve`, because the prose here is wrapped by hand at
+# deliberate points and `always` would rewrap every paragraph in the repo; and
+# `embeddedLanguageFormatting: off`, because the code inside a fence is a
+# worked example or a command someone will paste, not source to be tidied.
+gitignore: true
+
+# Without this, a bare `markdownlint-cli2` finds nothing and reports success.
+globs:
+  - "**/*.md"
+
+config:
+  MD013:
+    # AGENTS.md and docs/ already hold 80. README.md opts up to 100 with a
+    # markdownlint-configure-file comment at the foot of the file.
+    line_length: 80
+    # A padded table row is wider than any prose limit, and a fenced block is
+    # usually a command that must not be broken.
+    tables: false
+    code_blocks: false
+  MD046:
+    # GitHub only syntax-highlights fenced blocks, so an indented one silently
+    # loses the highlighting the author meant to have.
+    style: fenced
+
+ignores:
+  # release-please regenerates this from commit subjects. Anything done to it
+  # here is clobbered on the next release.
+  - CHANGELOG.md
+  # A symlink to AGENTS.md. Linting it reports every line of that file twice.
+  - CLAUDE.md
+  # Local agent scratch, kept out of this public repo via .git/info/exclude —
+  # which `gitignore: true` above does not read, so it needs naming here. CI
+  # never sees the file; a full-tree run on a dev machine does.
+  - .claude/**
