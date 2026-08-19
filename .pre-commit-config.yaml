@@ -22,6 +22,11 @@ repos:
     rev: v0.23.2
     hooks:
       - id: markdownlint-cli2
+        # The `globs` in .markdownlint-cli2.yaml already cover every file, and
+        # markdownlint-cli2 adds any filenames it is given to them rather than
+        # replacing them — so passing the staged files just reports each of
+        # them twice.
+        pass_filenames: false
 
   # The maintained fork; pre-commit/mirrors-prettier is archived.
   - repo: https://github.com/rbubley/mirrors-prettier
