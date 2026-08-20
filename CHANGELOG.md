@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/atdr/contrail/compare/v0.3.0...v0.3.1) (2026-08-20)
+
+
+### Documentation
+
+* a file-reading importer now needs its env var in two workflows ([#20](https://github.com/atdr/contrail/issues/20)) ([353b0c4](https://github.com/atdr/contrail/commit/353b0c4774e0e3cca444623bb437813eff13ad79))
+
 ## [0.3.0](https://github.com/atdr/contrail/compare/v0.2.0...v0.3.0) (2026-08-16)
 
 
