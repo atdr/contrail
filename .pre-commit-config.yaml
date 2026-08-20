@@ -3,7 +3,10 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.3
     hooks:
-      - id: ruff
+      # `ruff-check`, not `ruff`: the latter is a deprecated alias kept for
+      # compatibility, running the identical `ruff check`. It will be removed
+      # eventually, and the failure would land on an unrelated `rev` bump.
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
 
