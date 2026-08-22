@@ -53,7 +53,7 @@ jobs:
       # already configured for this repo keeps it current. Prettier has no
       # first-party action, so its pin below is a hand edit — the same deal as
       # the `rev:` pins in .pre-commit-config.yaml.
-      - uses: DavidAnson/markdownlint-cli2-action@v9
+      - uses: DavidAnson/markdownlint-cli2-action@v24
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
