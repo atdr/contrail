@@ -41,7 +41,7 @@ dev = [
     # formatter's output is not stable across minor releases. Without it the
     # first restyling release turns every unrelated PR red. Bumping past it
     # should be a deliberate PR that reformats the tree.
-    "ruff>=0.16.2,<0.17",
+    "ruff>=0.16.3,<0.17",
     # Runs the hooks in .pre-commit-config.yaml, which include the two Markdown
     # tools. Optional to use — CI is still the gate — but declared here so
     # `pip install -e ".[dev]"` leaves nothing to install by hand.
