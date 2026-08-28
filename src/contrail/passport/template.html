@@ -37,7 +37,8 @@
         --control-active: light-dark(#26322b, #e3ebe6);
         --control-active-text: light-dark(#ffffff, #132019);
         --shadow: light-dark(0 18px 55px rgba(29, 53, 39, 0.12), 0 18px 55px rgba(0, 0, 0, 0.34));
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: var(--font-sans);
         color: var(--text);
         background: var(--page);
       }
@@ -83,9 +84,10 @@
         height: 8px;
         border-top: 2px solid currentColor;
         border-left: 2px solid currentColor;
+        transform-origin: center;
       }
-      #period-newer::before { transform: rotate(-45deg); }
-      #period-older::before { transform: rotate(135deg); }
+      #period-newer::before { transform: translateX(2px) rotate(-45deg); }
+      #period-older::before { transform: translateX(-2px) rotate(135deg); }
       .period-scroll:disabled { opacity: 0.28; cursor: default; }
 
       .periods {
@@ -97,7 +99,7 @@
         scrollbar-width: thin;
       }
 
-      .periods button, .metric-tabs button {
+      .periods button {
         min-height: 44px;
         padding: 10px 16px;
         border: 0;
@@ -123,19 +125,20 @@
       h2, h3, p { margin-top: 0; }
       h2 { margin-bottom: 4px; font-size: clamp(1.45rem, 3vw, 2.25rem); font-weight: 500; }
       h3 { font-weight: 500; }
-      .eyebrow { margin-bottom: 8px; color: var(--teal); font-weight: 500; letter-spacing: 0.09em; text-transform: uppercase; }
+      .eyebrow { margin-bottom: 8px; color: var(--muted); font-weight: 500; letter-spacing: 0.09em; text-transform: uppercase; }
       .muted { color: var(--muted); }
       .tabular { font-variant-numeric: tabular-nums; }
 
       .overview { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(330px, 0.85fr); gap: 32px; }
-      .metric-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 24px 0 18px; }
-      .metric-tabs button { color: var(--muted); background: var(--surface-soft); }
-      .metric-tabs button[aria-pressed="true"] { color: #fff; background: var(--teal); }
+      .metric-tabs { display: flex; width: max-content; max-width: 100%; gap: 4px; flex-wrap: wrap; margin: 24px 0 18px; padding: 4px; border-radius: 999px; background: var(--surface-soft); }
+      .metric-tabs button { min-height: 36px; padding: 7px 13px; border: 0; border-radius: 999px; color: var(--muted); background: transparent; cursor: pointer; white-space: nowrap; }
+      .metric-tabs button[aria-pressed="true"] { color: var(--control-active-text); background: var(--control-active); }
       .hero-value { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.18em; row-gap: 0.08em; margin: 0; font-size: clamp(2.6rem, 8vw, 6.5rem); font-weight: 500; line-height: 0.9; letter-spacing: -0.045em; }
       .hero-value small { display: inline-block; flex: 0 1 auto; color: var(--muted); font-size: 0.37em; line-height: 1.05; letter-spacing: 0; }
       .hero-context { min-height: 1.5em; margin-top: 8px; color: var(--muted); }
 
-      .summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 28px; }
+      .summary-grid { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 28px; }
+      .summary-grid > * { flex: 1 1 auto; min-width: 72px; }
       .summary-item { padding-top: 12px; border-top: 1px solid var(--line); }
       .summary-item span { display: block; color: var(--muted); }
       .summary-item strong { display: block; margin-top: 3px; font-size: 1.25rem; font-weight: 500; }
@@ -259,7 +262,7 @@
       .extreme-card strong { display: block; margin-top: 10px; font-size: clamp(1.25rem, 3vw, 2rem); font-weight: 500; }
       .extreme-card p { margin: 5px 0 0; color: var(--muted); }
       .flight-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 13px; }
-      .flight-tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px; font-size: 0.8rem; }
+      .flight-tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.9); font-size: 0.8rem; }
       .category-icon {
         display: inline-grid;
         place-items: center;
@@ -299,7 +302,6 @@
       .quality-part { min-width: 0; padding-left: 12px; border-left: 3px solid var(--teal); }
       .quality-part strong { display: block; margin-top: 5px; font-size: 1.25rem; font-weight: 500; }
       .methodology { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); }
-      .methodology code { color: var(--text); }
 
       .ranking-dialog {
         width: min(920px, calc(100% - 28px));
@@ -327,13 +329,13 @@
         .compositions { grid-template-columns: 1fr; }
         .quality-layout { grid-template-columns: 1fr; }
         .quality-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .summary-grid > * { flex-basis: calc(33.333% - 18px); }
       }
 
       @media (max-width: 620px) {
         .header-inner, main, footer { width: min(100% - 20px, 1180px); }
         .header-inner { padding-top: 24px; }
-        .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .summary-grid > * { flex-basis: calc(50% - 18px); }
         .drivers { grid-template-columns: 1fr; }
         .extremes { grid-template-columns: 1fr; }
         section { border-radius: 18px; }
@@ -551,11 +553,21 @@
           </div>
           <div class="network-cuts">
             <div class="ranking">
-              <h3>Airport connections</h3>
+              <div class="ranking-head">
+                <h3>Airport connections</h3>
+                <button class="see-all" type="button" data-ranking="airports">
+                  See all
+                </button>
+              </div>
               <div class="ranking-chart"><canvas id="airports"></canvas></div>
             </div>
             <div class="ranking">
-              <h3>Country connections</h3>
+              <div class="ranking-head">
+                <h3>Country connections</h3>
+                <button class="see-all" type="button" data-ranking="countries">
+                  See all
+                </button>
+              </div>
               <div class="ranking-chart"><canvas id="countries"></canvas></div>
             </div>
           </div>
@@ -853,6 +865,11 @@
         let routeLayer;
         let airportLayer;
         const $ = (id) => document.getElementById(id);
+        const chartFont = getComputedStyle(document.documentElement).getPropertyValue("--font-sans").trim();
+        Chart.defaults.font.family = chartFont;
+        Chart.defaults.plugins.tooltip.titleFont = { family: chartFont, weight: "600" };
+        Chart.defaults.plugins.tooltip.bodyFont = { family: chartFont };
+        Chart.defaults.plugins.tooltip.footerFont = { family: chartFont };
         const sum = (rows, field) => rows.reduce((total, row) => total + (row[field] || 0), 0);
         const pct = (part, whole) => whole ? Math.round(part / whole * 100) : 0;
         const formatNumber = (value, digits = 0) => Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
@@ -1044,7 +1061,7 @@
               const theme = chartTheme();
               ctx.save();
               ctx.fillStyle = theme.text;
-              ctx.font = "500 12px Inter, system-ui, sans-serif";
+              ctx.font = `500 12px ${chartFont}`;
               chart.getDatasetMeta(0).data.forEach((bar, index) => {
                 const value = chart.data.datasets[0].data[index];
                 const label = formatter(value);
@@ -1071,7 +1088,7 @@
               const theme = chartTheme();
               ctx.save();
               ctx.fillStyle = theme.text;
-              ctx.font = "500 12px Inter, system-ui, sans-serif";
+              ctx.font = `500 12px ${chartFont}`;
               totals.forEach((total, index) => {
                 const bars = chart.data.datasets.map((_, datasetIndex) => chart.getDatasetMeta(datasetIndex).data[index]).filter(Boolean);
                 const anchor = bars.reduce((furthest, bar) => !furthest || bar.x > furthest.x ? bar : furthest, null);
@@ -1085,7 +1102,7 @@
           };
         }
 
-        function periodValueLabels(totals) {
+        function periodValueLabels(totals, unit) {
           return {
             id: "passport-period-value-labels",
             afterDatasetsDraw(chart) {
@@ -1093,7 +1110,7 @@
               const theme = chartTheme();
               ctx.save();
               ctx.fillStyle = theme.text;
-              ctx.font = "500 12px Inter, system-ui, sans-serif";
+              ctx.font = `500 12px ${chartFont}`;
               totals.forEach((total, index) => {
                 const bars = chart.data.datasets
                   .map((dataset, datasetIndex) => dataset.data[index] ? chart.getDatasetMeta(datasetIndex).data[index] : null)
@@ -1102,7 +1119,7 @@
                 if (!anchor) return;
                 ctx.textAlign = "center";
                 ctx.textBaseline = "bottom";
-                ctx.fillText(formatMassText(total), anchor.x, anchor.y - 7);
+                ctx.fillText(formatMassText(total, unit), anchor.x, anchor.y - 7);
               });
               ctx.restore();
             }
@@ -1318,11 +1335,28 @@
         }
 
         function impactByValues(rows, valuesForFlight) {
-          const result = new Map();
+          const values = new Map();
           withEmissions(completed(rows)).forEach((flight) => {
-            [...new Set(valuesForFlight(flight).filter(Boolean))].forEach((value) => result.set(value, (result.get(value) || 0) + flight.kg));
+            [...new Set(valuesForFlight(flight).filter(Boolean))].forEach((label) => {
+              const entry = values.get(label) || {
+                label,
+                total: 0,
+                metrics: emptyMetricBucket(),
+                cabin: new Map(),
+                reason: new Map()
+              };
+              addToMetricBucket(entry.metrics, flight);
+              entry.total = entry.metrics.totalKg;
+              ["cabin", "reason"].forEach((kind) => {
+                const category = visualCategory(flight, kind);
+                const bucket = entry[kind].get(category) || emptyMetricBucket();
+                addToMetricBucket(bucket, flight);
+                entry[kind].set(category, bucket);
+              });
+              values.set(label, entry);
+            });
           });
-          return [...result.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([label, total]) => ({ label, total, cabin: new Map(), reason: new Map() }));
+          return [...values.values()].sort((a, b) => b.total - a.total);
         }
 
         function updatePatterns(rows) {
@@ -1368,7 +1402,7 @@
                 barPercentage: 0.66
               }))
             },
-            plugins: [periodValueLabels(totals)],
+            plugins: [periodValueLabels(totals, maximum >= 1000 ? "t" : "kg")],
             options: {
               animation: false,
               responsive: true,
@@ -1389,8 +1423,19 @@
           const airportEntries = impactByValues(rows, (flight) => [flight.origin, flight.destination]);
           const countryEntries = impactByValues(rows, (flight) => [flight.start && flight.start.country, flight.end && flight.end.country])
             .map((entry) => ({ ...entry, label: `${countryFlag(entry.label)} ${countryDisplay ? countryDisplay.of(entry.label) || entry.label : entry.label}` }));
-          renderRanking("airports", airportEntries, "total", "total");
-          renderRanking("countries", countryEntries, "total", "total");
+          [
+            ["airports", "All airport connections", airportEntries],
+            ["countries", "All country connections", countryEntries]
+          ].forEach(([key, title, entries]) => {
+            rankingData.set(key, {
+              title,
+              entries,
+              breakdown: state.patternBreakdown,
+              metric: "total"
+            });
+            renderRanking(key, entries.slice(0, 6), state.patternBreakdown, "total");
+            document.querySelector(`[data-ranking="${key}"]`).hidden = entries.length <= 6;
+          });
         }
 
         function countryFlag(code) {
@@ -1474,7 +1519,12 @@
           ];
           rankings.forEach(([key, title, entries]) => {
             const ranked = rankForMetric(entries, state.driverMetric);
-            rankingData.set(key, { title, entries: ranked });
+            rankingData.set(key, {
+              title,
+              entries: ranked,
+              breakdown: state.driverBreakdown,
+              metric: state.driverMetric
+            });
             renderRanking(key, ranked.slice(0, 6));
             const button = document.querySelector(`[data-ranking="${key}"]`);
             button.hidden = ranked.length <= 6;
@@ -1484,12 +1534,14 @@
         function openRanking(key) {
           const ranking = rankingData.get(key);
           if (!ranking || !ranking.entries.length) return;
-          const metricLabel = state.driverMetric === "distance" ? "average CO₂e per km" : state.driverMetric === "duration" ? "average CO₂e per hour" : "total CO₂e";
-          const breakdownLabel = state.driverBreakdown === "total" ? "" : ` by ${state.driverBreakdown}`;
+          const metric = ranking.metric || "total";
+          const breakdown = ranking.breakdown || "total";
+          const metricLabel = metric === "distance" ? "average CO₂e per km" : metric === "duration" ? "average CO₂e per hour" : "total CO₂e";
+          const breakdownLabel = breakdown === "total" ? "" : ` by ${breakdown}`;
           $("ranking-dialog-title").textContent = `${ranking.title} · ${metricLabel}${breakdownLabel}`;
           $("ranking-dialog-chart").style.height = `${Math.max(360, ranking.entries.length * 34)}px`;
           $("ranking-dialog").showModal();
-          requestAnimationFrame(() => renderRanking("ranking-dialog-canvas", ranking.entries));
+          requestAnimationFrame(() => renderRanking("ranking-dialog-canvas", ranking.entries, breakdown, metric));
         }
 
         function setupMap() {
@@ -1599,6 +1651,7 @@
             };
           });
           const maximum = Math.max(0, ...series.map((item) => item.completed + item.planned));
+          const totals = series.map((item) => item.completed + item.planned);
           const theme = chartTheme();
           const categories = breakdownCategories(withEmissions(data.flights), state.trendBreakdown);
           $("trend-chart").setAttribute("aria-label", series.map((item) => {
@@ -1641,11 +1694,13 @@
               labels: series.map((item) => item.year),
               datasets
             },
+            plugins: [periodValueLabels(totals, maximum >= 1000 ? "t" : "kg")],
             options: {
               animation: false,
               responsive: true,
               maintainAspectRatio: false,
               interaction: { mode: "index", intersect: false },
+              layout: { padding: { top: 28 } },
               plugins: {
                 legend: { display: false },
                 tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e` } }
@@ -1692,7 +1747,7 @@
           $("airport-count").textContent = String(airports.size);
           $("country-count").textContent = String(countries.size);
           const assumed = done.length - cabinKnown;
-          $("methodology").innerHTML = `Impact figures are per passenger. Distance intensity uses <code>${data.meta.distanceMethod}</code>. Time intensity uses <code>${data.meta.durationMethod}</code>. ${assumed ? `${assumed} flight${assumed === 1 ? "" : "s"} without cabin data ${assumed === 1 ? "is" : "are"} shown as Economy in charts.` : "Every flight has cabin data."} Missing values are never extrapolated.`;
+          $("methodology").textContent = `Impact figures are per passenger. Distance intensity uses ${data.meta.distanceMethod}. Time intensity uses ${data.meta.durationMethod}. ${assumed ? `${assumed} flight${assumed === 1 ? "" : "s"} without cabin data ${assumed === 1 ? "is" : "are"} shown as Economy in charts.` : "Every flight has cabin data."} Missing values are never extrapolated.`;
         }
 
         function update() {
