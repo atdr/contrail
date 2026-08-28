@@ -1,0 +1,1772 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Contrail Passport</title>
+    <style>
+      __LEAFLET_CSS__
+    </style>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --page: light-dark(#f3f6f3, #0e1511);
+        --surface: light-dark(#ffffff, #17211b);
+        --surface-soft: light-dark(#e8f1eb, #223129);
+        --text: light-dark(#132019, #f1f6f2);
+        --muted: light-dark(#647068, #a5b2aa);
+        --line: light-dark(#dce5df, #34443a);
+        --forest: light-dark(#123c2c, #1a4d39);
+        --teal: light-dark(#087567, #36c8ae);
+        --teal-soft: light-dark(#83d9ca, #167d6e);
+        --gold: light-dark(#f4b744, #ffc85f);
+        --blue: light-dark(#3775b7, #6db0f1);
+        --danger: light-dark(#a43d35, #ff9188);
+        --total-value: #0b8071;
+        --cabin-economy: #69b9df;
+        --cabin-premium: #519fd2;
+        --cabin-business: #377fbd;
+        --cabin-first: #2b62a0;
+        --cabin-private: #21477e;
+        --reason-business: #dc8044;
+        --reason-leisure: #efbe4f;
+        --reason-crew: #a95a32;
+        --category-unknown: #76827b;
+        --control-active: light-dark(#26322b, #e3ebe6);
+        --control-active-text: light-dark(#ffffff, #132019);
+        --shadow: light-dark(0 18px 55px rgba(29, 53, 39, 0.12), 0 18px 55px rgba(0, 0, 0, 0.34));
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--text);
+        background: var(--page);
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--page); }
+      button { font: inherit; }
+
+      .passport-header {
+        color: #fff;
+        background:
+          radial-gradient(circle at 85% 5%, rgba(244, 183, 68, 0.26), transparent 30%),
+          linear-gradient(135deg, var(--forest), #087267);
+      }
+
+      .header-inner, main, footer {
+        width: min(1180px, calc(100% - 32px));
+        margin-inline: auto;
+      }
+
+      .header-inner { padding: 32px 0 0; }
+      .brand { display: flex; align-items: end; }
+      .brand p, .brand h1 { margin: 0; }
+      .brand p { opacity: 0.72; letter-spacing: 0.12em; text-transform: uppercase; }
+      .brand h1 { margin-top: 4px; font-size: clamp(2rem, 6vw, 4.5rem); font-weight: 500; }
+
+      .period-picker { display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px; gap: 6px; align-items: start; margin-top: 28px; }
+      .period-scroll {
+        display: grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        margin-top: 2px;
+        border: 1px solid rgba(255,255,255,0.3);
+        border-radius: 999px;
+        color: #fff;
+        background: rgba(255,255,255,0.1);
+        cursor: pointer;
+      }
+      .period-scroll::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-top: 2px solid currentColor;
+        border-left: 2px solid currentColor;
+      }
+      #period-newer::before { transform: rotate(-45deg); }
+      #period-older::before { transform: rotate(135deg); }
+      .period-scroll:disabled { opacity: 0.28; cursor: default; }
+
+      .periods {
+        display: flex;
+        gap: 8px;
+        padding: 0 0 10px;
+        overflow-x: auto;
+        scrollbar-color: rgba(255,255,255,0.45) transparent;
+        scrollbar-width: thin;
+      }
+
+      .periods button, .metric-tabs button {
+        min-height: 44px;
+        padding: 10px 16px;
+        border: 0;
+        border-radius: 999px;
+        color: inherit;
+        background: transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .periods button[aria-pressed="true"] { color: #153a2d; background: #fff; }
+
+      main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 22px 0 48px; }
+      section {
+        min-width: 0;
+        padding: clamp(20px, 4vw, 38px);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      h2, h3, p { margin-top: 0; }
+      h2 { margin-bottom: 4px; font-size: clamp(1.45rem, 3vw, 2.25rem); font-weight: 500; }
+      h3 { font-weight: 500; }
+      .eyebrow { margin-bottom: 8px; color: var(--teal); font-weight: 500; letter-spacing: 0.09em; text-transform: uppercase; }
+      .muted { color: var(--muted); }
+      .tabular { font-variant-numeric: tabular-nums; }
+
+      .overview { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(330px, 0.85fr); gap: 32px; }
+      .metric-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 24px 0 18px; }
+      .metric-tabs button { color: var(--muted); background: var(--surface-soft); }
+      .metric-tabs button[aria-pressed="true"] { color: #fff; background: var(--teal); }
+      .hero-value { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.18em; row-gap: 0.08em; margin: 0; font-size: clamp(2.6rem, 8vw, 6.5rem); font-weight: 500; line-height: 0.9; letter-spacing: -0.045em; }
+      .hero-value small { display: inline-block; flex: 0 1 auto; color: var(--muted); font-size: 0.37em; line-height: 1.05; letter-spacing: 0; }
+      .hero-context { min-height: 1.5em; margin-top: 8px; color: var(--muted); }
+
+      .summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 28px; }
+      .summary-item { padding-top: 12px; border-top: 1px solid var(--line); }
+      .summary-item span { display: block; color: var(--muted); }
+      .summary-item strong { display: block; margin-top: 3px; font-size: 1.25rem; font-weight: 500; }
+
+
+      .map {
+        min-height: 420px;
+        overflow: hidden;
+        position: relative;
+        border-radius: 18px;
+        color: #fff;
+        background: #0b554c;
+      }
+      #route-map { position: absolute; inset: 0; width: 100%; height: 100%; background: #0b554c; }
+      .leaflet-container { font: inherit; }
+      .leaflet-control-zoom a {
+        color: #fff;
+        border-color: rgba(255,255,255,0.2) !important;
+        background: rgba(8,45,37,0.88);
+      }
+      .leaflet-control-zoom a:hover { color: #fff; background: rgba(8,67,57,0.96); }
+      .leaflet-control-scale-line {
+        color: #fff;
+        border: 0;
+        border-bottom: 2px solid rgba(255,255,255,0.6);
+        border-radius: 6px 6px 0 0;
+        background: rgba(8,45,37,0.68);
+        box-shadow: none;
+        text-shadow: none;
+      }
+      .leaflet-tooltip {
+        color: #132019;
+        border: 0;
+        border-radius: 9px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      }
+      .map-caption { position: absolute; left: 20px; right: 20px; bottom: 18px; z-index: 500; display: flex; justify-content: space-between; gap: 16px; pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,0.55); }
+      .map-caption strong { flex: 0 0 auto; white-space: nowrap; }
+      .map-caption span { opacity: 0.74; }
+
+      .section-head { display: flex; justify-content: space-between; align-items: end; gap: 18px; margin-bottom: 24px; }
+      .section-head p { margin: 0; color: var(--muted); }
+      .chart-controls, .driver-controls { display: flex; justify-content: flex-end; align-items: center; gap: 18px; flex-wrap: wrap; }
+      .chart-controls .pattern-tabs + .pattern-tabs,
+      .driver-controls .pattern-tabs + .pattern-tabs { position: relative; }
+      .chart-controls .pattern-tabs + .pattern-tabs::before,
+      .driver-controls .pattern-tabs + .pattern-tabs::before {
+        content: "";
+        position: absolute;
+        top: 7px;
+        bottom: 7px;
+        left: -10px;
+        width: 1px;
+        background: var(--line);
+      }
+      .trend-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 0.3fr); gap: 30px; align-items: end; }
+      .trend-chart, .pattern-chart { width: 100%; overflow-x: auto; }
+      .chart-stage { position: relative; min-width: 720px; height: 270px; }
+      .pattern-chart { height: 100%; }
+      .pattern-chart .chart-stage { min-width: 680px; min-height: 420px; height: 100%; }
+      .trend-note { padding: 18px; border-radius: 18px; background: var(--surface-soft); }
+      .trend-note strong { display: block; margin: 8px 0; font-size: 2rem; font-weight: 500; }
+
+      .drivers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px; }
+      .ranking { min-width: 0; }
+      .ranking-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+      .ranking-head h3 { margin: 0; }
+      .see-all {
+        padding: 6px 10px;
+        border: 0;
+        border-radius: 999px;
+        color: var(--teal);
+        background: var(--surface-soft);
+        cursor: pointer;
+        font-size: 0.86rem;
+      }
+      .see-all:hover { color: #fff; background: var(--teal); }
+      .ranking-chart { position: relative; height: 220px; margin-top: 10px; }
+      .network-cuts .ranking-chart { height: 180px; }
+      .empty { padding: 18px 0; color: var(--muted); }
+
+      .compositions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 30px;
+        margin-bottom: 32px;
+        padding-bottom: 30px;
+        border-bottom: 1px solid var(--line);
+      }
+      .composition-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+      .composition-head h3 { margin-bottom: 0; }
+      .composition-chart { position: relative; height: 58px; margin-top: 10px; }
+      .composition-legend { display: grid; gap: 10px; margin-top: 16px; }
+      .composition-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto auto; gap: 9px; align-items: center; }
+      .composition-swatch { width: 12px; height: 12px; border-radius: 4px; }
+      .composition-label { display: inline-flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .composition-value, .composition-percent { font-variant-numeric: tabular-nums; }
+      .composition-percent { min-width: 3.2em; color: var(--muted); text-align: right; }
+
+      .pattern-tabs { display: flex; gap: 4px; flex-wrap: wrap; padding: 4px; border-radius: 999px; background: var(--surface-soft); }
+      .pattern-tabs button {
+        min-height: 36px;
+        padding: 7px 13px;
+        border: 0;
+        border-radius: 999px;
+        color: var(--muted);
+        background: transparent;
+        cursor: pointer;
+      }
+      .pattern-tabs button[aria-pressed="true"] { color: var(--control-active-text); background: var(--control-active); }
+      .patterns-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.55fr); gap: 30px; align-items: stretch; }
+      .network-cuts { display: grid; gap: 22px; }
+      .network-cuts h3 { margin-bottom: 0; }
+
+      .extremes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+      .impact-ranges { display: grid; gap: 26px; }
+      .impact-range-head { margin-bottom: 10px; }
+      .impact-range-head h3 { margin: 0; }
+      .extreme-card { padding: 20px; border-radius: 18px; background: var(--surface-soft); }
+      .extreme-card > span { color: var(--muted); }
+      .extreme-card strong { display: block; margin-top: 10px; font-size: clamp(1.25rem, 3vw, 2rem); font-weight: 500; }
+      .extreme-card p { margin: 5px 0 0; color: var(--muted); }
+      .flight-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 13px; }
+      .flight-tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px; font-size: 0.8rem; }
+      .category-icon {
+        display: inline-grid;
+        place-items: center;
+        flex: 0 0 auto;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        color: #fff;
+        background: var(--icon-bg, var(--teal));
+        font-size: 0.62rem;
+        font-weight: 750;
+        line-height: 1;
+      }
+      .category-icon.wide { width: 28px; border-radius: 999px; font-size: 0.52rem; letter-spacing: -0.02em; }
+      .category-icon.reason-icon { width: 20px; color: currentColor; background: transparent; font-size: 0.95rem; }
+      .cabin-first { --icon-bg: var(--cabin-first); color: #17365f; background: #cddff3; }
+      .cabin-business { --icon-bg: var(--cabin-business); color: #113a68; background: #d6eaff; }
+      .cabin-premium { --icon-bg: var(--cabin-premium); color: #174b72; background: #d8edf8; }
+      .cabin-economy { --icon-bg: var(--cabin-economy); color: #17485f; background: #daf1fb; }
+      .cabin-private { --icon-bg: var(--cabin-private); color: #10294f; background: #c8d7ec; }
+      .reason-business { color: #5b3511; background: color-mix(in srgb, var(--reason-business) 28%, #fff); }
+      .reason-leisure { color: #704b00; background: color-mix(in srgb, var(--reason-leisure) 32%, #fff); }
+      .reason-crew { color: #542711; background: color-mix(in srgb, var(--reason-crew) 26%, #fff); }
+      .tag-unknown { color: var(--muted); background: var(--surface); }
+
+      .driver-controls { margin: -8px 0 14px; }
+
+      .quality-layout { display: grid; grid-template-columns: minmax(190px, 0.34fr) minmax(0, 1.66fr); gap: 14px; align-items: stretch; }
+      .quality-total, .quality-group { padding: 18px; border-radius: 18px; background: var(--surface-soft); }
+      .quality-total { display: flex; flex-direction: column; justify-content: space-between; min-height: 176px; }
+      .quality-total span, .quality-part span { color: var(--muted); }
+      .quality-total strong { display: block; font-size: clamp(3rem, 7vw, 5rem); font-weight: 500; line-height: 1; }
+      .quality-groups { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+      .quality-group { min-width: 0; min-height: 176px; }
+      .quality-group h3 { margin-bottom: 14px; }
+      .quality-parts { display: grid; grid-template-columns: 1fr; gap: 10px; }
+      .quality-part { min-width: 0; padding-left: 12px; border-left: 3px solid var(--teal); }
+      .quality-part strong { display: block; margin-top: 5px; font-size: 1.25rem; font-weight: 500; }
+      .methodology { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); }
+      .methodology code { color: var(--text); }
+
+      .ranking-dialog {
+        width: min(920px, calc(100% - 28px));
+        max-height: min(88vh, 900px);
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        color: var(--text);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+      .ranking-dialog::backdrop { background: rgba(4,16,11,0.66); backdrop-filter: blur(4px); }
+      .dialog-head { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 22px 24px; border-bottom: 1px solid var(--line); }
+      .dialog-head h2 { margin: 0; }
+      .dialog-close { width: 40px; height: 40px; border: 0; border-radius: 999px; color: var(--text); background: var(--surface-soft); cursor: pointer; font-size: 1.35rem; }
+      .dialog-scroll { max-height: calc(min(88vh, 900px) - 86px); padding: 16px 20px 24px; overflow-y: auto; }
+      .dialog-chart { position: relative; min-height: 360px; }
+
+      footer { padding-bottom: 40px; color: var(--muted); text-align: center; }
+
+      @media (max-width: 900px) {
+        .overview, .trend-layout, .patterns-layout { grid-template-columns: 1fr; }
+        .drivers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .compositions { grid-template-columns: 1fr; }
+        .quality-layout { grid-template-columns: 1fr; }
+        .quality-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      }
+
+      @media (max-width: 620px) {
+        .header-inner, main, footer { width: min(100% - 20px, 1180px); }
+        .header-inner { padding-top: 24px; }
+        .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .drivers { grid-template-columns: 1fr; }
+        .extremes { grid-template-columns: 1fr; }
+        section { border-radius: 18px; }
+        .overview { gap: 22px; }
+        .map { min-height: 360px; }
+        .period-picker { grid-template-columns: 36px minmax(0, 1fr) 36px; }
+        .period-scroll { width: 36px; height: 36px; }
+        .chart-stage { height: 235px; }
+        .pattern-chart { height: auto; }
+        .pattern-chart .chart-stage { min-height: 0; height: 245px; }
+        .chart-controls, .driver-controls { justify-content: flex-start; }
+        .chart-controls .pattern-tabs + .pattern-tabs::before,
+        .driver-controls .pattern-tabs + .pattern-tabs::before { display: none; }
+        .quality-groups { grid-template-columns: 1fr; }
+        .quality-parts { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="passport-header">
+      <div class="header-inner">
+        <div class="brand">
+          <div>
+            <p>Contrail</p>
+            <h1>Carbon Passport</h1>
+          </div>
+        </div>
+        <div class="period-picker">
+          <button
+            class="period-scroll"
+            id="period-newer"
+            type="button"
+            aria-label="Show newer years"
+          ></button>
+          <nav class="periods" id="periods" aria-label="Reporting period"></nav>
+          <button
+            class="period-scroll"
+            id="period-older"
+            type="button"
+            aria-label="Show older years"
+          ></button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="overview" aria-labelledby="impact-heading">
+        <div>
+          <p class="eyebrow">Completed flights</p>
+          <h2 id="impact-heading">Your flight impact</h2>
+          <div
+            class="metric-tabs"
+            id="metric-tabs"
+            aria-label="Headline measure"
+          >
+            <button type="button" data-metric="total" aria-pressed="true">
+              CO₂e total
+            </button>
+            <button type="button" data-metric="distance" aria-pressed="false">
+              Per km
+            </button>
+            <button type="button" data-metric="duration" aria-pressed="false">
+              Per hour
+            </button>
+          </div>
+          <p class="hero-value tabular" id="hero-value"></p>
+          <p class="hero-context" id="hero-context" aria-live="polite"></p>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <span>Flights</span
+              ><strong class="tabular" id="flight-count"></strong>
+            </div>
+            <div class="summary-item">
+              <span>Est. distance</span
+              ><strong class="tabular" id="distance-total"></strong>
+            </div>
+            <div class="summary-item">
+              <span>Block time</span
+              ><strong class="tabular" id="duration-total"></strong>
+            </div>
+            <div class="summary-item">
+              <span>Upcoming</span
+              ><strong class="tabular" id="planned-total"></strong>
+            </div>
+            <div class="summary-item">
+              <span>Airports</span
+              ><strong class="tabular" id="airport-count"></strong>
+            </div>
+            <div class="summary-item">
+              <span>Countries</span
+              ><strong class="tabular" id="country-count"></strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="map" aria-label="Interactive route map">
+          <div id="route-map" role="img" aria-label="Route network"></div>
+          <div class="map-caption">
+            <strong>Carbon map</strong><span>Line area represents CO₂e</span>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="trend-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Over time</p>
+            <h2 id="trend-heading">Annual trajectory</h2>
+          </div>
+          <div
+            class="pattern-tabs"
+            id="trend-breakdown-tabs"
+            role="group"
+            aria-label="Break down annual impact"
+          >
+            <button
+              type="button"
+              data-trend-breakdown="total"
+              aria-pressed="true"
+            >
+              Total
+            </button>
+            <button
+              type="button"
+              data-trend-breakdown="cabin"
+              aria-pressed="false"
+            >
+              Cabin
+            </button>
+            <button
+              type="button"
+              data-trend-breakdown="reason"
+              aria-pressed="false"
+            >
+              Reason
+            </button>
+          </div>
+        </div>
+        <div class="trend-layout">
+          <div class="trend-chart">
+            <div class="chart-stage">
+              <canvas
+                id="trend-chart"
+                role="img"
+                aria-label="Annual CO2e totals"
+              ></canvas>
+            </div>
+          </div>
+          <aside class="trend-note">
+            <span class="muted" id="trend-note-label"></span>
+            <strong class="tabular" id="trend-note-value"></strong>
+            <span class="muted" id="trend-note-copy"></span>
+          </aside>
+        </div>
+      </section>
+
+      <section aria-labelledby="patterns-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Carbon patterns</p>
+            <h2 id="patterns-heading">When and where impact accumulated</h2>
+          </div>
+          <div class="chart-controls">
+            <div
+              class="pattern-tabs"
+              id="pattern-tabs"
+              aria-label="Carbon impact grouping"
+            >
+              <button type="button" data-pattern="month" aria-pressed="true">
+                Month
+              </button>
+              <button type="button" data-pattern="weekday" aria-pressed="false">
+                Weekday
+              </button>
+            </div>
+            <div
+              class="pattern-tabs"
+              id="pattern-breakdown-tabs"
+              role="group"
+              aria-label="Break down carbon patterns"
+            >
+              <button
+                type="button"
+                data-pattern-breakdown="total"
+                aria-pressed="true"
+              >
+                Total
+              </button>
+              <button
+                type="button"
+                data-pattern-breakdown="cabin"
+                aria-pressed="false"
+              >
+                Cabin
+              </button>
+              <button
+                type="button"
+                data-pattern-breakdown="reason"
+                aria-pressed="false"
+              >
+                Reason
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="patterns-layout">
+          <div class="pattern-chart">
+            <div class="chart-stage">
+              <canvas
+                id="pattern-chart"
+                role="img"
+                aria-label="Completed passenger CO2e by period"
+              ></canvas>
+            </div>
+          </div>
+          <div class="network-cuts">
+            <div class="ranking">
+              <h3>Airport connections</h3>
+              <div class="ranking-chart"><canvas id="airports"></canvas></div>
+            </div>
+            <div class="ranking">
+              <h3>Country connections</h3>
+              <div class="ranking-chart"><canvas id="countries"></canvas></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="extremes-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Individual flights</p>
+            <h2 id="extremes-heading">Lightest and heaviest impact</h2>
+          </div>
+        </div>
+        <div class="impact-ranges">
+          <div>
+            <div class="impact-range-head">
+              <h3>Total CO₂e</h3>
+            </div>
+            <div class="extremes">
+              <article class="extreme-card" id="lightest-total"></article>
+              <article class="extreme-card" id="heaviest-total"></article>
+            </div>
+          </div>
+          <div>
+            <div class="impact-range-head">
+              <h3>CO₂e per kilometre</h3>
+            </div>
+            <div class="extremes">
+              <article class="extreme-card" id="lightest-distance"></article>
+              <article class="extreme-card" id="heaviest-distance"></article>
+            </div>
+          </div>
+          <div>
+            <div class="impact-range-head">
+              <h3>CO₂e per hour</h3>
+            </div>
+            <div class="extremes">
+              <article class="extreme-card" id="lightest-duration"></article>
+              <article class="extreme-card" id="heaviest-duration"></article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="drivers-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">What drove it</p>
+            <h2 id="drivers-heading">Impact drivers</h2>
+          </div>
+        </div>
+        <div class="compositions">
+          <div>
+            <div class="composition-head">
+              <h3>Cabin</h3>
+            </div>
+            <div id="cabins-composition">
+              <div class="composition-chart">
+                <canvas id="cabins-chart"></canvas>
+              </div>
+              <div class="composition-legend" id="cabins-legend"></div>
+            </div>
+          </div>
+          <div>
+            <div class="composition-head">
+              <h3>Reason</h3>
+            </div>
+            <div id="reasons-composition">
+              <div class="composition-chart">
+                <canvas id="reasons-chart"></canvas>
+              </div>
+              <div class="composition-legend" id="reasons-legend"></div>
+            </div>
+          </div>
+        </div>
+        <div class="driver-controls">
+          <div
+            class="pattern-tabs"
+            id="driver-metric-tabs"
+            role="group"
+            aria-label="Contributor ranking measure"
+          >
+            <button
+              type="button"
+              data-driver-metric="total"
+              aria-pressed="true"
+            >
+              Total CO₂e
+            </button>
+            <button
+              type="button"
+              data-driver-metric="distance"
+              aria-pressed="false"
+            >
+              Avg / km
+            </button>
+            <button
+              type="button"
+              data-driver-metric="duration"
+              aria-pressed="false"
+            >
+              Avg / hr
+            </button>
+          </div>
+          <div
+            class="pattern-tabs"
+            id="driver-tabs"
+            role="group"
+            aria-label="Break down contributor rankings"
+          >
+            <button type="button" data-breakdown="total" aria-pressed="true">
+              Total
+            </button>
+            <button type="button" data-breakdown="cabin" aria-pressed="false">
+              Cabin
+            </button>
+            <button type="button" data-breakdown="reason" aria-pressed="false">
+              Reason
+            </button>
+          </div>
+        </div>
+        <div class="drivers">
+          <div class="ranking">
+            <div class="ranking-head">
+              <h3>Top routes</h3>
+              <button class="see-all" type="button" data-ranking="routes">
+                See all
+              </button>
+            </div>
+            <div class="ranking-chart"><canvas id="routes"></canvas></div>
+          </div>
+          <div class="ranking">
+            <div class="ranking-head">
+              <h3>Operating airlines</h3>
+              <button class="see-all" type="button" data-ranking="carriers">
+                See all
+              </button>
+            </div>
+            <div class="ranking-chart"><canvas id="carriers"></canvas></div>
+          </div>
+          <div class="ranking">
+            <div class="ranking-head">
+              <h3>Aircraft</h3>
+              <button class="see-all" type="button" data-ranking="aircraft">
+                See all
+              </button>
+            </div>
+            <div class="ranking-chart"><canvas id="aircraft"></canvas></div>
+          </div>
+          <div class="ranking">
+            <div class="ranking-head">
+              <h3>Highest impact flights</h3>
+              <button class="see-all" type="button" data-ranking="flights">
+                See all
+              </button>
+            </div>
+            <div class="ranking-chart"><canvas id="flights"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="quality-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">How it was calculated</p>
+            <h2 id="quality-heading">Estimate quality</h2>
+          </div>
+        </div>
+        <div class="quality-layout">
+          <div class="quality-total">
+            <span>Completed flights</span><strong id="quality-total"></strong>
+          </div>
+          <div class="quality-groups">
+            <article class="quality-group">
+              <h3>Emissions data</h3>
+              <div class="quality-parts">
+                <div class="quality-part">
+                  <span>Exact TIM</span><strong id="exact-count"></strong>
+                </div>
+                <div class="quality-part">
+                  <span>Route average</span><strong id="typical-count"></strong>
+                </div>
+                <div class="quality-part">
+                  <span>Missing</span><strong id="missing-count"></strong>
+                </div>
+              </div>
+            </article>
+            <article class="quality-group">
+              <h3>Distance</h3>
+              <div class="quality-parts">
+                <div class="quality-part">
+                  <span>Available</span
+                  ><strong id="distance-available"></strong>
+                </div>
+                <div class="quality-part">
+                  <span>Missing</span><strong id="distance-missing"></strong>
+                </div>
+              </div>
+            </article>
+            <article class="quality-group">
+              <h3>Cabin</h3>
+              <div class="quality-parts">
+                <div class="quality-part">
+                  <span>Known</span><strong id="cabin-known"></strong>
+                </div>
+                <div class="quality-part">
+                  <span>Assumed economy</span
+                  ><strong id="cabin-assumed"></strong>
+                </div>
+              </div>
+            </article>
+            <article class="quality-group">
+              <h3>Reason</h3>
+              <div class="quality-parts">
+                <div class="quality-part">
+                  <span>Known</span><strong id="reason-known"></strong>
+                </div>
+                <div class="quality-part">
+                  <span>Missing</span><strong id="reason-missing"></strong>
+                </div>
+              </div>
+            </article>
+            <article class="quality-group">
+              <h3>Block time</h3>
+              <div class="quality-parts">
+                <div class="quality-part">
+                  <span>Available</span
+                  ><strong id="duration-available"></strong>
+                </div>
+                <div class="quality-part">
+                  <span>Missing</span><strong id="duration-missing"></strong>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+        <p class="methodology" id="methodology"></p>
+      </section>
+    </main>
+
+    <dialog
+      class="ranking-dialog"
+      id="ranking-dialog"
+      aria-labelledby="ranking-dialog-title"
+    >
+      <div class="dialog-head">
+        <h2 id="ranking-dialog-title"></h2>
+        <button
+          class="dialog-close"
+          id="ranking-dialog-close"
+          type="button"
+          aria-label="Close"
+        >
+          ×
+        </button>
+      </div>
+      <div class="dialog-scroll">
+        <div class="dialog-chart" id="ranking-dialog-chart">
+          <canvas id="ranking-dialog-canvas"></canvas>
+        </div>
+      </div>
+    </dialog>
+
+    <footer id="generated"></footer>
+
+    <script id="passport-data" type="application/json">
+      __PASSPORT_DATA__
+    </script>
+    <script id="world-data" type="application/json">
+      __WORLD_GEOJSON__
+    </script>
+    <script>
+      __CHARTJS_JS__
+    </script>
+    <script>
+      __LEAFLET_JS__
+    </script>
+    <script>
+      (() => {
+        "use strict";
+        const data = JSON.parse(document.getElementById("passport-data").textContent);
+        const world = JSON.parse(document.getElementById("world-data").textContent);
+        const state = {
+          year: null,
+          metric: "total",
+          pattern: "month",
+          trendBreakdown: "total",
+          patternBreakdown: "total",
+          driverBreakdown: "total",
+          driverMetric: "total"
+        };
+        const charts = new Map();
+        const rankingData = new Map();
+        let routeMap;
+        let routeLayer;
+        let airportLayer;
+        const $ = (id) => document.getElementById(id);
+        const sum = (rows, field) => rows.reduce((total, row) => total + (row[field] || 0), 0);
+        const pct = (part, whole) => whole ? Math.round(part / whole * 100) : 0;
+        const formatNumber = (value, digits = 0) => Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
+        const formatKg = (kg, unit = kg >= 1000 ? "t" : "kg") => unit === "t" ? `${formatNumber(kg / 1000, 1)} <small>t CO₂e</small>` : `${formatNumber(kg, 1)} <small>kg CO₂e</small>`;
+        const formatMassText = (kg, unit = kg >= 1000 ? "t" : "kg") => unit === "t" ? `${formatNumber(kg / 1000, 1)} t` : `${formatNumber(kg, 1)} kg`;
+        const formatMassAxisTick = (kg, maximum) => formatMassText(kg, maximum >= 1000 ? "t" : "kg");
+        const cssColor = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        const totalColor = () => cssColor("--total-value");
+
+        function categoryColor(kind, label) {
+          const key = label.toLowerCase();
+          if (kind === "cabin") {
+            if (key.includes("premium")) return cssColor("--cabin-premium");
+            if (key === "business") return cssColor("--cabin-business");
+            if (key === "first") return cssColor("--cabin-first");
+            if (key === "private") return cssColor("--cabin-private");
+            if (key.includes("economy")) return cssColor("--cabin-economy");
+          }
+          if (kind === "reason") {
+            if (key === "business") return cssColor("--reason-business");
+            if (key === "leisure" || key === "personal") return cssColor("--reason-leisure");
+            if (key === "crew") return cssColor("--reason-crew");
+          }
+          return cssColor("--category-unknown");
+        }
+
+        function visualCategory(row, kind) {
+          if (kind === "cabin" && (!row.cabinKnown || (row.cabin || "").toLowerCase().includes("assumed"))) return "Economy";
+          return row[kind] || "Unknown";
+        }
+
+        function scoped() {
+          return data.flights.filter((flight) => state.year === null || flight.year === state.year);
+        }
+
+        function withEmissions(rows) {
+          return rows.filter((flight) => flight.kg !== null);
+        }
+
+        function completed(rows) {
+          return rows.filter((flight) => flight.departed);
+        }
+
+        function makeButton(label, year) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = label;
+          button.setAttribute("aria-pressed", String(state.year === year));
+          button.addEventListener("click", () => {
+            state.year = year;
+            document.querySelectorAll("#periods button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+            update();
+          });
+          return button;
+        }
+
+        function buildPeriods() {
+          const nav = $("periods");
+          nav.append(makeButton("All time", null));
+          data.years.forEach((year) => nav.append(makeButton(String(year), year)));
+          const updateControls = () => {
+            $("period-newer").disabled = nav.scrollLeft <= 1;
+            $("period-older").disabled = nav.scrollLeft + nav.clientWidth >= nav.scrollWidth - 1;
+          };
+          $("period-newer").addEventListener("click", () => nav.scrollBy({ left: -nav.clientWidth * 0.75, behavior: "smooth" }));
+          $("period-older").addEventListener("click", () => nav.scrollBy({ left: nav.clientWidth * 0.75, behavior: "smooth" }));
+          nav.addEventListener("scroll", updateControls, { passive: true });
+          window.addEventListener("resize", updateControls);
+          requestAnimationFrame(updateControls);
+        }
+
+        function metricRows(rows, field) {
+          return withEmissions(completed(rows)).filter((flight) => flight[field] !== null);
+        }
+
+        function updateHero(rows) {
+          const completedRows = completed(rows);
+          const priced = withEmissions(completedRows);
+          const planned = withEmissions(rows.filter((flight) => !flight.departed));
+          const distanceRows = metricRows(rows, "distanceKm");
+          const durationRows = metricRows(rows, "durationHours");
+          const allDistanceRows = completedRows.filter((flight) => flight.distanceKm !== null);
+          const allDurationRows = completedRows.filter((flight) => flight.durationHours !== null);
+          const totalKg = sum(priced, "kg");
+          const distanceKm = sum(distanceRows, "distanceKm");
+          const durationHours = sum(durationRows, "durationHours");
+
+          let value;
+          let context;
+          if (state.metric === "distance") {
+            value = distanceKm ? `${formatNumber(totalKgFor(distanceRows) * 1000 / distanceKm, 1)} <small>g CO₂e / passenger-km</small>` : "Not available";
+            context = "Weighted intensity using one consistent great-circle distance method";
+          } else if (state.metric === "duration") {
+            value = durationHours ? `${formatNumber(totalKgFor(durationRows) / durationHours, 1)} <small>kg CO₂e / block hour</small>` : "Needs arrival times";
+            context = "Weighted intensity using scheduled gate-to-gate time";
+          } else {
+            value = formatKg(totalKg);
+            context = `Passenger emissions across ${formatNumber(completedRows.length)} completed flights`;
+          }
+
+          $("hero-value").innerHTML = value;
+          $("hero-context").textContent = context;
+          $("flight-count").textContent = formatNumber(completedRows.length);
+          $("distance-total").textContent = allDistanceRows.length ? `${formatNumber(sum(allDistanceRows, "distanceKm"))} km` : "Not available";
+          $("duration-total").textContent = allDurationRows.length ? `${formatNumber(sum(allDurationRows, "durationHours"), 1)} h` : "Needs arrival times";
+          $("planned-total").innerHTML = formatKg(sum(planned, "kg"));
+        }
+
+        function totalKgFor(rows) {
+          return sum(rows, "kg");
+        }
+
+        function emptyMetricBucket() {
+          return { totalKg: 0, distanceKg: 0, distanceKm: 0, durationKg: 0, durationHours: 0 };
+        }
+
+        function addToMetricBucket(bucket, row) {
+          bucket.totalKg += row.kg;
+          if (row.distanceKm !== null) {
+            bucket.distanceKg += row.kg;
+            bucket.distanceKm += row.distanceKm;
+          }
+          if (row.durationHours !== null) {
+            bucket.durationKg += row.kg;
+            bucket.durationHours += row.durationHours;
+          }
+        }
+
+        function metricValue(bucket, metric) {
+          if (metric === "distance") return bucket.distanceKm ? bucket.distanceKg * 1000 / bucket.distanceKm : null;
+          if (metric === "duration") return bucket.durationHours ? bucket.durationKg / bucket.durationHours : null;
+          return bucket.totalKg;
+        }
+
+        function formatRankingValue(value, metric, includeCarbon = false) {
+          if (metric === "distance") return `${formatNumber(value, 1)} g${includeCarbon ? " CO₂e / passenger-km" : "/km"}`;
+          if (metric === "duration") return `${formatNumber(value, 1)} kg${includeCarbon ? " CO₂e / block hour" : "/hr"}`;
+          return `${formatMassText(value)}${includeCarbon ? " CO₂e" : ""}`;
+        }
+
+        function groupAll(rows, field, labeler = (row) => row[field]) {
+          const values = new Map();
+          withEmissions(completed(rows)).forEach((row) => {
+            const label = labeler(row) || "Unknown";
+            values.set(label, (values.get(label) || 0) + row.kg);
+          });
+          return [...values.entries()].sort((a, b) => b[1] - a[1]);
+        }
+
+        function rankAll(rows, labeler) {
+          const values = new Map();
+          withEmissions(completed(rows)).forEach((row) => {
+            const label = labeler(row) || "Unknown";
+            const entry = values.get(label) || { label, total: 0, metrics: emptyMetricBucket(), cabin: new Map(), reason: new Map() };
+            addToMetricBucket(entry.metrics, row);
+            entry.total = entry.metrics.totalKg;
+            ["cabin", "reason"].forEach((kind) => {
+              const category = visualCategory(row, kind);
+              const bucket = entry[kind].get(category) || emptyMetricBucket();
+              addToMetricBucket(bucket, row);
+              entry[kind].set(category, bucket);
+            });
+            values.set(label, entry);
+          });
+          return [...values.values()].sort((a, b) => b.total - a.total);
+        }
+
+        function chartTheme() {
+          const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          return {
+            text: getComputedStyle(document.body).color,
+            muted: dark ? "#a5b2aa" : "#647068",
+            grid: dark ? "rgba(165,178,170,0.18)" : "rgba(100,112,104,0.16)"
+          };
+        }
+
+        function replaceChart(id, configuration) {
+          if (charts.has(id)) charts.get(id).destroy();
+          const chart = new Chart($(id), configuration);
+          charts.set(id, chart);
+          return chart;
+        }
+
+        function valueLabels(axis, formatter) {
+          return {
+            id: `passport-value-labels-${axis}`,
+            afterDatasetsDraw(chart) {
+              const { ctx } = chart;
+              const theme = chartTheme();
+              ctx.save();
+              ctx.fillStyle = theme.text;
+              ctx.font = "500 12px Inter, system-ui, sans-serif";
+              chart.getDatasetMeta(0).data.forEach((bar, index) => {
+                const value = chart.data.datasets[0].data[index];
+                const label = formatter(value);
+                if (axis === "y") {
+                  ctx.textAlign = "left";
+                  ctx.textBaseline = "middle";
+                  ctx.fillText(label, bar.x + 8, bar.y);
+                } else {
+                  ctx.textAlign = "center";
+                  ctx.textBaseline = "bottom";
+                  ctx.fillText(label, bar.x, bar.y - 7);
+                }
+              });
+              ctx.restore();
+            }
+          };
+        }
+
+        function rankingValueLabels(totals, metric) {
+          return {
+            id: "passport-ranking-value-labels",
+            afterDatasetsDraw(chart) {
+              const { ctx } = chart;
+              const theme = chartTheme();
+              ctx.save();
+              ctx.fillStyle = theme.text;
+              ctx.font = "500 12px Inter, system-ui, sans-serif";
+              totals.forEach((total, index) => {
+                const bars = chart.data.datasets.map((_, datasetIndex) => chart.getDatasetMeta(datasetIndex).data[index]).filter(Boolean);
+                const anchor = bars.reduce((furthest, bar) => !furthest || bar.x > furthest.x ? bar : furthest, null);
+                if (!anchor) return;
+                ctx.textAlign = "left";
+                ctx.textBaseline = "middle";
+                ctx.fillText(formatRankingValue(total, metric), anchor.x + 8, anchor.y);
+              });
+              ctx.restore();
+            }
+          };
+        }
+
+        function periodValueLabels(totals) {
+          return {
+            id: "passport-period-value-labels",
+            afterDatasetsDraw(chart) {
+              const { ctx } = chart;
+              const theme = chartTheme();
+              ctx.save();
+              ctx.fillStyle = theme.text;
+              ctx.font = "500 12px Inter, system-ui, sans-serif";
+              totals.forEach((total, index) => {
+                const bars = chart.data.datasets
+                  .map((dataset, datasetIndex) => dataset.data[index] ? chart.getDatasetMeta(datasetIndex).data[index] : null)
+                  .filter(Boolean);
+                const anchor = bars.reduce((highest, bar) => !highest || bar.y < highest.y ? bar : highest, null);
+                if (!anchor) return;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "bottom";
+                ctx.fillText(formatMassText(total), anchor.x, anchor.y - 7);
+              });
+              ctx.restore();
+            }
+          };
+        }
+
+        function breakdownCategories(rows, breakdown) {
+          if (breakdown === "total") return ["Total"];
+          const totals = new Map();
+          withEmissions(rows).forEach((row) => {
+            const category = visualCategory(row, breakdown);
+            totals.set(category, (totals.get(category) || 0) + row.kg);
+          });
+          return [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([label]) => label);
+        }
+
+        function breakdownColor(breakdown, category) {
+          return breakdown === "total" ? totalColor() : categoryColor(breakdown, category);
+        }
+
+        function hatchPattern(canvas, color) {
+          const hatch = document.createElement("canvas");
+          hatch.width = 9;
+          hatch.height = 9;
+          const context = hatch.getContext("2d");
+          context.fillStyle = `${color}42`;
+          context.fillRect(0, 0, 9, 9);
+          context.strokeStyle = color;
+          context.lineWidth = 2.5;
+          context.beginPath();
+          context.moveTo(-2, 9);
+          context.lineTo(9, -2);
+          context.stroke();
+          return canvas.getContext("2d").createPattern(hatch, "repeat");
+        }
+
+        function stackedBorderRadius(axis, radius = 7) {
+          return (context) => {
+            const active = context.chart.data.datasets
+              .map((dataset, index) => Number(dataset.data[context.dataIndex]) > 0 ? index : null)
+              .filter((index) => index !== null);
+            const last = active.at(-1);
+            if (axis === "y") {
+              return {
+                topLeft: 0,
+                bottomLeft: 0,
+                topRight: context.datasetIndex === last ? radius : 0,
+                bottomRight: context.datasetIndex === last ? radius : 0
+              };
+            }
+            return {
+              bottomLeft: 0,
+              bottomRight: 0,
+              topLeft: context.datasetIndex === last ? radius : 0,
+              topRight: context.datasetIndex === last ? radius : 0
+            };
+          };
+        }
+
+        function rankingMetricValue(entry, metric) {
+          if (entry.metrics) return metricValue(entry.metrics, metric);
+          return metric === "total" ? entry.total : null;
+        }
+
+        function rankingCategoryValue(entry, breakdown, category, metric) {
+          const bucket = entry[breakdown].get(category);
+          if (!bucket) return 0;
+          if (metric === "total") return bucket.totalKg;
+          const denominator = metric === "distance" ? entry.metrics.distanceKm : entry.metrics.durationHours;
+          if (!denominator) return 0;
+          return metric === "distance" ? bucket.distanceKg * 1000 / denominator : bucket.durationKg / denominator;
+        }
+
+        function rankForMetric(entries, metric) {
+          return entries
+            .map((entry) => ({ entry, value: rankingMetricValue(entry, metric) }))
+            .filter((item) => item.value !== null)
+            .sort((a, b) => b.value - a.value)
+            .map((item) => item.entry);
+        }
+
+        function renderRanking(id, entries, breakdown = state.driverBreakdown, metric = state.driverMetric) {
+          const theme = chartTheme();
+          const totals = entries.map((entry) => rankingMetricValue(entry, metric));
+          const maximum = Math.max(1, ...totals);
+          const categoryTotals = new Map();
+          if (breakdown !== "total") {
+            entries.forEach((entry) => entry[breakdown].forEach((_, label) => {
+              const value = rankingCategoryValue(entry, breakdown, label, metric);
+              categoryTotals.set(label, (categoryTotals.get(label) || 0) + value);
+            }));
+          }
+          const categories = [...categoryTotals.entries()].sort((a, b) => b[1] - a[1]).map((entry) => entry[0]);
+          const datasets = breakdown === "total" ? [{ label: "Total", data: totals, backgroundColor: totalColor(), hoverBackgroundColor: totalColor(), borderSkipped: false, borderRadius: { topLeft: 0, bottomLeft: 0, topRight: 7, bottomRight: 7 }, barPercentage: 0.72 }] : categories.map((category) => ({
+            label: category,
+            data: entries.map((entry) => rankingCategoryValue(entry, breakdown, category, metric)),
+            backgroundColor: categoryColor(breakdown, category),
+            hoverBackgroundColor: categoryColor(breakdown, category),
+            borderSkipped: false,
+            borderRadius: stackedBorderRadius("y"),
+            barPercentage: 0.72
+          }));
+          $(id).setAttribute("role", "img");
+          $(id).setAttribute("aria-label", entries.length ? entries.map((entry) => {
+            const categoriesText = breakdown === "total" ? "" : `; ${[...entry[breakdown].keys()].map((label) => `${label} ${formatRankingValue(rankingCategoryValue(entry, breakdown, label, metric), metric, true)}`).join(", ")}`;
+            return `${entry.label}: ${formatRankingValue(rankingMetricValue(entry, metric), metric, true)}${categoriesText}`;
+          }).join(", ") : `No flights with the data required for ${metric === "distance" ? "distance intensity" : metric === "duration" ? "time intensity" : "total impact"} in this period`);
+          replaceChart(id, {
+            type: "bar",
+            data: {
+              labels: entries.map((entry) => entry.label),
+              datasets
+            },
+            plugins: [rankingValueLabels(totals, metric)],
+            options: {
+              animation: false,
+              responsive: true,
+              maintainAspectRatio: false,
+              indexAxis: "y",
+              layout: { padding: { right: metric === "total" ? 58 : 88 } },
+              plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatRankingValue(context.raw, metric, true)}` } }
+              },
+              scales: {
+                x: { display: false, stacked: true, beginAtZero: true, max: maximum * 1.24 },
+                y: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { autoSkip: false, color: theme.text, font: { size: 12 } } }
+              }
+            }
+          });
+        }
+
+        function categoryIcon(kind, label) {
+          const key = label.toLowerCase();
+          const icon = document.createElement("span");
+          icon.className = "category-icon";
+          icon.setAttribute("aria-hidden", "true");
+          if (kind === "cabin") {
+            const badge = key.includes("premium") ? "E+" : key === "business" ? "B" : key === "first" ? "F" : key === "private" ? "VIP" : key.includes("economy") ? "E" : "?";
+            icon.textContent = badge;
+            icon.style.setProperty("--icon-bg", categoryColor(kind, label));
+            if (badge === "VIP") icon.classList.add("wide");
+            return icon;
+          }
+          icon.classList.add("reason-icon");
+          if (key === "business") {
+            icon.textContent = "💼";
+          } else if (key === "leisure" || key === "personal") {
+            icon.textContent = "☀️";
+          } else if (key === "crew") {
+            icon.textContent = "🧑‍✈️";
+          } else {
+            icon.textContent = "?";
+          }
+          return icon;
+        }
+
+        function renderComposition(id, entries, kind) {
+          const total = entries.reduce((value, entry) => value + entry[1], 0);
+          $(`${id}-chart`).setAttribute("role", "img");
+          $(`${id}-chart`).setAttribute("aria-label", entries.length ? entries.map(([label, kg]) => `${label}: ${formatNumber(total ? kg / total * 100 : 0, 1)}%`).join(", ") : "No priced flights in this period");
+          replaceChart(`${id}-chart`, {
+            type: "bar",
+            data: {
+              labels: [""],
+              datasets: entries.map(([label, kg], index) => ({
+                label,
+                data: [kg],
+                backgroundColor: categoryColor(kind, label),
+                hoverBackgroundColor: categoryColor(kind, label),
+                borderSkipped: false,
+                borderRadius: index === 0 ? { topLeft: 14, bottomLeft: 14 } : index === entries.length - 1 ? { topRight: 14, bottomRight: 14 } : 0,
+                barThickness: 28
+              }))
+            },
+            options: {
+              animation: false,
+              responsive: true,
+              maintainAspectRatio: false,
+              indexAxis: "y",
+              plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e · ${formatNumber(total ? context.raw / total * 100 : 0, 1)}%` } }
+              },
+              scales: {
+                x: { display: false, stacked: true, max: total || 1 },
+                y: { display: false, stacked: true }
+              }
+            }
+          });
+
+          const legend = $(`${id}-legend`);
+          legend.replaceChildren();
+          entries.forEach(([label, kg]) => {
+            const percentage = total ? kg / total * 100 : 0;
+            const row = document.createElement("div");
+            row.className = "composition-row";
+            const swatch = document.createElement("span");
+            swatch.className = "composition-swatch";
+            swatch.style.background = categoryColor(kind, label);
+            const name = document.createElement("span");
+            name.className = "composition-label";
+            name.append(categoryIcon(kind, label), document.createTextNode(label));
+            const value = document.createElement("span");
+            value.className = "composition-value";
+            value.textContent = formatMassText(kg);
+            const share = document.createElement("span");
+            share.className = "composition-percent";
+            share.textContent = `${formatNumber(percentage, 1)}%`;
+            row.append(swatch, name, value, share);
+            legend.append(row);
+          });
+        }
+
+        function impactByValues(rows, valuesForFlight) {
+          const result = new Map();
+          withEmissions(completed(rows)).forEach((flight) => {
+            [...new Set(valuesForFlight(flight).filter(Boolean))].forEach((value) => result.set(value, (result.get(value) || 0) + flight.kg));
+          });
+          return [...result.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([label, total]) => ({ label, total, cabin: new Map(), reason: new Map() }));
+        }
+
+        function updatePatterns(rows) {
+          const validDates = withEmissions(completed(rows)).filter((flight) => flight.date);
+          const definitions = {
+            month: {
+              labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+              value: (flight) => ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(flight.date.slice(5, 7)) - 1]
+            },
+            weekday: {
+              labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+              value: (flight) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(`${flight.date}T00:00:00Z`).getUTCDay()]
+            }
+          };
+          const definition = definitions[state.pattern];
+          const categories = breakdownCategories(validDates, state.patternBreakdown);
+          const values = new Map(
+            definition.labels.map((label) => [label, new Map(categories.map((category) => [category, 0]))])
+          );
+          validDates.forEach((flight) => {
+            const label = definition.value(flight);
+            const category = state.patternBreakdown === "total" ? "Total" : visualCategory(flight, state.patternBreakdown);
+            values.get(label).set(category, values.get(label).get(category) + flight.kg);
+          });
+          const totals = definition.labels.map((label) => sum([...values.get(label).values()].map((kg) => ({ kg })), "kg"));
+          const maximum = Math.max(0, ...totals);
+          const theme = chartTheme();
+          $("pattern-chart").setAttribute("aria-label", definition.labels.map((label, index) => {
+            const details = state.patternBreakdown === "total" ? "" : `; ${categories.map((category) => `${category} ${formatMassText(values.get(label).get(category))}`).join(", ")}`;
+            return `${label}: ${formatMassText(totals[index])} CO₂e${details}`;
+          }).join(", "));
+          replaceChart("pattern-chart", {
+            type: "bar",
+            data: {
+              labels: definition.labels,
+              datasets: categories.map((category) => ({
+                label: category,
+                data: definition.labels.map((label) => values.get(label).get(category)),
+                backgroundColor: breakdownColor(state.patternBreakdown, category),
+                hoverBackgroundColor: breakdownColor(state.patternBreakdown, category),
+                borderSkipped: false,
+                borderRadius: stackedBorderRadius("x"),
+                barPercentage: 0.66
+              }))
+            },
+            plugins: [periodValueLabels(totals)],
+            options: {
+              animation: false,
+              responsive: true,
+              maintainAspectRatio: false,
+              layout: { padding: { top: 28 } },
+              plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e` } }
+              },
+              scales: {
+                x: { stacked: true, grid: { display: false }, border: { color: theme.grid }, ticks: { autoSkip: false, color: theme.muted } },
+                y: { stacked: true, beginAtZero: true, suggestedMax: maximum * 1.12, grid: { color: theme.grid }, border: { display: false }, ticks: { color: theme.muted, callback: (value) => formatMassAxisTick(value, maximum) } }
+              }
+            }
+          });
+
+          const countryDisplay = typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(undefined, { type: "region" }) : null;
+          const airportEntries = impactByValues(rows, (flight) => [flight.origin, flight.destination]);
+          const countryEntries = impactByValues(rows, (flight) => [flight.start && flight.start.country, flight.end && flight.end.country])
+            .map((entry) => ({ ...entry, label: `${countryFlag(entry.label)} ${countryDisplay ? countryDisplay.of(entry.label) || entry.label : entry.label}` }));
+          renderRanking("airports", airportEntries, "total", "total");
+          renderRanking("countries", countryEntries, "total", "total");
+        }
+
+        function countryFlag(code) {
+          return /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map((letter) => 127397 + letter.charCodeAt())) : "🌐";
+        }
+
+        function routeName(flight) {
+          return `${flight.origin || "?"} → ${flight.destination || "?"}`;
+        }
+
+        function flightTag(text, className, kind, value) {
+          const tag = document.createElement("span");
+          tag.className = `flight-tag ${className}`;
+          tag.append(categoryIcon(kind, value), document.createTextNode(text));
+          return tag;
+        }
+
+        function flightTags(flight) {
+          const tags = document.createElement("div");
+          tags.className = "flight-tags";
+          const cabin = visualCategory(flight, "cabin");
+          const cabinKey = cabin.toLowerCase();
+          if (cabinKey === "first") tags.append(flightTag("First", "cabin-first", "cabin", cabin));
+          else if (cabinKey === "business") tags.append(flightTag("Business", "cabin-business", "cabin", cabin));
+          else if (cabinKey.includes("premium")) tags.append(flightTag(cabin, "cabin-premium", "cabin", cabin));
+          else if (cabinKey === "private") tags.append(flightTag("Private", "cabin-private", "cabin", cabin));
+          else if (cabinKey.includes("economy")) tags.append(flightTag(cabin, "cabin-economy", "cabin", cabin));
+          else tags.append(flightTag(cabin, "tag-unknown", "cabin", cabin));
+
+          const reason = flight.reason || "Unknown";
+          const reasonKey = reason.toLowerCase();
+          if (reasonKey === "business") tags.append(flightTag("Business trip", "reason-business", "reason", reason));
+          else if (reasonKey === "leisure") tags.append(flightTag("Leisure", "reason-leisure", "reason", reason));
+          else if (reasonKey === "personal") tags.append(flightTag("Personal", "reason-leisure", "reason", reason));
+          else if (reasonKey === "crew") tags.append(flightTag("Crew", "reason-crew", "reason", reason));
+          else tags.append(flightTag("Reason unknown", "tag-unknown", "reason", reason));
+          return tags;
+        }
+
+        function renderExtreme(id, label, item, formatter) {
+          const target = $(id);
+          target.replaceChildren();
+          const heading = document.createElement("span");
+          heading.textContent = label;
+          target.append(heading);
+          if (!item) {
+            const empty = document.createElement("p");
+            empty.textContent = "Needs the required source data.";
+            target.append(empty);
+            return;
+          }
+          const [flight, value] = item;
+          const route = document.createElement("strong");
+          route.textContent = routeName(flight);
+          const detail = document.createElement("p");
+          detail.textContent = `${formatter(value)} · ${flight.flight || "Flight unknown"} · ${flight.date || "Date unknown"}`;
+          target.append(route, detail, flightTags(flight));
+        }
+
+        function updateExtremes(rows) {
+          const done = withEmissions(completed(rows));
+          const total = done.map((flight) => [flight, flight.kg]).sort((a, b) => a[1] - b[1]);
+          const distance = done.filter((flight) => flight.distanceKm).map((flight) => [flight, flight.kg * 1000 / flight.distanceKm]).sort((a, b) => a[1] - b[1]);
+          const duration = done.filter((flight) => flight.durationHours).map((flight) => [flight, flight.kg / flight.durationHours]).sort((a, b) => a[1] - b[1]);
+          renderExtreme("lightest-total", "Lightest", total[0], (value) => `${formatMassText(value)} CO₂e`);
+          renderExtreme("heaviest-total", "Heaviest", total.at(-1), (value) => `${formatMassText(value)} CO₂e`);
+          renderExtreme("lightest-distance", "Lightest", distance[0], (value) => `${formatNumber(value, 1)} g CO₂e / passenger-km`);
+          renderExtreme("heaviest-distance", "Heaviest", distance.at(-1), (value) => `${formatNumber(value, 1)} g CO₂e / passenger-km`);
+          renderExtreme("lightest-duration", "Lightest", duration[0], (value) => `${formatNumber(value, 1)} kg CO₂e / block hour`);
+          renderExtreme("heaviest-duration", "Heaviest", duration.at(-1), (value) => `${formatNumber(value, 1)} kg CO₂e / block hour`);
+        }
+
+        function updateRankings(rows) {
+          renderComposition("cabins", groupAll(rows, "cabin", (row) => visualCategory(row, "cabin")), "cabin");
+          renderComposition("reasons", groupAll(rows, "reason"), "reason");
+          const rankings = [
+            ["routes", "All routes", rankAll(rows, (row) => row.route)],
+            ["carriers", "All operating airlines", rankAll(rows, (row) => row.carrier)],
+            ["aircraft", "All aircraft", rankAll(rows, (row) => row.aircraft)],
+            ["flights", "All flights by impact", rankAll(rows, (row) => `${row.flight || "Unknown"} · ${row.origin || "?"}–${row.destination || "?"} · ${row.date || "date unknown"}`)]
+          ];
+          rankings.forEach(([key, title, entries]) => {
+            const ranked = rankForMetric(entries, state.driverMetric);
+            rankingData.set(key, { title, entries: ranked });
+            renderRanking(key, ranked.slice(0, 6));
+            const button = document.querySelector(`[data-ranking="${key}"]`);
+            button.hidden = ranked.length <= 6;
+          });
+        }
+
+        function openRanking(key) {
+          const ranking = rankingData.get(key);
+          if (!ranking || !ranking.entries.length) return;
+          const metricLabel = state.driverMetric === "distance" ? "average CO₂e per km" : state.driverMetric === "duration" ? "average CO₂e per hour" : "total CO₂e";
+          const breakdownLabel = state.driverBreakdown === "total" ? "" : ` by ${state.driverBreakdown}`;
+          $("ranking-dialog-title").textContent = `${ranking.title} · ${metricLabel}${breakdownLabel}`;
+          $("ranking-dialog-chart").style.height = `${Math.max(360, ranking.entries.length * 34)}px`;
+          $("ranking-dialog").showModal();
+          requestAnimationFrame(() => renderRanking("ranking-dialog-canvas", ranking.entries));
+        }
+
+        function setupMap() {
+          routeMap = L.map("route-map", {
+            attributionControl: false,
+            minZoom: 1,
+            maxZoom: 8,
+            zoomSnap: 0.25,
+            zoomDelta: 0.5,
+            worldCopyJump: false,
+            maxBounds: [[-85, -220], [85, 220]],
+            maxBoundsViscosity: 0.72
+          });
+          routeMap.createPane("land").style.zIndex = "200";
+          routeMap.createPane("routes").style.zIndex = "410";
+          routeMap.createPane("airports").style.zIndex = "420";
+          L.geoJSON(world, {
+            pane: "land",
+            interactive: false,
+            style: { color: "#5f8c80", weight: 0.7, fillColor: "#173f35", fillOpacity: 1 }
+          }).addTo(routeMap);
+          routeLayer = L.layerGroup().addTo(routeMap);
+          airportLayer = L.layerGroup().addTo(routeMap);
+          L.control.scale({ position: "topright", imperial: false, maxWidth: 110 }).addTo(routeMap);
+          routeMap.setView([20, 8], 1);
+          requestAnimationFrame(() => routeMap.invalidateSize());
+        }
+
+        function greatCircle(start, end, steps = 48) {
+          const radians = Math.PI / 180;
+          const vector = (point) => {
+            const lat = point.lat * radians;
+            const lon = point.lon * radians;
+            return [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
+          };
+          const first = vector(start);
+          const last = vector(end);
+          const angle = Math.acos(Math.min(1, Math.max(-1, first[0] * last[0] + first[1] * last[1] + first[2] * last[2])));
+          if (angle < 0.000001) return [[start.lat, start.lon], [end.lat, end.lon]];
+          const denominator = Math.sin(angle);
+          return Array.from({ length: steps + 1 }, (_, index) => {
+            const fraction = index / steps;
+            const a = Math.sin((1 - fraction) * angle) / denominator;
+            const b = Math.sin(fraction * angle) / denominator;
+            const x = a * first[0] + b * last[0];
+            const y = a * first[1] + b * last[1];
+            const z = a * first[2] + b * last[2];
+            return [Math.atan2(z, Math.hypot(x, y)) / radians, Math.atan2(y, x) / radians];
+          });
+        }
+
+        function splitAtDateLine(points) {
+          return points.reduce((segments, point, index) => {
+            if (index && Math.abs(point[1] - points[index - 1][1]) > 180) segments.push([]);
+            segments.at(-1).push(point);
+            return segments;
+          }, [[]]).filter((segment) => segment.length > 1);
+        }
+
+        function updateMap(rows) {
+          routeLayer.clearLayers();
+          airportLayer.clearLayers();
+          const routes = new Map();
+          withEmissions(completed(rows)).forEach((flight) => {
+            if (!flight.start || !flight.end) return;
+            const existing = routes.get(flight.route) || { kg: 0, start: flight.start, end: flight.end, distanceKm: flight.distanceKm };
+            existing.kg += flight.kg;
+            routes.set(flight.route, existing);
+          });
+          const airports = new Map();
+          const maximumDensity = Math.max(1, ...[...routes.values()].map((route) => route.kg / Math.max(1, route.distanceKm || 1)));
+          routes.forEach((route, label) => {
+            const density = route.kg / Math.max(1, route.distanceKm || 1);
+            const weight = Math.max(0.85, 8 * density / maximumDensity);
+            splitAtDateLine(greatCircle(route.start, route.end)).forEach((segment) => {
+              L.polyline(segment, { pane: "routes", color: "#f5faf7", opacity: 0.7, weight, lineCap: "round" })
+                .bindTooltip(`${label}<br>${formatMassText(route.kg)} CO₂e`)
+                .addTo(routeLayer);
+            });
+            [route.start, route.end].forEach((airport) => {
+              const existing = airports.get(airport.iata) || { ...airport, kg: 0 };
+              existing.kg += route.kg;
+              airports.set(airport.iata, existing);
+            });
+          });
+          const maximumAirportImpact = Math.max(1, ...[...airports.values()].map((airport) => airport.kg));
+          airports.forEach((airport) => {
+            const share = airport.kg / maximumAirportImpact;
+            const fillColor = `hsl(${46 - 34 * share} 92% ${63 - 10 * share}%)`;
+            L.circleMarker([airport.lat, airport.lon], { pane: "airports", radius: 3.5 + 4 * Math.sqrt(share), color: "#fff", weight: 1.2, fillColor, fillOpacity: 1 })
+              .bindTooltip(`<strong>${airport.iata}</strong><br>${formatMassText(airport.kg)} CO₂e connected`, { direction: "top", offset: [0, -4] })
+              .addTo(airportLayer);
+          });
+          const caption = document.querySelector(".map-caption span");
+          caption.textContent = routes.size ? "Line area · airport colour = CO₂e" : "No priced routes in this period";
+          requestAnimationFrame(() => routeMap.invalidateSize());
+        }
+
+        function updateTrend() {
+          const series = [...data.years].sort((a, b) => a - b).map((year) => {
+            const rows = data.flights.filter((flight) => flight.year === year);
+            return {
+              year,
+              rows,
+              completed: sum(withEmissions(rows.filter((flight) => flight.departed)), "kg"),
+              planned: sum(withEmissions(rows.filter((flight) => !flight.departed)), "kg")
+            };
+          });
+          const maximum = Math.max(0, ...series.map((item) => item.completed + item.planned));
+          const theme = chartTheme();
+          const categories = breakdownCategories(withEmissions(data.flights), state.trendBreakdown);
+          $("trend-chart").setAttribute("aria-label", series.map((item) => {
+            const details = state.trendBreakdown === "total" ? "" : `; ${categories.map((category) => {
+              const kg = sum(withEmissions(item.rows.filter((row) => visualCategory(row, state.trendBreakdown) === category)), "kg");
+              return `${category} ${formatMassText(kg)}`;
+            }).join(", ")}`;
+            return `${item.year}: ${formatMassText(item.completed)} completed${item.planned ? `, ${formatMassText(item.planned)} upcoming` : ""}${details}`;
+          }).join(", "));
+          const datasets = categories.flatMap((category) => {
+            const color = breakdownColor(state.trendBreakdown, category);
+            const upcomingPattern = hatchPattern($("trend-chart"), color);
+            const filterCategory = (row) => state.trendBreakdown === "total" || visualCategory(row, state.trendBreakdown) === category;
+            return [
+              {
+                label: state.trendBreakdown === "total" ? "Completed" : `${category} · completed`,
+                data: series.map((item) => sum(withEmissions(item.rows.filter((row) => row.departed && filterCategory(row))), "kg")),
+                backgroundColor: color,
+                hoverBackgroundColor: color,
+                borderSkipped: false,
+                borderRadius: stackedBorderRadius("x"),
+                barPercentage: 0.72
+              },
+              {
+                label: state.trendBreakdown === "total" ? "Upcoming" : `${category} · upcoming`,
+                data: series.map((item) => sum(withEmissions(item.rows.filter((row) => !row.departed && filterCategory(row))), "kg")),
+                backgroundColor: upcomingPattern,
+                hoverBackgroundColor: upcomingPattern,
+                borderColor: color,
+                borderWidth: 1,
+                borderSkipped: false,
+                borderRadius: stackedBorderRadius("x"),
+                barPercentage: 0.72
+              }
+            ];
+          });
+          replaceChart("trend-chart", {
+            type: "bar",
+            data: {
+              labels: series.map((item) => item.year),
+              datasets
+            },
+            options: {
+              animation: false,
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: "index", intersect: false },
+              plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e` } }
+              },
+              scales: {
+                x: { stacked: true, grid: { display: false }, border: { color: theme.grid }, ticks: { autoSkip: false, color: theme.muted, font: { size: 11 } } },
+                y: { stacked: true, beginAtZero: true, grid: { color: theme.grid }, border: { display: false }, ticks: { color: theme.muted, callback: (value) => formatMassAxisTick(value, maximum) } }
+              }
+            }
+          });
+
+          const year = state.year || data.years[0];
+          const current = series.find((item) => item.year === year);
+          const trendUnit = current && Math.max(current.completed, current.planned) >= 1000 ? "t" : "kg";
+          $("trend-note-label").textContent = state.year ? String(state.year) : data.years.length ? "Latest year" : "No dated flights";
+          $("trend-note-value").innerHTML = current ? formatKg(current.completed, trendUnit) : "No flights";
+          $("trend-note-copy").textContent = current && current.planned ? `${formatMassText(current.planned, trendUnit)} CO₂e comes from upcoming flights.` : current ? "No upcoming impact remains in this period." : "Add flights, then regenerate your Passport.";
+        }
+
+        function updateQuality(rows) {
+          const done = completed(rows);
+          const exact = done.filter((flight) => flight.emissionsSource === "exact").length;
+          const typical = done.filter((flight) => flight.emissionsSource === "typical_route_average").length;
+          const missing = done.length - exact - typical;
+          const cabinKnown = done.filter((flight) => flight.cabinKnown).length;
+          const reasonKnown = done.filter((flight) => flight.reason && flight.reason.toLowerCase() !== "unknown").length;
+          const distance = done.filter((flight) => flight.distanceKm !== null).length;
+          const duration = done.filter((flight) => flight.durationHours !== null).length;
+          const airports = new Set(done.flatMap((flight) => [flight.origin, flight.destination]).filter(Boolean));
+          const countries = new Set(done.flatMap((flight) => [flight.start && flight.start.country, flight.end && flight.end.country]).filter(Boolean));
+          const partition = (count) => `${count} · ${pct(count, done.length)}%`;
+          $("quality-total").textContent = formatNumber(done.length);
+          $("exact-count").textContent = partition(exact);
+          $("typical-count").textContent = partition(typical);
+          $("missing-count").textContent = partition(missing);
+          $("distance-available").textContent = partition(distance);
+          $("distance-missing").textContent = partition(done.length - distance);
+          $("duration-available").textContent = partition(duration);
+          $("duration-missing").textContent = partition(done.length - duration);
+          $("cabin-known").textContent = partition(cabinKnown);
+          $("cabin-assumed").textContent = partition(done.length - cabinKnown);
+          $("reason-known").textContent = partition(reasonKnown);
+          $("reason-missing").textContent = partition(done.length - reasonKnown);
+          $("airport-count").textContent = String(airports.size);
+          $("country-count").textContent = String(countries.size);
+          const assumed = done.length - cabinKnown;
+          $("methodology").innerHTML = `Impact figures are per passenger. Distance intensity uses <code>${data.meta.distanceMethod}</code>. Time intensity uses <code>${data.meta.durationMethod}</code>. ${assumed ? `${assumed} flight${assumed === 1 ? "" : "s"} without cabin data ${assumed === 1 ? "is" : "are"} shown as Economy in charts.` : "Every flight has cabin data."} Missing values are never extrapolated.`;
+        }
+
+        function update() {
+          const rows = scoped();
+          updateHero(rows);
+          updateMap(rows);
+          updateTrend();
+          updatePatterns(rows);
+          updateExtremes(rows);
+          updateRankings(rows);
+          updateQuality(rows);
+        }
+
+        document.querySelectorAll("#metric-tabs button").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.metric = button.dataset.metric;
+            document.querySelectorAll("#metric-tabs button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+            updateHero(scoped());
+          });
+        });
+
+        document.querySelectorAll("#pattern-tabs button").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.pattern = button.dataset.pattern;
+            document.querySelectorAll("#pattern-tabs button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+            updatePatterns(scoped());
+          });
+        });
+
+        document.querySelectorAll("#trend-breakdown-tabs button").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.trendBreakdown = button.dataset.trendBreakdown;
+            document.querySelectorAll("#trend-breakdown-tabs button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+            updateTrend();
+          });
+        });
+
+        document.querySelectorAll("#pattern-breakdown-tabs button").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.patternBreakdown = button.dataset.patternBreakdown;
+            document.querySelectorAll("#pattern-breakdown-tabs button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+            updatePatterns(scoped());
+          });
+        });
+
+        document.querySelectorAll("#driver-tabs button").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.driverBreakdown = button.dataset.breakdown;
+            document.querySelectorAll("#driver-tabs button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+            updateRankings(scoped());
+          });
+        });
+
+        document.querySelectorAll("#driver-metric-tabs button").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.driverMetric = button.dataset.driverMetric;
+            document.querySelectorAll("#driver-metric-tabs button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+            updateRankings(scoped());
+          });
+        });
+
+        document.querySelectorAll("[data-ranking]").forEach((button) => {
+          button.addEventListener("click", () => openRanking(button.dataset.ranking));
+        });
+        $("ranking-dialog-close").addEventListener("click", () => $("ranking-dialog").close());
+        $("ranking-dialog").addEventListener("click", (event) => {
+          if (event.target === $("ranking-dialog")) $("ranking-dialog").close();
+        });
+
+        buildPeriods();
+        setupMap();
+        $("generated").textContent = `Generated ${new Date(data.meta.generatedAt).toLocaleString()} with contrail ${data.meta.contrailVersion}. Keep this file private.`;
+        update();
+      })();
+    </script>
+  </body>
+</html>

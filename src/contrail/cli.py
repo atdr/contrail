@@ -1,10 +1,12 @@
-"""Command line interface: ``contrail sync`` and ``contrail sources``."""
+"""Command line interface: sync, source inspection, and Passport generation."""
 
 from __future__ import annotations
 
 import argparse
 import sys
+import webbrowser
 from datetime import UTC, datetime
+from pathlib import Path
 
 import requests
 
@@ -13,6 +15,8 @@ from contrail.config import DEFAULT_CSV_PATH, Config, ConfigError, load_config
 from contrail.emissions import get_provider
 from contrail.importers import IMPORTERS, get_importer
 from contrail.models import FlightRecord, UnparsedEvent
+from contrail.passport import DEFAULT_OUTPUT_PATH
+from contrail.passport import render as render_passport
 from contrail.storage import JSONLRawLog, kg_value, normalize_rows, total_kg
 from contrail.storage.local_csv import STATUS_CANCELLED, LocalCSVStorage, actual_kg, row_key
 from contrail.storage.raw_log import default_path as default_raw_path
@@ -713,6 +717,29 @@ def cmd_sources(args) -> int:
     return 1 if unknown else 0
 
 
+def cmd_passport(args) -> int:
+    """Generate one private, offline HTML dashboard from the stored CSV."""
+    config = load_config(config_path=args.config, csv_path=args.csv_path)
+    csv_path = Path(config.csv_path)
+    if not csv_path.exists():
+        raise ValueError(f"Flight log not found: {csv_path}")
+
+    rows = LocalCSVStorage(str(csv_path)).load()
+    if not rows:
+        raise ValueError(f"Flight log is empty: {csv_path}")
+
+    output_path = Path(args.output)
+    if output_path.resolve() == csv_path.resolve():
+        raise ValueError("Passport output must not overwrite the flight log")
+
+    output = render_passport(rows, output_path, now=_now())
+    print(f"Wrote {output}.")
+    print("  Passport embeds your flight history. Keep the HTML private.")
+    if args.open and not webbrowser.open(output.as_uri()):
+        print(f"  Could not open a browser automatically. Open {output} by hand.", file=sys.stderr)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="contrail",
@@ -738,6 +765,28 @@ def build_parser() -> argparse.ArgumentParser:
     sources = subparsers.add_parser("sources", help="list available and configured importers")
     sources.add_argument("--config", metavar="PATH", help="path to a config.json/config.yaml")
     sources.set_defaults(func=cmd_sources)
+
+    passport = subparsers.add_parser(
+        "passport", help="build a private, offline HTML dashboard from the CSV"
+    )
+    passport.add_argument("--config", metavar="PATH", help="path to a config.json/config.yaml")
+    passport.add_argument(
+        "--csv-path",
+        metavar="PATH",
+        help=f"flight log to read (default: ./{DEFAULT_CSV_PATH})",
+    )
+    passport.add_argument(
+        "--output",
+        metavar="PATH",
+        default=DEFAULT_OUTPUT_PATH,
+        help=f"HTML file to write (default: ./{DEFAULT_OUTPUT_PATH})",
+    )
+    passport.add_argument(
+        "--open",
+        action="store_true",
+        help="open the generated Passport in the default browser",
+    )
+    passport.set_defaults(func=cmd_passport)
 
     return parser
 
