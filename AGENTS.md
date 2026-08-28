@@ -106,9 +106,9 @@ Two keys, and the difference matters:
   failing test that proves the current form is wrong.
 - **Mutation is confined to flights that haven't departed.** Past rows are never
   touched — that's what makes "absent from the feed" unambiguous. One exception:
-  `resync.backfill()` fills a _blank_ cabin, aircraft or reason on a row of any
-  age, because a Flighty export is almost entirely past flights and it re-prices
-  nothing.
+  `resync.backfill()` fills a _blank_ arrival, cabin, aircraft or reason on a row
+  of any age, because a Flighty export is almost entirely past flights and it
+  re-prices nothing.
 - **A flight is identified by route and date, never by flight number.** `BA16` is
   SYD-SIN-LHR on one day: two legs, two cabins, two rows. Any "dedup by flight
   number" idea silently merges them and loses a figure.

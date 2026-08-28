@@ -59,6 +59,7 @@ it hasn't seen before — nothing is ever double-counted or re-priced.
 
 ```text
 contrail sync [--config PATH] [--csv-path PATH] [--dry-run]
+contrail passport [--config PATH] [--csv-path PATH] [--output PATH] [--open]
 contrail sources
 ```
 
@@ -67,6 +68,49 @@ emissions API or touching the CSV. Use it when testing a parsing change, or when
 spend API calls. It doesn't need `TIM_API_KEY` set.
 
 `contrail sources` lists which importers exist and which are configured.
+
+## Passport
+
+`contrail passport` turns the flight log into a private, interactive emissions
+dashboard:
+
+```bash
+contrail passport
+```
+
+It reads `./flight_emissions.csv` and writes `./passport.html` by default. Use
+`--csv-path` to read another log, `--output` to choose another HTML path, and
+`--open` to open the result in your default browser after writing it:
+
+```bash
+contrail passport --csv-path archive/flights.csv --output reports/passport.html --open
+```
+
+The result is one self-contained HTML file. It embeds the flight data and
+styles, Chart.js 4.5.1 for the charts, Leaflet 1.9.4 for the map, and stripped
+Natural Earth 1:110m country boundaries. It requests no external scripts or map
+tiles, so it works offline and makes no network requests. That also means the
+HTML contains your itinerary. Keep it private: `passport.html` is gitignored by
+default, and a custom output path needs the same care.
+
+Passport compares all time with individual years, and shows total CO2e, CO2e
+per kilometre and CO2e per scheduled block hour alongside the flights and
+routes that drove them. The annual trajectory and the month or weekday carbon
+patterns can each be split by cabin or reason. Airport and country connection
+counts appear in the overview, their CO2e contributions are ranked in the
+patterns section, and the lightest and heaviest individual flights are compared
+by total, per-kilometre and per-hour impact. Contributor rankings can use those
+same three measures and can be broken down by cabin or reason. The offline route
+map can be panned and zoomed.
+
+Distance is calculated consistently for every flight as the Haversine
+great-circle distance between the bundled airport coordinates. It is labelled
+as an estimated route distance and does not replace or modify TIM's
+`distance_km`. Scheduled block duration is calculated from the stored departure
+and arrival instants where both are available. Flights without a reported cabin
+are shown as Economy in charts. The estimate quality section discloses those
+assumptions and partitions the completed flights by emissions source, distance,
+duration, cabin and reason availability.
 
 ## How emissions are computed
 
@@ -148,6 +192,7 @@ it.
 | `operating_carrier_code` / `operating_flight_number`                 | Who actually flies it. Differs from the above on a codeshare, and is what gets priced                      |
 | `origin` / `destination`                                             | IATA airport codes                                                                                         |
 | `departure_time`                                                     | Departure as an instant, in the origin's own timezone. Blank for all-day events                            |
+| `arrival_time`                                                       | Arrival as an instant, in the destination's own timezone. Blank when the source does not state one         |
 | `status`                                                             | Blank normally; `cancelled` if an upcoming flight vanished from the feed                                   |
 | `cabin_class_known`                                                  | The cabin flown, if a source reported one, else blank                                                      |
 | `aircraft_type`                                                      | The airframe, as the source names it. TIM never names one                                                  |
@@ -156,7 +201,7 @@ it.
 | `model_version`                                                      | Full TIM version, e.g. `3.0.0+20260814`. The `+dated` part identifies the dataset that produced the figure |
 | `emissions_data_source`                                              | `TIM` or `EASA`                                                                                            |
 | `contrails_impact`                                                   | TIM's contrails warming bucket: `negligible`, `moderate` or `severe`                                       |
-| `distance_km`                                                        | Distance TIM used for the calculation                                                                      |
+| `distance_km`                                                        | Distance TIM used for its calculation; distinct from Passport's estimated great-circle route distance      |
 | `aircraft_match`                                                     | How well TIM matched an airframe. It never names the aircraft                                              |
 | `emissions_kg_first` / `_business` / `_premium_economy` / `_economy` | Per-passenger CO2e by cabin, in kg                                                                         |
 | `emissions_kg_actual`                                                | The cabin actually flown if known, else economy — **the per-flight figure to sum**                         |
@@ -179,19 +224,19 @@ alone.** Concretely, while `flight_date` is today or later:
   mistaken cancellation would otherwise destroy them permanently. Only
   `emissions_kg_actual` is cleared, which is what drops it out of any total. If
   it reappears, it is restored automatically.
-- `cabin_class_known`, `aircraft_type` and `flight_reason` are filled in when
-  blank and never overwritten. A stored value is either your own edit or the
-  one source that reports it, so it is the only copy.
+- `arrival_time`, `cabin_class_known`, `aircraft_type` and `flight_reason` are
+  filled in when blank and never overwritten. A stored value is either your own
+  edit or a source fact, so replacing it would risk losing the only copy.
 
 From the day after departure a row is frozen, and only your own edits change it
 — with one exception. If a _second_ source turns out to know a flight already in
-the log, it may fill in a blank `cabin_class_known`, `aircraft_type` or
-`flight_reason`, and record its own key in `also_seen_as`. That re-prices nothing
-and re-fetches nothing: setting the cabin only decides which of the per-cabin
-figures the row already holds counts as its actual emissions, which is the same
-hand edit described below. It is what lets a log built from TripIt over months
-have its past rows corrected the day you first point contrail at a Flighty
-export.
+the log, it may fill in a blank `arrival_time`, `cabin_class_known`,
+`aircraft_type` or `flight_reason`, and record its own key in `also_seen_as`.
+That re-prices nothing and re-fetches nothing: arrival only makes scheduled
+duration available, while setting the cabin decides which of the per-cabin
+figures the row already holds counts as its actual emissions. It is what lets a
+log built from TripIt over months have its past rows corrected the day you first
+point contrail at a Flighty export.
 That boundary is also what makes cancellation safe to infer at all: TripIt's
 feed only carries recent and upcoming trips, so a _past_ flight leaving it just
 means it aged out, while a _future_ one leaving it genuinely means something.

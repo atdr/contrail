@@ -27,10 +27,10 @@ tomorrow, so a flight departing that evening would freeze before it left.
 - Date, route and flight numbers are corrected from the feed.
 - It is re-priced on every run — see [emissions.md](emissions.md) for why even an
   `exact` figure is worth re-asking.
-- `cabin_class_known`, `aircraft_type` and `flight_reason` are only ever filled
-  in, never overwritten. A stored value is either a hand edit or the one source
-  that reports it, and in both cases it is the only copy; a warning names the row
-  when a re-synced flight had a cabin set.
+- `arrival_time`, `cabin_class_known`, `aircraft_type` and `flight_reason` are
+  only ever filled in, never overwritten. A stored value is either a hand edit
+  or a source fact, and replacing it could lose the only copy; a warning names
+  the row when a re-synced flight had a cabin set.
 - Disappearing from the feed marks it `cancelled` rather than deleting it. The
   per-cabin figures stay because TIM will never price a past flight again; only
   `emissions_kg_actual` is cleared, which is the single point that drops it out
@@ -38,16 +38,16 @@ tomorrow, so a flight departing that evening would freeze before it left.
 
 ## The one thing a past row will accept
 
-`resync.backfill()` may fill a **blank** `cabin_class_known`, `aircraft_type` or
-`flight_reason`, and add to `also_seen_as`, on a row of any age. Nothing else in
-this module touches a departed flight.
+`resync.backfill()` may fill a **blank** `arrival_time`, `cabin_class_known`,
+`aircraft_type` or `flight_reason`, and add to `also_seen_as`, on a row of any
+age. Nothing else in this module touches a departed flight.
 
 It is safe because it isn't what the freeze protects against. The freeze exists
 for two reasons — absence from a feed is ambiguous for a past flight, and TIM
 will not re-price one — and neither is in play. A back-fill re-prices nothing and
-re-fetches nothing. Setting a cabin only changes which of the per-cabin figures
-the row _already holds_ feeds `emissions_kg_actual`, which is precisely the hand
-edit the README documents.
+re-fetches nothing. Arrival only makes scheduled duration available; setting a
+cabin changes which of the per-cabin figures the row _already holds_ feeds
+`emissions_kg_actual`, which is precisely the hand edit the README documents.
 
 And refusing it would refuse the point. A Flighty export is typically two decades
 of flights, essentially all in the past; if the correction only applied to

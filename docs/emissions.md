@@ -139,6 +139,13 @@ fail every future run.
 
 `raw_log` and `raw_path` are **top-level** config keys, not per-source.
 
+`distance_km` is provider provenance: it is the distance TIM used in that
+particular calculation, and can be absent from historical route-average rows.
+Passport therefore calculates a separate estimated route distance from airport
+coordinates for every flight. It uses that one method consistently for its
+distance totals and CO2e-per-kilometre metric; it never fills in or changes the
+TIM field.
+
 ## The API key
 
 Goes in the `x-goog-api-key` header, never the query string. `requests` embeds
