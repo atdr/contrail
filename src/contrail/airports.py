@@ -32,6 +32,13 @@ def _airports() -> dict:
     return _AIRPORTS
 
 
+def details_for(iata: str | None) -> dict | None:
+    """Bundled metadata for an IATA airport code, or None when unknown."""
+    if not iata:
+        return None
+    return _airports().get(iata.strip().upper())
+
+
 def timezone_for(iata: str | None) -> ZoneInfo | None:
     """IANA timezone for an IATA airport code, or None if it isn't known."""
     if not iata:
@@ -40,7 +47,7 @@ def timezone_for(iata: str | None) -> ZoneInfo | None:
     if code in _ZONES:
         return _ZONES[code]
 
-    entry = _airports().get(code)
+    entry = details_for(code)
     zone: ZoneInfo | None = None
     if entry and entry.get("tz"):
         try:
@@ -76,6 +83,16 @@ def departure_datetime(dtstart, origin: str | None) -> datetime | None:
         return dtstart
     zone = timezone_for(origin)
     return dtstart.astimezone(zone) if zone else dtstart
+
+
+def arrival_datetime(dtend, destination: str | None) -> datetime | None:
+    """The arrival as an instant, expressed in the destination's timezone."""
+    if not isinstance(dtend, datetime):
+        return None
+    if dtend.tzinfo is None:
+        return dtend
+    zone = timezone_for(destination)
+    return dtend.astimezone(zone) if zone else dtend
 
 
 def departure_date(dtstart, origin: str | None) -> date | None:

@@ -129,6 +129,7 @@ def _collapse(flights: dict) -> tuple[dict, list[tuple[FlightRecord, FlightRecor
         if flight.key not in winner.also_seen:
             winner.also_seen.append(flight.key)
         for field in (
+            "arrival_time",
             "cabin_class",
             "aircraft_type",
             "flight_reason",
@@ -348,6 +349,7 @@ def _flight_row(flight: FlightRecord, result, now_iso: str) -> dict:
         "origin": flight.origin,
         "destination": flight.destination,
         "departure_time": flight.departure_time.isoformat() if flight.departure_time else "",
+        "arrival_time": flight.arrival_time.isoformat() if flight.arrival_time else "",
         "status": STATUS_CANCELLED if flight.cancelled else "",
         "cabin_class_known": flight.cabin_class or "",
         "aircraft_type": flight.aircraft_type or "",
@@ -373,13 +375,13 @@ def _flight_row(flight: FlightRecord, result, now_iso: str) -> dict:
 def _merge_row(row: dict, flight: FlightRecord, result, now_iso: str, changed: bool) -> dict:
     """Fold a fresh reading of an upcoming flight into the row already stored.
 
-    Two things survive regardless of what the feed says. The back-fill fields —
-    cabin, aircraft, reason — are only ever filled in, never replaced: a stored
-    value is either a hand edit or the one source that reports it, and in both
-    cases it is the only copy. And a worse emissions figure is refused on an
-    unchanged flight, so a transient TIM miss can't downgrade a good number —
-    unless the flight's details changed, in which case it is a different flight
-    and whatever comes back is the truth.
+    Two things survive regardless of what the feed says. The back-fill fields
+    (arrival, cabin, aircraft, reason) are only ever filled in, never replaced:
+    a stored value may be a hand edit or a source fact, and either way it is the
+    only copy. And a worse emissions figure is refused on an unchanged flight,
+    so a transient TIM miss can't downgrade a good number. If the flight's
+    details changed, it is a different flight and whatever comes back is the
+    truth.
     """
     fresh = _flight_row(flight, result, now_iso)
     merged = {**row, **{field: fresh[field] for field in resync.FEED_FIELDS}}
@@ -461,6 +463,7 @@ def _unparsed_row(event: UnparsedEvent, now_iso: str) -> dict:
         "origin": partial.get("origin") or "",
         "destination": partial.get("destination") or "",
         "departure_time": "",
+        "arrival_time": "",
         "status": "",
         "cabin_class_known": "",
         "aircraft_type": "",

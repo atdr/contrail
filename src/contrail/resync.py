@@ -25,6 +25,7 @@ from contrail.storage.local_csv import STATUS_CANCELLED, is_cancelled, row_key
 FEED_FIELDS = (
     "flight_date",
     "departure_time",
+    "arrival_time",
     "carrier_code",
     "flight_number",
     "operating_carrier_code",
@@ -33,10 +34,11 @@ FEED_FIELDS = (
     "destination",
 )
 
-# Fields a source may *fill in* but never overwrite. Only one source reports any
-# of them today, so a stored value is either that source's or a hand edit, and in
-# both cases it is the only copy — replacing it would be loss, not correction.
-BACKFILL_FIELDS = ("cabin_class_known", "aircraft_type", "flight_reason")
+# Fields a source may *fill in* but never overwrite. A stored value may be a
+# source fact or a hand edit, and either way replacing it would be loss rather
+# than a safe correction. Arrival joins the source-specific descriptive fields
+# because filling a blank changes no pricing or flight identity.
+BACKFILL_FIELDS = ("arrival_time", "cabin_class_known", "aircraft_type", "flight_reason")
 
 # What makes two entries the same flight, whichever source found them.
 #
@@ -123,6 +125,7 @@ def feed_view(flight: FlightRecord) -> dict:
     return {
         "flight_date": flight.flight_date.isoformat(),
         "departure_time": flight.departure_time.isoformat() if flight.departure_time else "",
+        "arrival_time": flight.arrival_time.isoformat() if flight.arrival_time else "",
         "carrier_code": flight.carrier_code,
         "flight_number": flight.flight_number,
         "operating_carrier_code": flight.operating_carrier_code or "",
@@ -211,10 +214,10 @@ def backfill(row: dict, flight: FlightRecord) -> tuple[dict, list[str]]:
     **This is allowed on a row that has already departed**, which nothing else in
     this module is. The freeze exists because a past flight's absence is
     ambiguous and because TIM will not re-price one; neither applies here. Filling
-    in a cabin only changes which already-stored per-cabin figure
-    ``emissions_kg_actual`` reads from — precisely the hand edit the README
-    documents — and a Flighty export is almost entirely past flights, so refusing
-    it would refuse the point.
+    in arrival or descriptive detail changes no pricing; filling a cabin only
+    changes which already-stored per-cabin figure ``emissions_kg_actual`` reads
+    from, precisely the hand edit the README documents. A Flighty export is
+    almost entirely past flights, so refusing it would refuse the point.
     """
     # Its own key plus everything folded into it. Without the folded keys a
     # codeshare listed twice in one export would lose one of its two ids.
@@ -223,6 +226,10 @@ def backfill(row: dict, flight: FlightRecord) -> tuple[dict, list[str]]:
     changed = [] if merged["also_seen_as"] == (row.get("also_seen_as") or "") else ["also_seen_as"]
 
     for field, value in (
+        (
+            "arrival_time",
+            flight.arrival_time.isoformat() if flight.arrival_time else None,
+        ),
         ("cabin_class_known", flight.cabin_class),
         ("aircraft_type", flight.aircraft_type),
         ("flight_reason", flight.flight_reason),

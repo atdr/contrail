@@ -42,6 +42,7 @@ CSV_FIELDS = [
     "origin",  # IATA code
     "destination",  # IATA code
     "departure_time",  # ISO 8601 in the origin's timezone; blank for all-day events
+    "arrival_time",  # ISO 8601 in the destination's timezone; blank when unstated
     "status",  # blank = flown or booked; "cancelled" = dropped from the feed
     "cabin_class_known",  # cabin the source reported, else blank
     "aircraft_type",  # airframe as the source names it; TIM never names one
