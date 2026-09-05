@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/atdr/contrail/compare/v0.4.0...v0.4.1) (2026-09-05)
+
+
+### Documentation
+
+* add code of conduct, security policy, and contributing guide ([#40](https://github.com/atdr/contrail/issues/40)) ([1c32597](https://github.com/atdr/contrail/commit/1c3259716dd3230669001639ab73691268b6e7a8))
+* **emissions:** note first attempt at catching a TIM aircraft-model update ([#36](https://github.com/atdr/contrail/issues/36)) ([c742f77](https://github.com/atdr/contrail/commit/c742f77a77d2cd62db91a18d0ed5655584bda35d))
+
 ## [0.4.0](https://github.com/atdr/contrail/compare/v0.3.1...v0.4.0) (2026-09-05)
 
 

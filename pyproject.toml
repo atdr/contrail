@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "contrails"
-version = "0.4.0"
+version = "0.4.1"
 description = "Estimate the CO2e emissions of flights you've taken or booked, and keep a running log."
 readme = "README.md"
 requires-python = ">=3.11"
