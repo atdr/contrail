@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/atdr/contrail/compare/v0.3.1...v0.4.0) (2026-09-05)
+
+
+### Features
+
+* **release:** publish to PyPI as `contrails` ([#34](https://github.com/atdr/contrail/issues/34)) ([b34d65f](https://github.com/atdr/contrail/commit/b34d65ff050dee790bb416d272cc3dad0eb7be9f))
+
 ## [0.3.1](https://github.com/atdr/contrail/compare/v0.3.0...v0.3.1) (2026-09-05)
 
 
