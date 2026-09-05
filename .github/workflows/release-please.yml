@@ -1,4 +1,4 @@
-name: Release Please
+name: release-please
 
 on:
   push:
@@ -10,6 +10,10 @@ permissions:
 
 jobs:
   release-please:
+    name: maintain the release PR
+    # This one holds every release behind it, so a hang here is a release that
+    # silently never happens. Ten minutes against a job that takes seconds.
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       # Maintains a rolling release PR from the conventional commits on main.

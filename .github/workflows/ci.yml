@@ -1,4 +1,4 @@
-name: CI
+name: ci
 
 on:
   push:
@@ -10,6 +10,11 @@ permissions:
 
 jobs:
   lint:
+    name: ruff
+    # Ten minutes against a job that takes ten seconds. The point is a `pip`
+    # fetch that stalls rather than fails, which would otherwise sit until
+    # GitHub's six-hour default.
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -21,6 +26,11 @@ jobs:
       - run: ruff format --check .
 
   test:
+    # Interpolated, not a fixed string: a matrix job with a static `name:`
+    # produces three checks called the same thing, and the version under test
+    # is the only thing that tells them apart.
+    name: pytest ${{ matrix.python-version }}
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -46,6 +56,13 @@ jobs:
         run: contrail sync --dry-run --csv-path "${RUNNER_TEMP}/should-not-be-written.csv"
 
   docs:
+    name: markdown
+    # `npx` fetches Prettier from the registry on every run, and a stalled
+    # fetch hangs rather than failing. The same line in atdr/contrail-gh has
+    # sat silent for exactly 301 seconds, npm's fetch-timeout expiring and the
+    # retry succeeding, in a job that takes twelve seconds when the fetch is
+    # clean. Ten minutes bounds a stall that never recovers.
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

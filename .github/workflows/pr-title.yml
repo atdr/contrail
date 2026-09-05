@@ -1,4 +1,4 @@
-name: Lint PR title
+name: pr-title
 
 on:
   pull_request_target:
@@ -9,6 +9,8 @@ permissions:
 
 jobs:
   lint:
+    name: conventional title
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
       # On a squash merge the PR title becomes the commit subject, which is what
