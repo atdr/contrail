@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.1](https://github.com/atdr/contrail/compare/v0.3.0...v0.3.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **deps:** Update airportsdata requirement from &gt;=20260803 to &gt;=20260902 ([#31](https://github.com/atdr/contrail/issues/31)) ([24f6c2e](https://github.com/atdr/contrail/commit/24f6c2eac97357a3ae01a4887210f8032b4406d8))
+* **deps:** Update icalendar requirement from &gt;=7.2.2 to &gt;=7.3.0 ([#29](https://github.com/atdr/contrail/issues/29)) ([640788f](https://github.com/atdr/contrail/commit/640788fd2720046957835ea4036d7ae94e8716fb))
+
+
+### Documentation
+
+* a file-reading importer now needs its env var in two workflows ([#20](https://github.com/atdr/contrail/issues/20)) ([353b0c4](https://github.com/atdr/contrail/commit/353b0c4774e0e3cca444623bb437813eff13ad79))
+
 ## [0.3.0](https://github.com/atdr/contrail/compare/v0.2.0...v0.3.0) (2026-08-16)
 
 
