@@ -25,13 +25,19 @@ whether an instance's TIM key still works.
 | contrail writes a new output file                    | Add it to the `git add` line in `sync.yml`                                                                                                                    |
 | contrail gains an importer that reads a **file**     | A directory for it, the env var in _both_ `sync.yml` and `check-instance.yml`, and a guard in `check-template.yml` that the public template never carries one |
 | A new column or behaviour users should know about    | Update the template's README                                                                                                                                  |
-| A release is cut                                     | Bump the `@vX.Y.Z` pin in `sync.yml`                                                                                                                          |
+| A release is cut                                     | Nothing here — Dependabot opens the version-bump PR in the instance                                                                                           |
 | `requires-python` rises above the workflow's version | Raise `python-version` in `sync.yml`                                                                                                                          |
 
-The release row is the one release-please can't take off your hands. It rewrites
-the `@vX.Y.Z` pins in this repo's README, because they're listed under
-`extra-files`, but it has no reach into another repository. `sync.yml` stays a
-hand edit after every release.
+The release row used to be the one release-please couldn't take off your
+hands: it rewrites the version pins in this repo's own README, because
+they're listed under `extra-files`, but it had no reach into another
+repository, so `sync.yml` stayed a hand edit after every release. Publishing
+to PyPI closes that gap indirectly — contrail-gh pins a plain version in
+`requirements.txt` rather than a git tag in a shell command, so Dependabot
+can see and bump it. contrail's only obligation is that the release actually
+reaches PyPI, which the `publish` job in `release-please.yml` now does on
+its own. Someone still has to review and merge the Dependabot PR — see
+contrail-gh's own README for that side of it.
 
 The `flighty_csv` importer is the first of the file-reading kind, and it is the
 reason that third row exists. An export is a manual file rather than a feed URL,
@@ -53,9 +59,10 @@ writes.
 
 ## Why the pin is never `main`
 
-A derived repo runs whatever tag it pins. Tracking `main` would push every commit
-here straight into people's private repos unannounced, including the ones that
-turn out to be wrong. Bumping is a deliberate one-line edit, and the template's
+A derived repo runs whatever version it pins. Tracking `main` would push every
+commit here straight into people's private repos unannounced, including the ones
+that turn out to be wrong. Bumping is still deliberate — reviewing and merging a
+Dependabot pull request rather than hand-editing a tag — and the template's
 README explains how to re-apply a personal pin after pulling template updates.
 
 This also means **a schema change reaches users only when they bump.** Their CSV

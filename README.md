@@ -16,13 +16,16 @@ prices each one using Google's [Travel Impact Model](https://travelimpactmodel.o
 <!-- x-release-please-start-version -->
 
 ```bash
-pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.3.1"
+pip install contrails==0.3.1
 ```
 
 <!-- x-release-please-end -->
 
-Pin a tag rather than tracking `main`, so a change here can never surprise a running instance.
-Python 3.11 or newer.
+The distribution is `contrails` — the `contrail` name was already taken on PyPI by an
+unrelated project — but the import name and the CLI command are still `contrail`.
+
+Pin an exact version rather than a floor or `main`, so a change here can never surprise a
+running instance. Python 3.11 or newer.
 
 For local development:
 
@@ -108,7 +111,7 @@ Copy one of the shipped examples and edit it:
 
 ```bash
 cp config.example.json config.json      # no extra dependencies
-cp config.example.yaml config.yaml      # commented; needs pip install "contrail[yaml]"
+cp config.example.yaml config.yaml      # commented; needs pip install "contrails[yaml]"
 ```
 
 Both are gitignored once renamed. A config file also lets you run several sources in one sync:
@@ -124,7 +127,7 @@ Both are gitignored once renamed. A config file also lets you run several source
 }
 ```
 
-`config.yaml` works identically but needs PyYAML: `pip install "contrail[yaml]"`.
+`config.yaml` works identically but needs PyYAML: `pip install "contrails[yaml]"`.
 
 Each entry in `sources` is passed to its importer as-is, so importers are free to define whatever
 shape they need (a URL, OAuth credentials, a file path) without the schema having to anticipate
@@ -380,7 +383,7 @@ secrets, and it syncs daily and commits the updated CSV back to your own repo.
 
 ```bash
 python3 -m venv ~/contrail-venv
-~/contrail-venv/bin/pip install "contrail @ git+https://github.com/atdr/contrail.git@v0.3.1"
+~/contrail-venv/bin/pip install contrails==0.3.1
 crontab -e
 ```
 
