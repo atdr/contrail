@@ -123,13 +123,16 @@ Two keys, and the difference matters:
   changes toward a bump, so a `chore(deps)` bump of a runtime dependency changes
   what users install with nothing in the changelog and no release. Dev
   dependencies stay `chore(deps-dev):`.
-- **The two install pins in `README.md` are rewritten by release-please**, not by
-  hand. They sit inside `<!-- x-release-please-start-version -->` /
-  `<!-- x-release-please-end -->` comments, and `README.md` is listed under
-  `extra-files` in `release-please-config.json` — both halves are needed. Delete
-  a comment and the pin quietly rots to whatever release it was written against,
-  which is exactly how it drifted before. A _new_ literal version anywhere else
-  is a bug: import `__version__`.
+- **The two install pins in `README.md`, and the two version placeholders in
+  `.github/ISSUE_TEMPLATE/bug_report.yml`, are rewritten by release-please**,
+  not by hand. They sit inside `x-release-please-start-version` /
+  `x-release-please-end` markers (HTML comments in the Markdown, `#` comments
+  in the YAML, since YAML has no other comment syntax), and both files are
+  listed under `extra-files` in `release-please-config.json` — every marker
+  pair and its file both need to be there. Delete a marker and the pin quietly
+  rots to whatever release it was written against, which is exactly how it
+  drifted before. A _new_ literal version anywhere else is a bug: import
+  `__version__` in code, or wire the file into `extra-files` if it's not code.
 - **release-please needs the repo setting "Allow GitHub Actions to create and
   approve pull requests"** (Settings → Actions → General). `permissions:
 pull-requests: write` in the workflow is _not_ sufficient on its own, and the

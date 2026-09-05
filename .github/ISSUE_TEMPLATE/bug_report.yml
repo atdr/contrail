@@ -1,0 +1,100 @@
+name: Bug report
+description: contrail did something wrong, or crashed
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        Please write in plain English: short sentences, everyday words, and exactly what you saw. There is no need to write it up formally.
+
+        **Do not paste your `TRIPIT_ICAL_URL`, your TIM API key, or the contents of `config.json`/`config.yaml`.** Those are secrets — the feed URL alone lets anyone read your itineraries. The checkboxes below ask which sources and provider you have configured, not their values.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before reporting
+      options:
+        - label: I searched the existing issues for this problem
+          required: true
+        - label: I am running the latest version of contrail
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: contrail version
+      description: Output of `contrail --version`.
+      # x-release-please-start-version
+      placeholder: contrail 0.4.0
+      # x-release-please-end
+    validations:
+      required: true
+
+  - type: dropdown
+    id: command
+    attributes:
+      label: Command run
+      options:
+        - sync
+        - sync --dry-run
+        - sources
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: sources
+    attributes:
+      label: Sources configured
+      description: Which importers are set up, not their URLs or paths.
+      options:
+        - label: tripit_ical
+        - label: flighty_csv
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what contrail did instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: |
+        The full stdout/stderr from the run. For a `--dry-run`, this includes the `MATCHED`/`NEW`/`UNPARSED`/`LINKED`/`CHANGED`/`REPRICE`/`CANCEL` lines, which are usually the most useful part.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      description: Output of `python3 --version`. contrail requires 3.11+.
+      placeholder: Python 3.12.4
+    validations:
+      required: true
+
+  - type: input
+    id: install-method
+    attributes:
+      label: How contrail is installed
+      # x-release-please-start-version
+      placeholder: pip install contrails==0.4.0
+      # x-release-please-end
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: |
+        The OS running contrail. If it runs via atdr/contrail-gh, that's the GitHub-hosted runner's OS (ubuntu-latest, currently Ubuntu 24.04) — GitHub Actions is the CI environment, not an OS itself.
+      placeholder: Ubuntu 24.04, Raspberry Pi OS 12 on a Pi 4
+    validations:
+      required: true

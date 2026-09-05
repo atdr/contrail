@@ -1,8 +1,11 @@
 # Local configuration and personal data — never commit these.
 # `contrail sync` writes ./flight_emissions.csv by default, and this repo is public.
-config.json
-config.yaml
-config.yml
+# Anchored to the root: GitHub's own issue-chooser config is
+# .github/ISSUE_TEMPLATE/config.yml, and an unanchored pattern here would
+# swallow it too.
+/config.json
+/config.yaml
+/config.yml
 # Glob, not just the default filename: backups and per-account variants
 # (flight_emissions.backup-*.csv, flight_emissions-work.csv) are real flight
 # data too, and this repo is public.
