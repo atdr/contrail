@@ -28,7 +28,7 @@ dependencies = [
     # IATA -> IANA timezone mapping, so a UTC departure time resolves to the
     # local calendar date TIM asks for. MIT, no dependencies, data bundled in
     # the wheel, so no network call and CI stays hermetic.
-    "airportsdata>=20260803",
+    "airportsdata>=20260902",
     # zoneinfo has no system tz database to read on Windows.
     "tzdata; sys_platform == 'win32'",
 ]
