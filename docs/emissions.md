@@ -97,6 +97,31 @@ about it, and it cannot be, since the API takes no aircraft parameter. Its use i
 the other direction — a stored airframe beside a moving `exact` figure is
 evidence about the equipment-swap question above.
 
+## Watching for a real equipment swap: not yet caught
+
+The question above needs a flight where the airframe actually changes model, not
+just tail. Flighty's live app timeline exposes registration changes as they
+happen, ahead of departure.
+
+One short-haul flight was checked this way across its pre-departure daily syncs:
+`emissions_kg_*` and `aircraft_match` (`AIRCRAFT_MAPPING_EXACT`) were identical
+on every run, even though `model_version` bumped daily, confirming contrail
+really did re-ask TIM each time. But the app's tail history for that flight
+showed several registration changes, all resolving to the same model. So this
+was a null result for the test, not for TIM: there was no real equipment change
+for it to catch or miss. A stable figure under a non-event does not say whether
+TIM tracks a genuine swap promptly, tracks it slowly, or never updates within
+the window at all.
+
+**The blocker: Flighty's CSV export carries none of the tail history needed to
+find a real case.** Registration changes are only visible in the app's live
+timeline. The CSV importer reads a single `Aircraft Type Name` column, one
+snapshot value rather than a log, and tail number is explicitly out of storage
+scope (see `flighty_csv.py`). This cannot be settled from what contrail stores.
+It needs a flight, captured by hand from the app, that swaps model rather than
+tail, close enough to departure that a few daily syncs fall on either side of
+it. Wait for that flight.
+
 ## Keeping everything it returned
 
 TIM refuses to price a departed flight, so whatever is captured while a flight is
