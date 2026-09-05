@@ -7,13 +7,9 @@ body:
       value: |
         Thanks for taking the time to report this.
 
-        Please write in plain English: short sentences, everyday words, and exactly what you
-        saw. There is no need to write it up formally.
+        Please write in plain English: short sentences, everyday words, and exactly what you saw. There is no need to write it up formally.
 
-        **Do not paste your `TRIPIT_ICAL_URL`, your TIM API key, or the contents of
-        `config.json`/`config.yaml`.** Those are secrets — the feed URL alone lets anyone read
-        your itineraries. The checkboxes below ask which sources and provider you have
-        configured, not their values.
+        **Do not paste your `TRIPIT_ICAL_URL`, your TIM API key, or the contents of `config.json`/`config.yaml`.** Those are secrets — the feed URL alone lets anyone read your itineraries. The checkboxes below ask which sources and provider you have configured, not their values.
 
   - type: checkboxes
     id: preflight
@@ -67,9 +63,7 @@ body:
     attributes:
       label: Output
       description: |
-        The full stdout/stderr from the run. For a `--dry-run`, this includes the
-        `MATCHED`/`NEW`/`UNPARSED`/`LINKED`/`CHANGED`/`REPRICE`/`CANCEL` lines, which are usually
-        the most useful part.
+        The full stdout/stderr from the run. For a `--dry-run`, this includes the `MATCHED`/`NEW`/`UNPARSED`/`LINKED`/`CHANGED`/`REPRICE`/`CANCEL` lines, which are usually the most useful part.
       render: shell
     validations:
       required: true
@@ -95,6 +89,8 @@ body:
     id: os
     attributes:
       label: Operating system
-      placeholder: macOS 14.5, or GitHub Actions (atdr/contrail-gh)
+      description: |
+        The OS running contrail. If it runs via atdr/contrail-gh, that's the GitHub-hosted runner's OS (ubuntu-latest, currently Ubuntu 24.04) — GitHub Actions is the CI environment, not an OS itself.
+      placeholder: Ubuntu 24.04, Raspberry Pi OS 12 on a Pi 4
     validations:
       required: true
