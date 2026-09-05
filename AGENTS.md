@@ -48,6 +48,22 @@ Two keys, and the difference matters:
   rather than spelling it out — see the gotcha on version pins for the two
   literals that remain.
 - **No test may make a real network call.** Mock `requests` in both directions.
+- **Every workflow is named after its own file**, and the description goes on
+  the job. GitHub labels a check `<workflow name> / <job name>` and never shows
+  the filename, so `pr-title / conventional title` names both the file to open
+  and what it did. A matrix job's `name:` has to interpolate the matrix value
+  (`pytest ${{ matrix.python-version }}`) or all three legs produce checks
+  called the same thing. `atdr/contrail-gh` enforces this in CI; here it is
+  convention. The `Analyze (python)` and `Analyze (actions)` checks are the
+  exception and always will be: CodeQL runs from default setup, which is a repo
+  setting rather than a file, so its name and its timeout are GitHub's to
+  choose.
+- **Every job that can carry `timeout-minutes` sets one.** GitHub's default is
+  six hours, and the failure that matters is a stall rather than an error: a
+  `pip` or `npx` fetch that hangs never fails on its own. Ten minutes
+  everywhere except `pr-title.yml`, which gets five. A job whose only key is
+  `uses:` cannot carry it, which is why the setting lives inside a reusable
+  workflow rather than on its callers.
 - **Markdown is formatted, not hand-aligned.** Prettier owns table padding and
   whitespace; markdownlint-cli2 owns line length and the rest. Run
   `npx prettier@3.9.6 --write "**/*.md"` rather than lining a table up by
