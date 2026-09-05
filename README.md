@@ -419,6 +419,8 @@ using contrail already has a Google Cloud project for the TIM API key.
 
 ## Development
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow. Quick start:
+
 ```bash
 ./venv/bin/pytest              # no test makes a real network call
 ./venv/bin/ruff check .
