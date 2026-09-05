@@ -15,6 +15,8 @@ jobs:
     # silently never happens. Ten minutes against a job that takes seconds.
     timeout-minutes: 10
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
     steps:
       # Maintains a rolling release PR from the conventional commits on main.
       # Merging it bumps the version in pyproject.toml, updates CHANGELOG.md,
@@ -24,6 +26,31 @@ jobs:
       # workflows, so the release PR itself shows no CI run. The commits it
       # releases were already tested on main.
       - uses: googleapis/release-please-action@v5
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  publish:
+    name: publish to PyPI
+    needs: release-please
+    if: needs.release-please.outputs.release_created
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # No API token: PyPI trusts this workflow (owner/repo/environment) to
+      # mint its own short-lived credential via OIDC.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Build
+        run: |
+          pip install build
+          python -m build
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
