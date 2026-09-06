@@ -80,7 +80,8 @@ as the cabin that only a Flighty export knows. See
 [resync.md](resync.md#one-flight-two-sources).
 
 A mapping keyed by type would read more tidily and would quietly change that,
-and would also make two feeds of one type impossible to express.
+and would also make two feeds of one type impossible to express. It is refused
+rather than interpreted, for the same reason.
 
 ## Why `storage` is keyed by role
 
@@ -96,8 +97,13 @@ promise the two are peers and ordered, neither of which is true, and would leave
 `load()` should read. Anything other than `flights` and `raw_log` is refused.
 
 `storage.raw_log.path` defaults to the flights path with a `.raw.jsonl` suffix,
-so `flight_emissions.csv` gets `flight_emissions.raw.jsonl` beside it. An absent
-`raw_log` section is not a disabled one: only `enabled: false` switches it off.
+so `flight_emissions.csv` gets `flight_emissions.raw.jsonl` beside it.
+
+An absent `raw_log` section is not a disabled one, and neither is an `enabled:`
+with nothing after it. Only a stated `false` switches the raw log off. Every key
+in the file reads an empty value as "use the default", and this is the one where
+the wrong guess cannot be undone: TIM will not price a flight once it has
+departed, so a provenance record skipped is gone rather than deferred.
 
 ## Why `passport` has no `type`
 
@@ -113,22 +119,38 @@ implementation carries only that implementation's options.
 
 ## What contrail does not check
 
-Only `type` is reserved. Everything else in an entry belongs to the
-implementation, and contrail never inspects it: `config.py` does not know what a
-`url` is or which importer takes a `path`. That is what lets a new importer
-define its own shape, including one that needs OAuth credentials rather than a
-URL, without the schema having to anticipate it. See
-`src/contrail/importers/base.py`.
+**Any entry that carries a `type` keeps its own keys.** `type` is the only
+reserved one, and contrail never inspects the rest: `config.py` does not know
+what a `url` is, which importer takes a `path`, or what a future `bucket` would
+mean. That is what lets a new implementation define its own shape, including an
+importer that needs OAuth credentials rather than a URL, without the schema
+having to anticipate it. See `src/contrail/importers/base.py`.
 
 The consequence is that a misspelled key inside an entry is silently ignored,
-and the importer reports the field it wanted as missing. Unknown keys at the top
-level are named, because that set is closed.
+and the implementation reports the field it wanted as missing.
+
+**Every closed set is checked**, which is the rest of the file: the section
+names, the `storage` roles, and the keys under `passport`. `passport` is in that
+list precisely because it has no `type`, so nothing behind it owns the
+leftovers. It is also where a typo hides best, since the flag is spelled
+`--output` and `output:` is the natural thing to write, so `output_path` is
+named rather than ignored.
+
+A shape that cannot mean anything is refused outright rather than warned about:
+`importers` as a mapping, `storage` or one of its roles as anything but a
+mapping, an `importers` entry that is not a mapping, or a `storage` role that is
+not `flights` or `raw_log`.
 
 ## Keys replaced in 0.5.0
 
 All of these still work. Each prints one line to stderr naming its replacement,
 and where a file carries both spellings the new one wins, so a config can be
 migrated a key at a time.
+
+The line also names whatever is actually beating the old key on that run, which
+is not always its replacement: an environment variable or a flag overrides both.
+Being told a value is "still honoured" while the run uses a different one would
+send you to edit the line that was never the cause.
 
 | Was                                       | Now                       |
 | ----------------------------------------- | ------------------------- |
