@@ -755,8 +755,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"contrail {__version__}")
     # An explicit metavar so the hidden `sources` alias stays out of the usage
-    # line: help=SUPPRESS removes a subcommand from the help body but not from
-    # the generated {a,b,c} choice list.
+    # line, which is otherwise generated from every key in the parser map.
+    # Nothing keeps it out of the invalid-choice message, and that is fine:
+    # that line only appears beside a mistake, where naming a command that
+    # does work is the useful answer.
     subparsers = parser.add_subparsers(
         dest="command", required=True, metavar="{sync,importers,passport}"
     )
@@ -775,14 +777,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sync.set_defaults(func=cmd_sync)
 
-    for name, help_text in (
-        ("importers", "list available and configured importers"),
+    for name, listing in (
+        ("importers", {"help": "list available and configured importers"}),
         # The name this command had while the config section was `sources:`.
         # A hidden second parser rather than argparse `aliases=`, which prints
         # "importers (sources)" in --help and keeps teaching the old word.
-        ("sources", argparse.SUPPRESS),
+        #
+        # No `help` key at all, rather than help=SUPPRESS: `add_parser` tests
+        # `'help' in kwargs` and wraps whatever it finds in a pseudo-action
+        # without ever comparing it to SUPPRESS, so passing the sentinel puts
+        # a literal "==SUPPRESS==" in `--help`. Only omission hides a
+        # subcommand.
+        ("sources", {}),
     ):
-        importers = subparsers.add_parser(name, help=help_text)
+        importers = subparsers.add_parser(name, **listing)
         importers.add_argument("--config", metavar="PATH", help="path to a config.json/config.yaml")
         importers.set_defaults(func=cmd_sources)
 

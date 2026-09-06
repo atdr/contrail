@@ -35,9 +35,11 @@ DEFAULT_RAW_LOG = "jsonl"
 DEFAULT_PASSPORT_OUTPUT = "passport.html"
 CONFIG_BASENAMES = ("config.json", "config.yaml", "config.yml")
 
-# The sections a config file may carry, and the roles `storage:` may name.
+# The sections a config file may carry, the roles `storage:` may name, and the
+# keys `passport:` may carry. Closed sets, each checked in `_check_keys`.
 SECTIONS = ("importers", "emissions", "storage", "passport")
 STORAGE_ROLES = ("flights", "raw_log")
+PASSPORT_KEYS = ("output_path",)
 
 
 class ConfigError(Exception):
@@ -91,8 +93,16 @@ class Config:
     def raw_log_enabled(self) -> bool:
         """On unless switched off. An absent section is not a disabled one: a
         file that says nothing about the raw log gets the same one it always
-        had, beside the CSV."""
-        return bool(self._role("raw_log").get("enabled", True))
+        had, beside the CSV.
+
+        An `enabled:` with nothing after it says nothing either, so it has to
+        mean the default too. Every other key here reads an empty value that
+        way, via `or DEFAULT_*`, and this is the one where guessing wrong
+        cannot be undone: TIM will not price a departed flight twice, so a
+        provenance record skipped is gone rather than deferred.
+        """
+        enabled = self._role("raw_log").get("enabled")
+        return True if enabled is None else bool(enabled)
 
     @property
     def passport_output(self) -> str:
@@ -159,25 +169,41 @@ def warn(message: str) -> None:
     print(message, file=sys.stderr)
 
 
-def warn_superseded(source: str, old: str, new: str, ignored: bool = False) -> None:
+def warn_superseded(source: str, old: str, new: str, superseded_by: str | None = None) -> None:
     """Name a key the 0.4.x schema used, and what replaced it.
 
     A plain print rather than `warnings.warn`: DeprecationWarning is suppressed
     by default outside __main__ and invisible under cron and GitHub Actions,
     which is exactly where an old config file is most likely to be sitting.
+
+    `superseded_by` names whatever is beating the old key on this run, which is
+    not always its replacement: an environment variable or a flag overrides
+    both. Saying "still honoured" about a value the run is not using would send
+    someone to edit a line that was never the cause.
     """
-    fate = "being ignored in favour of" if ignored else "still honoured. Use"
-    warn(f"{source}: '{old}' was replaced in 0.5.0 and is {fate} {new}.")
+    if superseded_by is None:
+        warn(f"{source}: '{old}' was replaced in 0.5.0 and is still honoured. Use {new}.")
+    elif superseded_by == new:
+        warn(f"{source}: '{old}' was replaced in 0.5.0 and {new} is already set. Drop '{old}'.")
+    else:
+        warn(
+            f"{source}: '{old}' was replaced in 0.5.0, and {superseded_by} is overriding it "
+            f"on this run. Use {new}."
+        )
 
 
-def _section(file_data: dict, name: str, source: str) -> dict:
-    """One mapping section, rejecting a shape that cannot mean anything.
+def _mapping(value, name: str, source: str) -> dict:
+    """One mapping, rejecting a shape that cannot mean anything.
 
     `storage:` in particular reads as a list to anyone who has just written
     `importers:` as one, and a list of storage backends has no answer to "which
     one does `load()` read from".
+
+    `None` is not that: a block with every key commented out parses as one, and
+    that is a file saying nothing rather than a file saying something wrong.
+    Returning `{}` also keeps every caller safe to write into, which the env
+    layer below relies on.
     """
-    value = file_data.get(name)
     if value is None:
         return {}
     if not isinstance(value, dict):
@@ -187,6 +213,39 @@ def _section(file_data: dict, name: str, source: str) -> dict:
             f"owns a flight two of them report."
         )
     return dict(value)
+
+
+def _section(file_data: dict, name: str, source: str) -> dict:
+    return _mapping(file_data.get(name), name, source)
+
+
+def _entries(value, name: str, source: str) -> list[dict]:
+    """The importers, as the list of mappings the rest of the loader assumes.
+
+    The mirror of `_mapping`, and the mistake `_mapping`'s own error message
+    invites: `importers:` keyed by type reads perfectly well, and yields a list
+    of bare type names that fails much later and somewhere else, as an
+    `AttributeError` from inside an importer.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ConfigError(
+            f"{source}: '{name}' must be a list, not a {type(value).__name__}. "
+            f"Its order decides which source owns a flight two of them report, "
+            f"and keying it by type would also make two feeds of one type "
+            f"impossible to write down:\n"
+            f'  {{"{name}": [{{"type": "tripit_ical", "url": "https://..."}}]}}'
+        )
+    for entry in value:
+        if not isinstance(entry, dict):
+            raise ConfigError(
+                f"{source}: every '{name}' entry must be a mapping carrying a "
+                f"'type', not a {type(entry).__name__}: {entry!r}"
+            )
+    # Copied, because `_env_source` updates an entry in place and the file data
+    # is still read afterwards by the 0.4.x block.
+    return [dict(entry) for entry in value]
 
 
 def _env_source(sources: list[dict], type_name: str, field: str, value: str | None) -> None:
@@ -254,13 +313,25 @@ def load_config(
             raise ConfigError(f"{found} must contain a JSON/YAML object at the top level.")
     source = found.name if found is not None else "config"
 
-    importers = list(file_data.get("importers") or [])
+    importers = _entries(file_data.get("importers"), "importers", source)
     emissions = _section(file_data, "emissions", source)
     storage = _section(file_data, "storage", source)
     passport = _section(file_data, "passport", source)
 
-    _read_superseded(file_data, source, importers, emissions, storage)
-    _check_keys(file_data, storage, source)
+    # Each role too, not just the section: a role with every key commented out
+    # is `None`, and everything below writes into these.
+    for role, value in storage.items():
+        storage[role] = _mapping(value, f"storage.{role}", source)
+
+    # Which layer above the file will win, per superseded key, named so the
+    # warning can point at it, or None where the file's own value is what the
+    # run ends up using. Decided here although env and flags are applied below:
+    # a warning that misnames the cause sends someone to fix the wrong line.
+    superseding = {var: var if env.get(var) else None for var in SUPERSEDING_VARS}
+    if csv_path:
+        superseding["CSV_PATH"] = "--csv-path"
+    _read_superseded(file_data, source, importers, emissions, storage, superseding)
+    _check_keys(file_data, storage, passport, source)
 
     # A bare TRIPIT_ICAL_URL is the common case (GitHub Actions, cron), so treat
     # it as an implicit single source rather than making people write JSON. The
@@ -307,68 +378,130 @@ def load_config(
 
 
 def _read_superseded(
-    file_data: dict, source: str, importers: list[dict], emissions: dict, storage: dict
+    file_data: dict,
+    source: str,
+    importers: list[dict],
+    emissions: dict,
+    storage: dict,
+    superseding: dict,
 ) -> None:
     """Fold the keys a 0.4.x file uses into the sections that replaced them.
 
     A file carrying both spellings keeps the new one. Saying otherwise would
     mean a config could not be migrated a key at a time.
+
+    `superseding` carries the flags and environment variables that will be
+    applied after this runs. They are already decided even though nothing has
+    written them yet, so a key one of them overwrites is reported as ignored:
+    telling someone a value is "still honoured" when the run is using a
+    different one sends them to fix the wrong thing.
     """
     if file_data.get("sources"):
-        warn_superseded(source, "sources", "importers", ignored=bool(importers))
+        # Not superseded by TRIPIT_ICAL_URL: an env var updates the entry these
+        # become rather than replacing them, so they are still doing work.
+        warn_superseded(source, "sources", "importers", "importers" if importers else None)
         if not importers:
-            importers.extend(file_data["sources"])
+            importers.extend(_entries(file_data["sources"], "sources", source))
 
     if emissions.get("provider"):
         warn_superseded(
-            source, "emissions.provider", "emissions.type", ignored=bool(emissions.get("type"))
+            source,
+            "emissions.provider",
+            "emissions.type",
+            superseded_by=(
+                "emissions.type" if emissions.get("type") else superseding["EMISSIONS_PROVIDER"]
+            ),
         )
 
     flights = storage.setdefault("flights", {})
     raw_log = storage.setdefault("raw_log", {})
 
-    for old, role, key in (
-        ("csv_path", flights, "path"),
-        ("CSV_PATH", flights, "path"),
-        ("raw_path", raw_log, "path"),
+    for old, role, key, above in (
+        ("csv_path", flights, "path", "CSV_PATH"),
+        ("CSV_PATH", flights, "path", "CSV_PATH"),
+        ("raw_path", raw_log, "path", "RAW_PATH"),
     ):
         if file_data.get(old):
             new = f"storage.{'flights' if role is flights else 'raw_log'}.{key}"
-            warn_superseded(source, old, new, ignored=key in role)
+            warn_superseded(source, old, new, new if key in role else superseding[above])
             role.setdefault(key, file_data[old])
 
     if "raw_log" in file_data and not isinstance(file_data["raw_log"], dict):
-        warn_superseded(source, "raw_log", "storage.raw_log.enabled", ignored="enabled" in raw_log)
+        warn_superseded(
+            source,
+            "raw_log",
+            "storage.raw_log.enabled",
+            superseded_by=(
+                "storage.raw_log.enabled" if "enabled" in raw_log else superseding["RAW_LOG"]
+            ),
+        )
         raw_log.setdefault("enabled", bool(file_data["raw_log"]))
 
     # Flat keys, as written by pre-v0.1.0 config.json files. Silently accepted
     # for four minor versions; they join the warning rather than outliving it.
     if file_data.get("TIM_API_KEY"):
         warn_superseded(
-            source, "TIM_API_KEY", "emissions.api_key", ignored=bool(emissions.get("api_key"))
+            source,
+            "TIM_API_KEY",
+            "emissions.api_key",
+            superseded_by=(
+                "emissions.api_key" if emissions.get("api_key") else superseding["TIM_API_KEY"]
+            ),
         )
         emissions.setdefault("api_key", file_data["TIM_API_KEY"])
     if file_data.get("TRIPIT_ICAL_URL"):
-        warn_superseded(source, "TRIPIT_ICAL_URL", "importers", ignored=bool(importers))
+        # This one does not survive the env var: it is the URL itself, and
+        # `_env_source` overwrites exactly that field on the entry it makes.
+        warn_superseded(
+            source,
+            "TRIPIT_ICAL_URL",
+            "importers",
+            superseded_by="importers" if importers else superseding["TRIPIT_ICAL_URL"],
+        )
         if not importers:
             importers.append({"type": "tripit_ical", "url": file_data["TRIPIT_ICAL_URL"]})
 
+
+# The environment variables that can override a key this block still reads.
+SUPERSEDING_VARS = (
+    "CSV_PATH",
+    "RAW_PATH",
+    "RAW_LOG",
+    "TIM_API_KEY",
+    "TRIPIT_ICAL_URL",
+    "EMISSIONS_PROVIDER",
+)
 
 SUPERSEDED_KEYS = frozenset(
     {"sources", "csv_path", "CSV_PATH", "raw_path", "raw_log", "TIM_API_KEY", "TRIPIT_ICAL_URL"}
 )
 
 
-def _check_keys(file_data: dict, storage: dict, source: str) -> None:
+def _check_keys(file_data: dict, storage: dict, passport: dict, source: str) -> None:
     """Name a key contrail will do nothing with.
 
-    Only at the top level and among storage roles, where the set of names is
-    closed. Never inside an entry: an importer defines its own shape, and
-    `config.py` deliberately does not know what a `url` is.
+    Every closed set, and only the closed sets: the top level, the storage
+    roles, and `passport`. Never inside an entry that carries a `type` — an
+    importer or a storage backend defines its own shape, and `config.py`
+    deliberately does not know what a `url` or a `bucket` is.
+
+    `passport` is the exception among the sections because it has no `type`.
+    There is no registry behind it and so no implementation to own the
+    leftovers, which makes its keys as closed as the section names. It is also
+    the section where a typo is most likely and least visible: the flag is
+    spelled `--output`, so `output:` is the natural thing to write, and the
+    dashboard would land at the default path in silence.
     """
     for key in file_data:
         if key not in SECTIONS and key not in SUPERSEDED_KEYS:
             warn(f"{source}: '{key}' is not a section contrail reads. Ignoring it.")
+
+    for key in passport:
+        if key not in PASSPORT_KEYS:
+            warn(
+                f"{source}: 'passport.{key}' is not a key contrail reads. "
+                f"Ignoring it. Expected: {', '.join(PASSPORT_KEYS)}."
+            )
 
     for role in storage:
         if role not in STORAGE_ROLES:

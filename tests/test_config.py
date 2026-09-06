@@ -190,6 +190,37 @@ def test_an_absent_raw_log_section_is_not_a_disabled_one(tmp_path):
     assert config.raw_path is None  # so the CLI derives it from the CSV
 
 
+def test_an_empty_enabled_leaves_the_raw_log_on(tmp_path):
+    """`enabled:` with nothing after it is a key saying nothing, which has to
+    mean the default like every other empty value in the file. Reading it as
+    false is the one mistake here that cannot be undone: TIM refuses to price a
+    departed flight a second time, so provenance skipped is provenance gone."""
+    write_config(tmp_path, {"storage": {"raw_log": {"enabled": None}}})
+
+    assert load_config(env={}, directory=str(tmp_path)).raw_log_enabled is True
+
+
+def test_a_storage_role_left_empty_is_not_a_crash(tmp_path):
+    """A role with every key commented out parses as None, which is the shape
+    the shipped YAML example teaches by commenting out `path:`. The env layer
+    writes into these, so an unnormalized None reached the user as a
+    `TypeError` traceback rather than anything about configuration."""
+    write_config(tmp_path, {"storage": {"flights": None, "raw_log": None}})
+    config = load_config(
+        env={"CSV_PATH": "env.csv", "RAW_PATH": "env.jsonl"}, directory=str(tmp_path)
+    )
+
+    assert config.csv_path == "env.csv"
+    assert config.raw_path == "env.jsonl"
+
+
+def test_a_storage_role_that_is_not_a_mapping_is_a_configuration_error(tmp_path):
+    write_config(tmp_path, {"storage": {"flights": "log.csv"}})
+
+    with pytest.raises(ConfigError, match="'storage.flights' must be a mapping"):
+        load_config(env={}, directory=str(tmp_path))
+
+
 def test_storage_as_a_list_is_a_configuration_error(tmp_path):
     """It reads as a list to anyone who just wrote `importers:` as one, and a
     list of backends has no answer to which one `load()` reads from."""
@@ -206,6 +237,36 @@ def test_an_unknown_storage_role_is_a_configuration_error(tmp_path):
         load_config(env={}, directory=str(tmp_path))
 
 
+def test_importers_as_a_mapping_is_a_configuration_error(tmp_path):
+    """The mirror of the storage mistake, and the one the storage error message
+    invites by saying only `importers` is a list. Keyed by type it reads well,
+    yields a list of bare strings, and used to fail as an AttributeError from
+    inside an importer, a long way from the line that caused it."""
+    write_config(tmp_path, {"importers": {"tripit_ical": {"url": "u"}}})
+
+    with pytest.raises(ConfigError, match="'importers' must be a list"):
+        load_config(env={"TRIPIT_ICAL_URL": "u"}, directory=str(tmp_path))
+
+
+def test_an_importer_entry_that_is_not_a_mapping_is_a_configuration_error(tmp_path):
+    write_config(tmp_path, {"importers": ["tripit_ical"]})
+
+    with pytest.raises(ConfigError, match="entry must be a mapping"):
+        load_config(env={}, directory=str(tmp_path))
+
+
+def test_an_unknown_passport_key_is_named_rather_than_ignored_in_silence(tmp_path, capsys):
+    """`passport` carries no `type`, so no registry and no implementation owns
+    its leftovers and the key set is as closed as the section names. It is also
+    where a typo hides best: the flag is spelled `--output`, so `output:` is
+    the natural thing to write, and the dashboard lands at the default path."""
+    write_config(tmp_path, {"passport": {"output": "dash.html"}})
+    config = load_config(env={}, directory=str(tmp_path))
+
+    assert "'passport.output' is not a key" in capsys.readouterr().err
+    assert config.passport_output == "passport.html"
+
+
 def test_an_unknown_section_is_named_rather_than_ignored_in_silence(tmp_path, capsys):
     """A typo used to surface as "No flight sources configured", which points
     at the wrong problem entirely."""
@@ -215,13 +276,21 @@ def test_an_unknown_section_is_named_rather_than_ignored_in_silence(tmp_path, ca
     assert "'importer' is not a section" in capsys.readouterr().err
 
 
-def test_keys_inside_an_entry_are_never_second_guessed(tmp_path, capsys):
-    """An importer defines its own shape; config.py does not know what a `url`
-    is and must not start guessing. See importers/base.py."""
-    write_config(
-        tmp_path,
+@pytest.mark.parametrize(
+    "data",
+    [
         {"importers": [{"type": "tripit_ical", "url": "u", "something_new": 1}]},
-    )
+        {"storage": {"flights": {"type": "local_csv", "path": "l.csv", "bucket": "b"}}},
+    ],
+    ids=["importer", "storage_role"],
+)
+def test_keys_inside_an_entry_are_never_second_guessed(tmp_path, capsys, data):
+    """An entry carrying a `type` has an implementation behind it, and that
+    implementation owns every other key: config.py does not know what a `url`
+    or a `bucket` is and must not start guessing. That is what lets a new
+    backend define its own shape, which is the whole point of the registries.
+    See importers/base.py."""
+    write_config(tmp_path, data)
     load_config(env={}, directory=str(tmp_path))
 
     assert capsys.readouterr().err == ""
@@ -309,7 +378,38 @@ def test_a_new_key_wins_over_the_one_it_replaced(tmp_path, capsys):
 
     assert config.csv_path == "new.csv"
     assert [entry["type"] for entry in config.importers] == ["tripit_ical"]
-    assert "being ignored in favour of" in capsys.readouterr().err
+    assert "storage.flights.path is already set. Drop 'csv_path'." in capsys.readouterr().err
+
+
+SUPERSEDING_LAYERS = [
+    ({"emissions": {"provider": "tim"}}, {"EMISSIONS_PROVIDER": "tim"}, "EMISSIONS_PROVIDER"),
+    ({"csv_path": "old.csv"}, {"CSV_PATH": "env.csv"}, "CSV_PATH"),
+    ({"raw_path": "old.jsonl"}, {"RAW_PATH": "env.jsonl"}, "RAW_PATH"),
+    ({"raw_log": False}, {"RAW_LOG": "true"}, "RAW_LOG"),
+    ({"TIM_API_KEY": "old"}, {"TIM_API_KEY": "env"}, "TIM_API_KEY"),
+    ({"TRIPIT_ICAL_URL": "old"}, {"TRIPIT_ICAL_URL": "env"}, "TRIPIT_ICAL_URL"),
+]
+
+
+@pytest.mark.parametrize(("data", "env", "layer"), SUPERSEDING_LAYERS, ids=lambda v: str(v)[:24])
+def test_a_superseded_key_beaten_by_the_environment_says_so(tmp_path, capsys, data, env, layer):
+    """The warning is the entire migration path, so it has to name the thing
+    actually winning. Every one of these resolves to the environment's value,
+    and calling the file key "still honoured" would send someone to edit a line
+    that was never the cause."""
+    write_config(tmp_path, data)
+    load_config(env=env, directory=str(tmp_path))
+
+    assert f"{layer} is overriding it on this run" in capsys.readouterr().err
+
+
+def test_a_superseded_key_beaten_by_a_flag_says_so(tmp_path, capsys):
+    """Flags supersede the file too, and are the layer furthest from it."""
+    write_config(tmp_path, {"csv_path": "old.csv"})
+    config = load_config(csv_path="flag.csv", env={}, directory=str(tmp_path))
+
+    assert config.csv_path == "flag.csv"
+    assert "--csv-path is overriding it on this run" in capsys.readouterr().err
 
 
 def test_an_environment_only_setup_warns_about_nothing(tmp_path, capsys):
