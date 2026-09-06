@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.0](https://github.com/atdr/contrail/compare/v0.4.1...v0.5.0) (2026-09-06)
+
+
+### Features
+
+* **config:** restructure the config file around the packages ([#44](https://github.com/atdr/contrail/issues/44)) ([bff4e72](https://github.com/atdr/contrail/commit/bff4e72fc088b83f2e887597c55a594463bee010))
+* **passport:** add offline carbon dashboard ([#28](https://github.com/atdr/contrail/issues/28)) ([be478e8](https://github.com/atdr/contrail/commit/be478e8d898303cc9263f834b99ec2d9fbcdcaee))
+
+
+### Bug Fixes
+
+* report an unknown config type as a configuration error ([#43](https://github.com/atdr/contrail/issues/43)) ([cfba158](https://github.com/atdr/contrail/commit/cfba158782901595fb866ba78ff0e10333ead75f))
+* report the real version instead of 0.0.0.dev0 ([#41](https://github.com/atdr/contrail/issues/41)) ([96ff93e](https://github.com/atdr/contrail/commit/96ff93eaaaead216ea60f814d996f82f72075bd9))
+
+
+### Documentation
+
+* **config:** document the config file and verify the examples ([#45](https://github.com/atdr/contrail/issues/45)) ([31ef7fd](https://github.com/atdr/contrail/commit/31ef7fd2d3a741fc90402225e700b4331e2330a5))
+
 ## [0.4.1](https://github.com/atdr/contrail/compare/v0.4.0...v0.4.1) (2026-09-05)
 
 
