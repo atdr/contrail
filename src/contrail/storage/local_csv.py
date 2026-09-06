@@ -143,6 +143,8 @@ def actual_kg(row: dict) -> str:
 class LocalCSVStorage:
     """Reads and writes the flight log as a CSV file on local disk."""
 
+    id = "local_csv"
+
     def __init__(self, path: str):
         self.path = path
 

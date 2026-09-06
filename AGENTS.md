@@ -28,6 +28,12 @@ Three protocol seams:
 | `emissions/` | `EmissionsProvider.compute(flights, now) -> dict[key, EmissionsResult]` | `tim`                        |
 | `storage/`   | `Storage.load() -> list[dict]`, `save(rows)`                            | `local_csv`                  |
 
+Each seam has a registry keyed by the implementation's own `id`, and one
+`lookup_type` in `config.py` resolves a config `type:` against it. The raw log
+(`storage/raw_log.py`) has a registry of its own rather than a row in `STORAGES`:
+it appends provider answers and has no `load`/`save` pair, so it is not a
+`Storage` and must not be namable where one belongs.
+
 `cli.py` owns the flow: load config → load storage → collect from every source →
 collapse records that are the same flight → reconcile against what's stored →
 price → build rows → normalize → save.

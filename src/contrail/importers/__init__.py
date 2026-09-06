@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contrail.config import lookup_type
 from contrail.importers.base import Importer
 from contrail.importers.flighty_csv import FlightyCSVImporter
 from contrail.importers.tripit_ical import TripItICalImporter
@@ -15,13 +16,7 @@ IMPORTERS: dict[str, type[Importer]] = {
 
 def get_importer(type_name: str) -> type[Importer]:
     """Look up an importer class by its config ``type:`` string."""
-    try:
-        return IMPORTERS[type_name]
-    except KeyError:
-        available = ", ".join(sorted(IMPORTERS)) or "(none)"
-        raise ValueError(
-            f"Unknown importer type {type_name!r}. Available importers: {available}"
-        ) from None
+    return lookup_type(IMPORTERS, type_name, "importer type", "importers")
 
 
 __all__ = [

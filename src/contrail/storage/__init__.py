@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from contrail.config import lookup_type
 from contrail.storage.base import Storage
 from contrail.storage.local_csv import (
     CSV_FIELDS,
@@ -13,6 +14,31 @@ from contrail.storage.local_csv import (
     is_cancelled,
 )
 from contrail.storage.raw_log import JSONLRawLog, default_path
+
+# The flight log itself: what `Storage.load()` and `.save()` act on. Adding a
+# backend = one new module + one line here. See issue #9 for the S3 one.
+STORAGES: dict[str, type[Storage]] = {
+    LocalCSVStorage.id: LocalCSVStorage,
+}
+
+# Raw logs are a separate registry, not more entries in STORAGES. A raw log is
+# deliberately not a `Storage` — it appends provider answers rather than loading
+# and saving rows, and the CLI drives both (see the Seams section of
+# docs/storage.md). Keeping them apart is what stops a config naming one where
+# the other belongs.
+RAW_LOGS: dict[str, type] = {
+    JSONLRawLog.id: JSONLRawLog,
+}
+
+
+def get_storage(type_name: str) -> type[Storage]:
+    """Look up a flight-log backend by its config ``type:`` string."""
+    return lookup_type(STORAGES, type_name, "storage type", "storage backends")
+
+
+def get_raw_log(type_name: str) -> type:
+    """Look up a raw-log backend by its config ``type:`` string."""
+    return lookup_type(RAW_LOGS, type_name, "raw log type", "raw logs")
 
 
 def _sort_key(row: dict):
@@ -66,10 +92,14 @@ def normalize_rows(rows: list[dict]) -> list[dict]:
 __all__ = [
     "CSV_FIELDS",
     "JSONLRawLog",
+    "RAW_LOGS",
+    "STORAGES",
     "default_path",
     "STATUS_CANCELLED",
     "LocalCSVStorage",
     "Storage",
+    "get_raw_log",
+    "get_storage",
     "is_cancelled",
     "kg_value",
     "normalize_rows",

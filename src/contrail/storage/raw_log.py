@@ -29,6 +29,8 @@ def default_path(csv_path: str) -> str:
 class JSONLRawLog:
     """Appends one JSON object per priced flight."""
 
+    id = "jsonl"
+
     def __init__(self, path: str, enabled: bool = True):
         self.path = path
         self.enabled = enabled
