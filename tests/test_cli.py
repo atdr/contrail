@@ -619,3 +619,65 @@ def test_a_through_flight_conflict_survives_a_lower_case_feed(env, tmp_path, mon
     run_sync(["sync"])
 
     assert "counted about twice" in capsys.readouterr().err
+
+
+# -- the passport command -----------------------------------------------------
+
+
+def test_passport_writes_a_dashboard_from_the_log(env, capsys):
+    run_sync(["sync"])
+    capsys.readouterr()
+
+    assert main(["passport"]) == 0
+
+    document = (env / "passport.html").read_text(encoding="utf-8")
+    assert "Contrail Passport" in document
+    assert '"origin":"JFK"' in document  # the log, embedded rather than linked
+    assert "Keep the HTML private" in capsys.readouterr().out
+
+
+def test_passport_needs_no_source_and_no_api_key(env, monkeypatch):
+    """It reads the CSV and nothing else. Requiring the sync configuration would
+    stop anyone looking at a log they were handed."""
+    run_sync(["sync"])
+    monkeypatch.delenv("TRIPIT_ICAL_URL")
+    monkeypatch.delenv("TIM_API_KEY")
+
+    assert main(["passport", "--output", "elsewhere/passport.html"]) == 0
+    assert (env / "elsewhere" / "passport.html").exists()
+
+
+def test_passport_without_a_log_says_so(env, capsys):
+    assert main(["passport"]) == 1
+    assert "not found" in capsys.readouterr().err
+
+
+def test_passport_of_an_empty_log_says_so(env, capsys):
+    run_sync(["sync"])
+    header = (env / "flight_emissions.csv").read_text().splitlines()[0]
+    (env / "flight_emissions.csv").write_text(header + "\n")
+
+    assert main(["passport"]) == 1
+    assert "empty" in capsys.readouterr().err
+
+
+def test_passport_refuses_to_write_over_the_log(env, capsys):
+    """One mistyped --output would destroy years of figures TIM will not re-price."""
+    run_sync(["sync"])
+    before = read_csv(env / "flight_emissions.csv")
+
+    assert main(["passport", "--output", "flight_emissions.csv"]) == 1
+
+    assert "must not overwrite" in capsys.readouterr().err
+    assert read_csv(env / "flight_emissions.csv") == before
+
+
+def test_passport_opens_a_browser_only_when_asked(env):
+    run_sync(["sync"])
+
+    with patch("contrail.cli.webbrowser.open", return_value=True) as opener:
+        assert main(["passport"]) == 0
+        opener.assert_not_called()
+
+        assert main(["passport", "--open"]) == 0
+        opener.assert_called_once()

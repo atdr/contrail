@@ -44,6 +44,10 @@ class FlightRecord:
     # sources both report it, or when one source lists it twice.
     also_seen: list[str] = field(default_factory=list)
     raw: dict = field(default_factory=dict)  # original source data, for debugging
+    # Scheduled arrival in the destination's own timezone, when stated by the
+    # source. Kept last so adding it does not reinterpret positional arguments
+    # passed to older FlightRecord constructors.
+    arrival_time: datetime | None = None
 
     @property
     def key(self) -> str:

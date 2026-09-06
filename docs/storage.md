@@ -8,6 +8,18 @@ export they came from. `also_seen_as` is the join back to them — see the READM
 Widening the schema to absorb another source's columns is the thing this file
 exists to argue against.
 
+`arrival_time` is one deliberate addition beyond pricing and identity. Together
+with `departure_time`, it lets Passport calculate scheduled block duration
+without estimating time from route length. Both values are instants with the
+source airport's local offset. Either may be blank when the source does not
+state it.
+
+Passport's route distance is deliberately not another CSV column. It applies
+one reproducible Haversine great-circle calculation to the bundled coordinates
+for every airport pair when the HTML is generated. `distance_km` remains the
+distance TIM reported as provenance for its emissions calculation, and Passport
+does not overwrite or substitute it.
+
 ## No running total
 
 There is no `cumulative_*` column, and one shouldn't be added. A stored

@@ -6,6 +6,7 @@ does escape to the network, these tests fail rather than quietly passing.
 """
 
 import csv
+import io
 
 import pytest
 
@@ -27,6 +28,26 @@ def items(importer, sample_flighty_path):
 @pytest.fixture
 def flights(items):
     return [i for i in items if isinstance(i, FlightRecord)]
+
+
+def edited(path, row=2, **cells):
+    """The export with named columns of one data row replaced.
+
+    By column name and through the csv module: editing the text by hand shifts
+    every column after the one being changed, and the row still parses, so the
+    test quietly asserts against the wrong cells.
+    """
+    rows = list(csv.reader(path.read_text().splitlines()))
+    for column, value in cells.items():
+        rows[row][rows[0].index(column)] = value
+    out = io.StringIO()
+    csv.writer(out, lineterminator="\n").writerows(rows)
+    return out.getvalue().splitlines(keepends=True)
+
+
+def only_sfo(importer, lines) -> FlightRecord:
+    parsed = [item for item in importer.parse(lines) if isinstance(item, FlightRecord)]
+    return find(parsed, "SFO", "LHR")
 
 
 def find(flights, origin, destination, date=None):
@@ -75,6 +96,36 @@ def test_departure_time_is_localized_to_the_origin(flights):
     lets the freeze boundary be exact instead of a date comparison."""
     flight = find(flights, "SFO", "LHR")
     assert flight.departure_time.isoformat() == "2019-05-17T16:25:00-07:00"
+
+
+def test_arrival_time_is_localized_to_the_destination(flights):
+    """The other endpoint, in its own zone: an overnight flight lands on the
+    following local date, and both instants are needed for a block time."""
+    flight = find(flights, "SFO", "LHR")
+    assert flight.arrival_time.isoformat() == "2019-05-18T10:50:00+01:00"
+    assert flight.arrival_time > flight.departure_time
+
+
+def test_arrival_is_refused_unless_the_gate_departure_parses(importer, sample_flighty_path):
+    """`departure_datetime` falls through to takeoff and actual columns; the
+    arrival column has no such fallback. Pairing the two would report a
+    takeoff-to-gate figure as scheduled gate-to-gate block time, so a scheduled
+    gate departure that does not parse means no arrival either — the same answer
+    a blank one gets."""
+    lines = edited(
+        sample_flighty_path,
+        **{"Gate Departure (Scheduled)": "not-a-time", "Take off (Scheduled)": "2019-05-17T16:40"},
+    )
+    flight = only_sfo(importer, lines)
+
+    assert flight.raw["Gate Arrival (Scheduled)"] == "2019-05-18T10:50"  # still stated
+    assert flight.departure_time.isoformat() == "2019-05-17T16:40:00-07:00"  # fell through
+    assert flight.arrival_time is None
+
+
+def test_a_row_with_no_arrival_stated_has_none(importer, sample_flighty_path):
+    lines = edited(sample_flighty_path, **{"Gate Arrival (Scheduled)": ""})
+    assert only_sfo(importer, lines).arrival_time is None
 
 
 def test_a_cancelled_flight_is_reported_as_such(flights):

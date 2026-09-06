@@ -1,10 +1,12 @@
-"""Command line interface: ``contrail sync`` and ``contrail sources``."""
+"""Command line interface: sync, source inspection, and Passport generation."""
 
 from __future__ import annotations
 
 import argparse
 import sys
+import webbrowser
 from datetime import UTC, datetime
+from pathlib import Path
 
 import requests
 
@@ -13,6 +15,8 @@ from contrail.config import DEFAULT_CSV_PATH, Config, ConfigError, load_config
 from contrail.emissions import get_provider
 from contrail.importers import IMPORTERS, get_importer
 from contrail.models import FlightRecord, UnparsedEvent
+from contrail.passport import DEFAULT_OUTPUT_PATH
+from contrail.passport import render as render_passport
 from contrail.storage import JSONLRawLog, kg_value, normalize_rows, total_kg
 from contrail.storage.local_csv import STATUS_CANCELLED, LocalCSVStorage, actual_kg, row_key
 from contrail.storage.raw_log import default_path as default_raw_path
@@ -129,6 +133,7 @@ def _collapse(flights: dict) -> tuple[dict, list[tuple[FlightRecord, FlightRecor
         if flight.key not in winner.also_seen:
             winner.also_seen.append(flight.key)
         for field in (
+            "arrival_time",
             "cabin_class",
             "aircraft_type",
             "flight_reason",
@@ -348,6 +353,7 @@ def _flight_row(flight: FlightRecord, result, now_iso: str) -> dict:
         "origin": flight.origin,
         "destination": flight.destination,
         "departure_time": flight.departure_time.isoformat() if flight.departure_time else "",
+        "arrival_time": flight.arrival_time.isoformat() if flight.arrival_time else "",
         "status": STATUS_CANCELLED if flight.cancelled else "",
         "cabin_class_known": flight.cabin_class or "",
         "aircraft_type": flight.aircraft_type or "",
@@ -373,16 +379,22 @@ def _flight_row(flight: FlightRecord, result, now_iso: str) -> dict:
 def _merge_row(row: dict, flight: FlightRecord, result, now_iso: str, changed: bool) -> dict:
     """Fold a fresh reading of an upcoming flight into the row already stored.
 
-    Two things survive regardless of what the feed says. The back-fill fields —
-    cabin, aircraft, reason — are only ever filled in, never replaced: a stored
-    value is either a hand edit or the one source that reports it, and in both
-    cases it is the only copy. And a worse emissions figure is refused on an
-    unchanged flight, so a transient TIM miss can't downgrade a good number —
-    unless the flight's details changed, in which case it is a different flight
-    and whatever comes back is the truth.
+    Two things survive regardless of what the feed says. The back-fill fields
+    (cabin, aircraft, reason) are only ever filled in, never replaced: a stored
+    value may be a hand edit or a source fact, and either way it is the only
+    copy. And a worse emissions figure is refused on an unchanged flight, so a
+    transient TIM miss can't downgrade a good number. If the flight's details
+    changed, it is a different flight and whatever comes back is the truth.
+
+    Arrival is neither, and `resync.corrections` is what makes it neither: the
+    feed corrects it like any other scheduling fact, but a feed that states none
+    leaves the stored one alone. Filling it in here as well as correcting it
+    would pin it to the first value seen — `differences` would report the same
+    disagreement on every sync forever, and each of those runs would count as a
+    changed flight, which is exactly what lets a worse figure replace a better.
     """
     fresh = _flight_row(flight, result, now_iso)
-    merged = {**row, **{field: fresh[field] for field in resync.FEED_FIELDS}}
+    merged = {**row, **resync.corrections(fresh)}
     # Cancellation is the source's to state, and its absence from a feed is the
     # only other way a row gets marked. Present and not called off means open.
     merged["status"] = STATUS_CANCELLED if flight.cancelled else ""
@@ -461,6 +473,7 @@ def _unparsed_row(event: UnparsedEvent, now_iso: str) -> dict:
         "origin": partial.get("origin") or "",
         "destination": partial.get("destination") or "",
         "departure_time": "",
+        "arrival_time": "",
         "status": "",
         "cabin_class_known": "",
         "aircraft_type": "",
@@ -710,6 +723,29 @@ def cmd_sources(args) -> int:
     return 1 if unknown else 0
 
 
+def cmd_passport(args) -> int:
+    """Generate one private, offline HTML dashboard from the stored CSV."""
+    config = load_config(config_path=args.config, csv_path=args.csv_path)
+    csv_path = Path(config.csv_path)
+    if not csv_path.exists():
+        raise ValueError(f"Flight log not found: {csv_path}")
+
+    rows = LocalCSVStorage(str(csv_path)).load()
+    if not rows:
+        raise ValueError(f"Flight log is empty: {csv_path}")
+
+    output_path = Path(args.output)
+    if output_path.resolve() == csv_path.resolve():
+        raise ValueError("Passport output must not overwrite the flight log")
+
+    output = render_passport(rows, output_path, now=_now())
+    print(f"Wrote {output}.")
+    print("  Passport embeds your flight history. Keep the HTML private.")
+    if args.open and not webbrowser.open(output.as_uri()):
+        print(f"  Could not open a browser automatically. Open {output} by hand.", file=sys.stderr)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="contrail",
@@ -735,6 +771,28 @@ def build_parser() -> argparse.ArgumentParser:
     sources = subparsers.add_parser("sources", help="list available and configured importers")
     sources.add_argument("--config", metavar="PATH", help="path to a config.json/config.yaml")
     sources.set_defaults(func=cmd_sources)
+
+    passport = subparsers.add_parser(
+        "passport", help="build a private, offline HTML dashboard from the CSV"
+    )
+    passport.add_argument("--config", metavar="PATH", help="path to a config.json/config.yaml")
+    passport.add_argument(
+        "--csv-path",
+        metavar="PATH",
+        help=f"flight log to read (default: ./{DEFAULT_CSV_PATH})",
+    )
+    passport.add_argument(
+        "--output",
+        metavar="PATH",
+        default=DEFAULT_OUTPUT_PATH,
+        help=f"HTML file to write (default: ./{DEFAULT_OUTPUT_PATH})",
+    )
+    passport.add_argument(
+        "--open",
+        action="store_true",
+        help="open the generated Passport in the default browser",
+    )
+    passport.set_defaults(func=cmd_passport)
 
     return parser
 

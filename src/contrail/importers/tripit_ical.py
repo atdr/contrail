@@ -17,7 +17,7 @@ import requests
 from icalendar import Calendar
 
 from contrail.airlines import AirlineResolver
-from contrail.airports import departure_date, departure_datetime
+from contrail.airports import arrival_datetime, departure_date, departure_datetime
 from contrail.models import FlightRecord, UnparsedEvent
 
 # Matches "(SFO)" style airport codes anywhere in text
@@ -190,6 +190,7 @@ class TripItICalImporter:
         description = str(component.get("description", ""))
         location = str(component.get("location", ""))
         dtstart = component.get("dtstart")
+        dtend = component.get("dtend")
 
         carrier_code, flight_number, origin, destination = extract_flight_fields(
             summary, description, location
@@ -213,6 +214,7 @@ class TripItICalImporter:
             "departure_time": departure_datetime(
                 dtstart.dt if dtstart is not None else None, origin
             ),
+            "arrival_time": arrival_datetime(dtend.dt if dtend is not None else None, destination),
         }
 
     def _operating_flight(self, item: dict) -> tuple[str | None, str | None]:
@@ -245,6 +247,7 @@ class TripItICalImporter:
                 source_id=item["source_id"],
                 flight_date=flight_date,
                 departure_time=item["departure_time"],
+                arrival_time=item["arrival_time"],
                 carrier_code=item["carrier_code"],
                 flight_number=item["flight_number"],
                 origin=item["origin"],

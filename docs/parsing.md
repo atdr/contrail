@@ -32,6 +32,12 @@ origin **before** computing the date.
 All-day events have none; a naive time is RFC 5545 floating, i.e. already local,
 so it is left as-is rather than shifted.
 
+`arrival_time` follows the same rule at the destination. TripIt's `DTEND` and
+Flighty's scheduled arrival feed it when available. Keeping both instants lets
+Passport calculate scheduled gate-to-gate duration across timezones and date
+boundaries. A source that states neither arrival nor departure leaves duration
+unknown; contrail does not infer it from route distance.
+
 ## Codeshares, and why parse() is two-pass
 
 TripIt's DESCRIPTION names the _operating_ flight even when SUMMARY shows only
@@ -84,7 +90,14 @@ need care, all verified against a real export rather than assumed:
   departure on every row of a 261-flight export. No conversion is applied to it.
 - **Times are naive local wall-clock** (`2026-09-02T07:50`), with no offset.
   `departure_datetime` attaches the origin's zone, which is what lets the freeze
-  boundary be exact to the minute rather than a date comparison.
+  boundary be exact to the minute rather than a date comparison. Departure may
+  fall back to takeoff or actual time for that boundary. Passport duration is
+  stricter: arrival uses only the scheduled gate time, in the destination's
+  zone, so it never mixes gate, airborne, scheduled or actual endpoints. That
+  is also why a scheduled gate departure that does not _parse_ yields no
+  arrival — a blank one and an unusable one send the departure down the same
+  fallbacks, and pairing either with a gate arrival is the mixture being
+  refused.
 
 `PRIVATE` appears as a cabin class and is deliberately not mapped. TIM's
 per-cabin figures describe a seat on a scheduled airliner and say nothing useful

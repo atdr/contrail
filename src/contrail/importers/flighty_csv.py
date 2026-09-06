@@ -56,12 +56,16 @@ CABIN_CLASSES = {
 # Departure times, best first. Scheduled comes before actual because it is what
 # the schedule TIM prices against says, and it is the only one an upcoming
 # flight has.
+SCHEDULED_GATE_DEPARTURE = "Gate Departure (Scheduled)"
+
 DEPARTURE_COLUMNS = (
-    "Gate Departure (Scheduled)",
+    SCHEDULED_GATE_DEPARTURE,
     "Take off (Scheduled)",
     "Gate Departure (Actual)",
     "Take off (Actual)",
 )
+
+ARRIVAL_COLUMN = "Gate Arrival (Scheduled)"
 
 # Columns worth showing a human on a row that failed to parse. The rest of the
 # export is Flighty's own UUIDs, which tell a reader nothing.
@@ -109,6 +113,25 @@ def departure_datetime(row: dict, origin: str | None) -> datetime | None:
             zone = timezone_for(origin)
             return parsed.replace(tzinfo=zone) if zone and parsed.tzinfo is None else parsed
     return None
+
+
+def arrival_datetime(row: dict, destination: str | None) -> datetime | None:
+    """The scheduled gate arrival, given the destination's timezone.
+
+    Do not fall through to landing or actual times. Passport labels the derived
+    duration as scheduled block time, so mixing differently defined endpoints
+    would produce a precise-looking but dishonest number.
+
+    Which is why the guard is that the scheduled gate departure *parses*, not
+    merely that the cell holds something: an unparseable one sends
+    :func:`departure_datetime` down the fallbacks, and pairing a takeoff time
+    with a gate arrival is the mixture this exists to refuse.
+    """
+    if _parse_datetime(_text(row, SCHEDULED_GATE_DEPARTURE)) is None:
+        return None
+    parsed = _parse_datetime(_text(row, ARRIVAL_COLUMN))
+    zone = timezone_for(destination)
+    return parsed.replace(tzinfo=zone) if parsed and zone and parsed.tzinfo is None else parsed
 
 
 def cabin_class(value: str) -> str | None:
@@ -211,6 +234,7 @@ class FlightyCSVImporter:
         icao = _text(row, "Airline").upper()
 
         departure = departure_datetime(row, origin)
+        arrival = arrival_datetime(row, destination)
         if flight_date is None and departure is not None:
             flight_date = departure.date()
 
@@ -225,6 +249,7 @@ class FlightyCSVImporter:
             source_id=self._source_id(row) or self._fallback_id(row),
             flight_date=flight_date,
             departure_time=departure,
+            arrival_time=arrival,
             carrier_code=carrier,
             flight_number=number,
             origin=origin,

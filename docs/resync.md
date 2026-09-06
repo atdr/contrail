@@ -24,7 +24,12 @@ tomorrow, so a flight departing that evening would freeze before it left.
 
 ## While a flight is open
 
-- Date, route and flight numbers are corrected from the feed.
+- Date, route, times and flight numbers are corrected from the feed. Arrival is
+  the one field a feed may say nothing about — an iCal `VEVENT` need not carry a
+  `DTEND` — and silence is not a correction, so a stored arrival survives a feed
+  that omits one. A _stated_ arrival does replace it: leaving it fill-only pins
+  it while `departure_time` moves, and a rescheduled flight would end up with
+  two endpoints that describe no single flight.
 - It is re-priced on every run — see [emissions.md](emissions.md) for why even an
   `exact` figure is worth re-asking.
 - `cabin_class_known`, `aircraft_type` and `flight_reason` are only ever filled
@@ -38,16 +43,16 @@ tomorrow, so a flight departing that evening would freeze before it left.
 
 ## The one thing a past row will accept
 
-`resync.backfill()` may fill a **blank** `cabin_class_known`, `aircraft_type` or
-`flight_reason`, and add to `also_seen_as`, on a row of any age. Nothing else in
-this module touches a departed flight.
+`resync.backfill()` may fill a **blank** `arrival_time`, `cabin_class_known`,
+`aircraft_type` or `flight_reason`, and add to `also_seen_as`, on a row of any
+age. Nothing else in this module touches a departed flight.
 
 It is safe because it isn't what the freeze protects against. The freeze exists
 for two reasons — absence from a feed is ambiguous for a past flight, and TIM
 will not re-price one — and neither is in play. A back-fill re-prices nothing and
-re-fetches nothing. Setting a cabin only changes which of the per-cabin figures
-the row _already holds_ feeds `emissions_kg_actual`, which is precisely the hand
-edit the README documents.
+re-fetches nothing. Arrival only makes scheduled duration available; setting a
+cabin changes which of the per-cabin figures the row _already holds_ feeds
+`emissions_kg_actual`, which is precisely the hand edit the README documents.
 
 And refusing it would refuse the point. A Flighty export is typically two decades
 of flights, essentially all in the past; if the correction only applied to

@@ -4,7 +4,7 @@ The rule under test throughout: a flight that hasn't departed is contrail's to
 correct; one that has is left alone.
 """
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
@@ -430,6 +430,93 @@ def test_a_real_change_is_still_detected_on_an_upgraded_row():
     stored = row()
     del stored["departure_time"]
     assert differences(stored, flight(destination="MAD")) == ["destination"]
+
+
+# -- arrival, the one field a feed may leave out ------------------------------
+
+DEPARTURE = datetime(2026, 12, 1, 9, 0, tzinfo=UTC)
+ARRIVAL = datetime(2026, 12, 1, 13, 30, tzinfo=UTC)
+
+
+def timed(**extra):
+    """A stored row that knows both its endpoints."""
+    return row(
+        departure_time=DEPARTURE.isoformat(),
+        arrival_time=ARRIVAL.isoformat(),
+        **extra,
+    )
+
+
+def test_a_retimed_arrival_is_corrected_and_then_agrees():
+    """A field the feed disagrees about has to be a field the merge settles.
+    Reported but not applied, it is reported again on every sync to departure —
+    and each of those runs counts as a changed flight, which is precisely what
+    lets a worse figure replace a better one."""
+    later = ARRIVAL + timedelta(hours=1)
+    retimed = flight(departure_time=DEPARTURE, arrival_time=later)
+
+    assert differences(timed(), retimed) == ["arrival_time"]
+
+    merged = _merge_row(timed(), retimed, result(), "NOW", changed=True)
+    assert merged["arrival_time"] == later.isoformat()
+    assert differences(merged, retimed) == []  # converged
+
+
+def test_a_rescheduled_flight_moves_both_of_its_endpoints():
+    """Correcting the departure while pinning the arrival leaves a pair that
+    describes no single flight, and scheduled block time is read off that pair."""
+    moved = flight(
+        departure_time=DEPARTURE + timedelta(hours=2),
+        arrival_time=ARRIVAL + timedelta(hours=2),
+    )
+    merged = _merge_row(timed(), moved, result(), "NOW", changed=True)
+
+    assert merged["departure_time"] == (DEPARTURE + timedelta(hours=2)).isoformat()
+    assert merged["arrival_time"] == (ARRIVAL + timedelta(hours=2)).isoformat()
+
+
+def test_a_feed_that_states_no_arrival_does_not_blank_the_stored_one():
+    """An iCal VEVENT need not carry a DTEND, and the value may have come from a
+    source that does state one. Silence is not a correction."""
+    silent = flight(departure_time=DEPARTURE)
+
+    assert differences(timed(), silent) == []
+
+    merged = _merge_row(timed(), silent, result(), "NOW", changed=False)
+    assert merged["arrival_time"] == ARRIVAL.isoformat()
+
+
+def test_an_arrival_from_a_second_source_survives_the_owner_resyncing():
+    """The two rules meeting: `backfill` fills the arrival the owning feed never
+    states, and the next sync of that feed neither wipes it nor calls the flight
+    changed — which would have downgraded the stored exact figure."""
+    stored = row(
+        departure_time=DEPARTURE.isoformat(),
+        emissions_source="exact",
+        emissions_kg_economy="300.0",
+    )
+    filled, changed = backfill(stored, other(arrival_time=ARRIVAL))
+    assert filled["arrival_time"] == ARRIVAL.isoformat()
+    assert "arrival_time" in changed
+
+    owner = flight(departure_time=DEPARTURE)
+    assert differences(filled, owner) == []
+
+    merged = _merge_row(filled, owner, result("typical_route_average"), "NOW", changed=False)
+    assert merged["arrival_time"] == ARRIVAL.isoformat()
+    assert merged["emissions_source"] == "exact"
+    assert merged["emissions_kg_economy"] == "300.0"
+
+
+def test_backfill_fills_a_blank_arrival_but_never_replaces_one():
+    stored = row(flight_date=PAST)
+    merged, changed = backfill(stored, other(flight_date=date(2026, 5, 1), arrival_time=ARRIVAL))
+    assert merged["arrival_time"] == ARRIVAL.isoformat()
+    assert "arrival_time" in changed
+
+    again, changed = backfill(merged, other(source_id="flighty-2", arrival_time=DEPARTURE))
+    assert again["arrival_time"] == ARRIVAL.isoformat()
+    assert changed == ["also_seen_as"]
 
 
 # -- one flight, two sources -------------------------------------------------
