@@ -10,9 +10,9 @@ from pathlib import Path
 
 from contrail import __version__, resync
 from contrail.airports import details_for
+from contrail.config import DEFAULT_PASSPORT_OUTPUT as DEFAULT_OUTPUT_PATH
 from contrail.storage.local_csv import is_cancelled
 
-DEFAULT_OUTPUT_PATH = "passport.html"
 EARTH_RADIUS_KM = 6371.0088
 
 

@@ -11,14 +11,7 @@ from pathlib import Path
 import requests
 
 from contrail import __version__, resync
-from contrail.config import (
-    DEFAULT_CSV_PATH,
-    DEFAULT_RAW_LOG,
-    DEFAULT_STORAGE,
-    Config,
-    ConfigError,
-    load_config,
-)
+from contrail.config import DEFAULT_CSV_PATH, Config, ConfigError, load_config
 from contrail.emissions import get_provider
 from contrail.importers import IMPORTERS, get_importer
 from contrail.models import FlightRecord, UnparsedEvent
@@ -53,7 +46,7 @@ def collect(config: Config) -> tuple[list[FlightRecord], list[UnparsedEvent]]:
     flights: list[FlightRecord] = []
     unparsed: list[UnparsedEvent] = []
 
-    for source_config in config.require_sources():
+    for source_config in config.require_importers():
         type_name = source_config.get("type")
         if not type_name:
             raise ConfigError(f"Source entry is missing a 'type': {source_config!r}")
@@ -598,7 +591,7 @@ def _dry_run_report(plan: Reconciliation, csv_path: str) -> int:
 def cmd_sync(args) -> int:
     config = load_config(config_path=args.config, csv_path=args.csv_path)
 
-    storage = get_storage(DEFAULT_STORAGE)(config.csv_path)
+    storage = get_storage(config.storage_type)(config.csv_path)
     existing_rows = storage.load()
     # Snapshot before anything mutates a row, so the file is only rewritten when
     # its content genuinely changed. Re-pricing every upcoming flight on every
@@ -644,8 +637,8 @@ def cmd_sync(args) -> int:
         # Keep everything the provider said, not only what the CSV has columns
         # for: TIM will not price a departed flight again, so this is the only
         # chance to record the provenance behind each figure.
-        raw_log = get_raw_log(DEFAULT_RAW_LOG)(
-            config.raw_path or default_raw_path(config.csv_path), enabled=config.raw_log
+        raw_log = get_raw_log(config.raw_log_type)(
+            config.raw_path or default_raw_path(config.csv_path), enabled=config.raw_log_enabled
         )
         captured = raw_log.append(
             [
@@ -732,16 +725,18 @@ def cmd_sources(args) -> int:
 
 def cmd_passport(args) -> int:
     """Generate one private, offline HTML dashboard from the stored CSV."""
-    config = load_config(config_path=args.config, csv_path=args.csv_path)
+    config = load_config(
+        config_path=args.config, csv_path=args.csv_path, passport_output=args.output
+    )
     csv_path = Path(config.csv_path)
     if not csv_path.exists():
         raise ValueError(f"Flight log not found: {csv_path}")
 
-    rows = get_storage(DEFAULT_STORAGE)(str(csv_path)).load()
+    rows = get_storage(config.storage_type)(str(csv_path)).load()
     if not rows:
         raise ValueError(f"Flight log is empty: {csv_path}")
 
-    output_path = Path(args.output)
+    output_path = Path(config.passport_output)
     if output_path.resolve() == csv_path.resolve():
         raise ValueError("Passport output must not overwrite the flight log")
 
@@ -759,7 +754,12 @@ def build_parser() -> argparse.ArgumentParser:
         description="Estimate the CO2e emissions of flights you've taken or booked.",
     )
     parser.add_argument("--version", action="version", version=f"contrail {__version__}")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    # An explicit metavar so the hidden `sources` alias stays out of the usage
+    # line: help=SUPPRESS removes a subcommand from the help body but not from
+    # the generated {a,b,c} choice list.
+    subparsers = parser.add_subparsers(
+        dest="command", required=True, metavar="{sync,importers,passport}"
+    )
 
     sync = subparsers.add_parser("sync", help="fetch flights, price them, update the CSV")
     sync.add_argument("--config", metavar="PATH", help="path to a config.json/config.yaml")
@@ -775,9 +775,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sync.set_defaults(func=cmd_sync)
 
-    sources = subparsers.add_parser("sources", help="list available and configured importers")
-    sources.add_argument("--config", metavar="PATH", help="path to a config.json/config.yaml")
-    sources.set_defaults(func=cmd_sources)
+    for name, help_text in (
+        ("importers", "list available and configured importers"),
+        # The name this command had while the config section was `sources:`.
+        # A hidden second parser rather than argparse `aliases=`, which prints
+        # "importers (sources)" in --help and keeps teaching the old word.
+        ("sources", argparse.SUPPRESS),
+    ):
+        importers = subparsers.add_parser(name, help=help_text)
+        importers.add_argument("--config", metavar="PATH", help="path to a config.json/config.yaml")
+        importers.set_defaults(func=cmd_sources)
 
     passport = subparsers.add_parser(
         "passport", help="build a private, offline HTML dashboard from the CSV"
@@ -791,7 +798,8 @@ def build_parser() -> argparse.ArgumentParser:
     passport.add_argument(
         "--output",
         metavar="PATH",
-        default=DEFAULT_OUTPUT_PATH,
+        # No argparse default: the flag has to be distinguishable from an
+        # unset one, or it would beat `passport.output_path` in every run.
         help=f"HTML file to write (default: ./{DEFAULT_OUTPUT_PATH})",
     )
     passport.add_argument(
