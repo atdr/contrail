@@ -78,7 +78,7 @@ second row.
 - **A row another source still reports is never cancelled**, even if the source
   that owns it went quiet.
 
-Ordering decides ownership, so it is the order sources appear in `sources:`. That
+Ordering decides ownership, so it is the order they appear in `importers:`. That
 is deterministic and stable, which matters more than which source is "better":
 the row is the same flight either way, and `also_seen_as` reaches the rest.
 

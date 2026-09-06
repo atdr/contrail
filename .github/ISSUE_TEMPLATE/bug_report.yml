@@ -9,7 +9,7 @@ body:
 
         Please write in plain English: short sentences, everyday words, and exactly what you saw. There is no need to write it up formally.
 
-        **Do not paste your `TRIPIT_ICAL_URL`, your TIM API key, or the contents of `config.json`/`config.yaml`.** Those are secrets — the feed URL alone lets anyone read your itineraries. The checkboxes below ask which sources and provider you have configured, not their values.
+        **Do not paste your `TRIPIT_ICAL_URL`, your TIM API key, or the contents of `config.json`/`config.yaml`.** Those are secrets — the feed URL alone lets anyone read your itineraries. The checkboxes below ask which importers you have configured, not their values.
 
   - type: checkboxes
     id: preflight
@@ -46,7 +46,7 @@ body:
   - type: checkboxes
     id: sources
     attributes:
-      label: Sources configured
+      label: Importers configured
       description: Which importers are set up, not their URLs or paths.
       options:
         - label: tripit_ical

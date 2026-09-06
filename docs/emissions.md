@@ -137,7 +137,8 @@ and commit for no new information. Corrupt lines are skipped on read: it is a
 plain append, and every sync reads it back before appending, so raising would
 fail every future run.
 
-`raw_log` and `raw_path` are **top-level** config keys, not per-source.
+`raw_log` and `raw_path` live under **`storage.raw_log`** as `enabled` and
+`path`, not per-importer. See [config.md](config.md).
 
 `distance_km` is provider provenance: it is the distance TIM used in that
 particular calculation, and can be absent from historical route-average rows.
