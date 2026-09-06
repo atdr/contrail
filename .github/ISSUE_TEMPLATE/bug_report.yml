@@ -27,7 +27,7 @@ body:
       label: contrail version
       description: Output of `contrail --version`.
       # x-release-please-start-version
-      placeholder: contrail 0.4.1
+      placeholder: contrail 0.5.0
       # x-release-please-end
     validations:
       required: true
@@ -84,7 +84,7 @@ body:
     attributes:
       label: How contrail is installed
       # x-release-please-start-version
-      placeholder: pip install contrails==0.4.1
+      placeholder: pip install contrails==0.5.0
       # x-release-please-end
     validations:
       required: true
