@@ -681,3 +681,25 @@ def test_passport_opens_a_browser_only_when_asked(env):
 
         assert main(["passport", "--open"]) == 0
         opener.assert_called_once()
+
+
+def test_the_sources_alias_works_but_is_not_advertised(env, capsys):
+    """`sources` is kept working for anyone whose muscle memory or script has
+    it, and kept out of `--help` so nothing goes on teaching the old word.
+
+    argparse cannot express that with `help=SUPPRESS`: `add_parser` tests
+    `'help' in kwargs` and wraps whatever it finds in a pseudo-action without
+    ever comparing it to the sentinel, so passing SUPPRESS printed a literal
+    "==SUPPRESS==" as the subcommand's help text. Only omitting the key hides
+    it, which is easy to undo by accident, hence this test.
+    """
+    assert main(["sources"]) == 0
+    assert "tripit_ical" in capsys.readouterr().out
+
+    with pytest.raises(SystemExit):
+        main(["--help"])
+    help_text = capsys.readouterr().out
+
+    assert "SUPPRESS" not in help_text
+    assert "\n    sources" not in help_text
+    assert "\n    importers" in help_text
