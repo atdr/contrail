@@ -56,8 +56,10 @@ CABIN_CLASSES = {
 # Departure times, best first. Scheduled comes before actual because it is what
 # the schedule TIM prices against says, and it is the only one an upcoming
 # flight has.
+SCHEDULED_GATE_DEPARTURE = "Gate Departure (Scheduled)"
+
 DEPARTURE_COLUMNS = (
-    "Gate Departure (Scheduled)",
+    SCHEDULED_GATE_DEPARTURE,
     "Take off (Scheduled)",
     "Gate Departure (Actual)",
     "Take off (Actual)",
@@ -119,8 +121,13 @@ def arrival_datetime(row: dict, destination: str | None) -> datetime | None:
     Do not fall through to landing or actual times. Passport labels the derived
     duration as scheduled block time, so mixing differently defined endpoints
     would produce a precise-looking but dishonest number.
+
+    Which is why the guard is that the scheduled gate departure *parses*, not
+    merely that the cell holds something: an unparseable one sends
+    :func:`departure_datetime` down the fallbacks, and pairing a takeoff time
+    with a gate arrival is the mixture this exists to refuse.
     """
-    if not _text(row, "Gate Departure (Scheduled)"):
+    if _parse_datetime(_text(row, SCHEDULED_GATE_DEPARTURE)) is None:
         return None
     parsed = _parse_datetime(_text(row, ARRIVAL_COLUMN))
     zone = timezone_for(destination)
