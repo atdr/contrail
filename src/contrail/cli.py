@@ -11,14 +11,21 @@ from pathlib import Path
 import requests
 
 from contrail import __version__, resync
-from contrail.config import DEFAULT_CSV_PATH, Config, ConfigError, load_config
+from contrail.config import (
+    DEFAULT_CSV_PATH,
+    DEFAULT_RAW_LOG,
+    DEFAULT_STORAGE,
+    Config,
+    ConfigError,
+    load_config,
+)
 from contrail.emissions import get_provider
 from contrail.importers import IMPORTERS, get_importer
 from contrail.models import FlightRecord, UnparsedEvent
 from contrail.passport import DEFAULT_OUTPUT_PATH
 from contrail.passport import render as render_passport
-from contrail.storage import JSONLRawLog, kg_value, normalize_rows, total_kg
-from contrail.storage.local_csv import STATUS_CANCELLED, LocalCSVStorage, actual_kg, row_key
+from contrail.storage import get_raw_log, get_storage, kg_value, normalize_rows, total_kg
+from contrail.storage.local_csv import STATUS_CANCELLED, actual_kg, row_key
 from contrail.storage.raw_log import default_path as default_raw_path
 
 
@@ -591,7 +598,7 @@ def _dry_run_report(plan: Reconciliation, csv_path: str) -> int:
 def cmd_sync(args) -> int:
     config = load_config(config_path=args.config, csv_path=args.csv_path)
 
-    storage = LocalCSVStorage(config.csv_path)
+    storage = get_storage(DEFAULT_STORAGE)(config.csv_path)
     existing_rows = storage.load()
     # Snapshot before anything mutates a row, so the file is only rewritten when
     # its content genuinely changed. Re-pricing every upcoming flight on every
@@ -637,7 +644,7 @@ def cmd_sync(args) -> int:
         # Keep everything the provider said, not only what the CSV has columns
         # for: TIM will not price a departed flight again, so this is the only
         # chance to record the provenance behind each figure.
-        raw_log = JSONLRawLog(
+        raw_log = get_raw_log(DEFAULT_RAW_LOG)(
             config.raw_path or default_raw_path(config.csv_path), enabled=config.raw_log
         )
         captured = raw_log.append(
@@ -730,7 +737,7 @@ def cmd_passport(args) -> int:
     if not csv_path.exists():
         raise ValueError(f"Flight log not found: {csv_path}")
 
-    rows = LocalCSVStorage(str(csv_path)).load()
+    rows = get_storage(DEFAULT_STORAGE)(str(csv_path)).load()
     if not rows:
         raise ValueError(f"Flight log is empty: {csv_path}")
 

@@ -18,6 +18,8 @@ from pathlib import Path
 
 DEFAULT_CSV_PATH = "flight_emissions.csv"
 DEFAULT_EMISSIONS_PROVIDER = "tim"
+DEFAULT_STORAGE = "local_csv"
+DEFAULT_RAW_LOG = "jsonl"
 CONFIG_BASENAMES = ("config.json", "config.yaml", "config.yml")
 
 
@@ -67,6 +69,23 @@ class Config:
                 '  {"sources": [{"type": "flighty_csv", "path": "flighty/"}]}'
             )
         return self.sources
+
+
+def lookup_type(registry: dict, type_name: str, noun: str, plural: str):
+    """Resolve a config ``type:`` string against one of the seam registries.
+
+    A `ConfigError` rather than a `ValueError`: an unrecognised ``type:`` is a
+    fault in the user's config file, and `main` prints those as "Configuration
+    error". Raising `ValueError` here would report the same mistake two ways —
+    `cli.collect` already raises `ConfigError` for a *missing* type.
+    """
+    try:
+        return registry[type_name]
+    except KeyError:
+        available = ", ".join(sorted(registry)) or "(none)"
+        raise ConfigError(
+            f"Unknown {noun} {type_name!r}. Available {plural}: {available}"
+        ) from None
 
 
 def csv_path_or_none(value):

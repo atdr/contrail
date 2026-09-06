@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contrail.config import lookup_type
 from contrail.emissions.base import EmissionsProvider
 from contrail.emissions.tim import TIMEmissionsProvider
 
@@ -12,13 +13,7 @@ PROVIDERS: dict[str, type] = {
 
 def get_provider(name: str) -> type:
     """Look up an emissions provider class by name."""
-    try:
-        return PROVIDERS[name]
-    except KeyError:
-        available = ", ".join(sorted(PROVIDERS)) or "(none)"
-        raise ValueError(
-            f"Unknown emissions provider {name!r}. Available providers: {available}"
-        ) from None
+    return lookup_type(PROVIDERS, name, "emissions provider", "providers")
 
 
 __all__ = ["PROVIDERS", "EmissionsProvider", "TIMEmissionsProvider", "get_provider"]
