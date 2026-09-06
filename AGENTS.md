@@ -109,6 +109,13 @@ Two keys, and the difference matters:
   `resync.backfill()` fills a _blank_ arrival, cabin, aircraft or reason on a row
   of any age, because a Flighty export is almost entirely past flights and it
   re-prices nothing.
+- **No field is both feed-corrected and fill-only.** `differences()` and
+  `resync.corrections()` read one list, so a field reported as disagreeing is a
+  field the merge then settles. Settle it anywhere else and the row never
+  converges: the same disagreement is reported on every sync to departure, and
+  each of those counts as a changed flight, which is what lets a worse figure
+  replace a better one. `arrival_time` is the awkward case — corrected from the
+  feed, but never blanked by a feed that states none.
 - **A flight is identified by route and date, never by flight number.** `BA16` is
   SYD-SIN-LHR on one day: two legs, two cabins, two rows. Any "dedup by flight
   number" idea silently merges them and loses a figure.

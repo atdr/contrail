@@ -93,7 +93,11 @@ need care, all verified against a real export rather than assumed:
   boundary be exact to the minute rather than a date comparison. Departure may
   fall back to takeoff or actual time for that boundary. Passport duration is
   stricter: arrival uses only the scheduled gate time, in the destination's
-  zone, so it never mixes gate, airborne, scheduled or actual endpoints.
+  zone, so it never mixes gate, airborne, scheduled or actual endpoints. That
+  is also why a scheduled gate departure that does not _parse_ yields no
+  arrival — a blank one and an unusable one send the departure down the same
+  fallbacks, and pairing either with a gate arrival is the mixture being
+  refused.
 
 `PRIVATE` appears as a cabin class and is deliberately not mapped. TIM's
 per-cabin figures describe a seat on a scheduled airliner and say nothing useful
