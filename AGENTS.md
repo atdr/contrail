@@ -94,6 +94,8 @@ Two keys, and the difference matters:
 
 ## Depth
 
+- [docs/config.md](docs/config.md) — the config file: one section per package,
+  what each key does, and the 0.4.x keys still read
 - [docs/parsing.md](docs/parsing.md) — the ported regexes, local dates,
   codeshares, why `parse()` is two-pass, reading a Flighty export
 - [docs/emissions.md](docs/emissions.md) — exact vs route average, the past-date

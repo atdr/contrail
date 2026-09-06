@@ -11,14 +11,16 @@
 #
 # Anything set as an environment variable wins over this file, so a GitHub
 # Actions or cron setup can inject TRIPIT_ICAL_URL / TIM_API_KEY without you
-# editing anything here.
+# editing anything here. docs/config.md is the full reference.
+#
+# One section per package under src/contrail. A section that names a protocol
+# seam carries a `type`, because a registry resolves it.
 
-# Where the flight log is written. Relative paths are resolved from the
-# directory you run `contrail sync` in. Overridden by --csv-path or CSV_PATH.
-csv_path: flight_emissions.csv
-
-# Every source listed here is read in a single `contrail sync`.
-sources:
+# Every importer listed here is read in a single `contrail sync`.
+#
+# A list, and the order matters: where two importers know the same flight, the
+# first one listed owns the row and the second fills in what it is missing.
+importers:
   - type: tripit_ical
 
     # Your TripIt calendar feed: profile icon -> Settings -> Calendar Feed.
@@ -42,36 +44,66 @@ sources:
     # Airline names it can't learn from the feed are looked up on Wikidata.
     # Set this to false to keep contrail off the network entirely; unresolved
     # codeshares are then priced as booked.
-    # airline_lookup: true
+    airline_lookup: true
 
-  # A Flighty export. This is the only source that reports the cabin you
+  # A Flighty export. This is the only importer that reports the cabin you
   # actually flew, so it is what stops a business-class long-haul being logged
-  # as economy — often a fourfold difference. Uncomment to use it.
-  #
-  # - type: flighty_csv
-  #
-  #   # An exported CSV, a directory of them, or a glob. Export from the Flighty
-  #   # app (Settings -> Export), which emails you the file. A directory is the
-  #   # useful shape: drop each new export in and the newest wins, since Flighty
-  #   # names them FlightyExport-YYYY-MM-DD.csv.
-  #   path: flighty/
-  #
-  #   # An export is your whole flight history in one file. Keep it out of any
-  #   # public repository.
-  #
-  #   # Flighty names airlines by ICAO code (BAW), while the emissions API wants
-  #   # IATA (BA). A table shipped with contrail does almost all of that offline;
-  #   # set this to false to stop it looking up the rest on Wikidata.
-  #   # airline_lookup: true
+  # as economy — often a fourfold difference. Delete this entry if you have no
+  # export; a path matching nothing warns and yields nothing rather than
+  # failing the sync.
+  - type: flighty_csv
+
+    # An exported CSV, a directory of them, or a glob. Export from the Flighty
+    # app (Settings -> Export), which emails you the file. A directory is the
+    # useful shape: drop each new export in and the newest wins, since Flighty
+    # names them FlightyExport-YYYY-MM-DD.csv.
+    path: flighty/
+
+    # An export is your whole flight history in one file. Keep it out of any
+    # public repository.
+
+    # Flighty names airlines by ICAO code (BAW), while the emissions API wants
+    # IATA (BA). A table shipped with contrail does almost all of that offline;
+    # set this to false to stop it looking up the rest on Wikidata.
+    airline_lookup: true
 
   # Each entry is passed to its own importer, so different importers can take
-  # completely different fields. Where two sources know the same flight, the
-  # first one listed keeps the row and the second fills in what it is missing.
+  # completely different fields. contrail reads only `type` and never checks
+  # the rest — see src/contrail/importers/base.py.
 
 emissions:
-  provider: tim
+  type: tim
 
   # Google Cloud API key with the Travel Impact Model API enabled. Free, no
   # billing required. Overridden by the TIM_API_KEY environment variable.
   # Not needed at all for `contrail sync --dry-run`.
   api_key: YOUR-GOOGLE-CLOUD-API-KEY
+
+# Where contrail writes. One entry per role, because the flight log and the raw
+# log are different kinds of thing: only the first is a `Storage` backend.
+storage:
+  flights:
+    type: local_csv
+
+    # The flight log. Relative paths are resolved from the directory you run
+    # contrail in. Overridden by --csv-path or CSV_PATH.
+    path: flight_emissions.csv
+
+  raw_log:
+    type: jsonl
+
+    # Everything the emissions API ever said, kept because TIM will not price a
+    # flight once it has departed. Set to false to switch it off entirely.
+    enabled: true
+
+    # Defaults to the flights path with a .raw.jsonl suffix, so
+    # flight_emissions.csv gets flight_emissions.raw.jsonl beside it. Set this
+    # only to put it somewhere else.
+    # path: flight_emissions.raw.jsonl
+
+# `contrail passport` builds a private offline dashboard from the log. No
+# `type` here: it is a view over the log rather than a seam with alternatives.
+passport:
+  # Overridden by --output or PASSPORT_OUTPUT. The file embeds your itinerary,
+  # so it is gitignored by default and a custom path needs the same care.
+  output_path: passport.html

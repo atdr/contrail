@@ -60,14 +60,14 @@ it hasn't seen before — nothing is ever double-counted or re-priced.
 ```text
 contrail sync [--config PATH] [--csv-path PATH] [--dry-run]
 contrail passport [--config PATH] [--csv-path PATH] [--output PATH] [--open]
-contrail sources
+contrail importers
 ```
 
 `--dry-run` fetches and parses flights and prints what _would_ be written, without calling the
 emissions API or touching the CSV. Use it when testing a parsing change, or when you'd rather not
 spend API calls. It doesn't need `TIM_API_KEY` set.
 
-`contrail sources` lists which importers exist and which are configured.
+`contrail importers` lists which importers exist and which are configured.
 
 ## Passport
 
@@ -143,8 +143,9 @@ a codeshare or a flight several weeks out may not.
 
 Resolution order, highest priority first:
 
-1. CLI flags (`--csv-path`, `--config`)
-2. Environment variables (`TRIPIT_ICAL_URL`, `FLIGHTY_CSV_PATH`, `TIM_API_KEY`, `CSV_PATH`)
+1. CLI flags (`--csv-path`, `--output`, `--config`)
+2. Environment variables (`TRIPIT_ICAL_URL`, `FLIGHTY_CSV_PATH`, `TIM_API_KEY`, `CSV_PATH`,
+   `RAW_LOG`, `RAW_PATH`, `EMISSIONS_PROVIDER`, `PASSPORT_OUTPUT`)
 3. `config.json` or `config.yaml` in the current directory
 4. Built-in defaults
 
@@ -158,24 +159,34 @@ cp config.example.json config.json      # no extra dependencies
 cp config.example.yaml config.yaml      # commented; needs pip install "contrails[yaml]"
 ```
 
-Both are gitignored once renamed. A config file also lets you run several sources in one sync:
+Both are gitignored once renamed. A config file also lets you run several importers in one sync.
+It has one section per package under `src/contrail`, and a section that names a protocol seam
+carries the `type` a registry resolves:
 
 ```json
 {
-  "csv_path": "flight_emissions.csv",
-  "sources": [
+  "importers": [
     { "type": "tripit_ical", "url": "https://www.tripit.com/feed/ical/private/.../tripit.ics" },
     { "type": "flighty_csv", "path": "flighty/" }
   ],
-  "emissions": { "provider": "tim", "api_key": "..." }
+  "emissions": { "type": "tim", "api_key": "..." },
+  "storage": {
+    "flights": { "type": "local_csv", "path": "flight_emissions.csv" },
+    "raw_log": { "type": "jsonl", "enabled": true }
+  },
+  "passport": { "output_path": "passport.html" }
 }
 ```
 
 `config.yaml` works identically but needs PyYAML: `pip install "contrails[yaml]"`.
 
-Each entry in `sources` is passed to its importer as-is, so importers are free to define whatever
-shape they need (a URL, OAuth credentials, a file path) without the schema having to anticipate
-it.
+Each entry in `importers` is passed to its importer as-is, so importers are free to define
+whatever shape they need (a URL, OAuth credentials, a file path) without the schema having to
+anticipate it. Only `type` is reserved.
+
+Files written for 0.4.x still work: `sources`, `csv_path`, `raw_log`, `raw_path` and
+`emissions.provider` are all still read, and each names its replacement once on stderr. They are
+removed at 1.0. [docs/config.md](docs/config.md) is the full reference.
 
 **Never commit `config.json`.** It's in this repo's `.gitignore` for that reason.
 
@@ -380,7 +391,7 @@ gone permanently. The sidecar is append-only and records an answer only when it
 differs from the last one for that flight, so it accumulates the history of what
 changed rather than a copy per run.
 
-Both are top-level config keys: `"raw_log": false` switches it off, `"raw_path"` moves
+Both live under `storage.raw_log`: `"enabled": false` switches it off, `"path"` moves
 it. (`RAW_LOG` and `RAW_PATH` work as environment variables too.)
 
 ### Codeshares

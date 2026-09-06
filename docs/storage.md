@@ -69,4 +69,8 @@ the `Storage` protocol, so a future S3/GCS backend inherits the sort-and-derive
 invariants for free. The protocol itself is deliberately two methods.
 
 The raw log (`storage/raw_log.py`) is kept off that protocol: `Storage` is about
-rows, and the CLI drives both.
+rows, and the CLI drives both. It has a registry of its own (`RAW_LOGS`) rather
+than a row in `STORAGES`, so a config cannot name one where the other belongs.
+The config file groups them anyway, under `storage.flights` and
+`storage.raw_log`, because that is where someone looks for "where does contrail
+write" — see [config.md](config.md).

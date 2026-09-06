@@ -1,13 +1,31 @@
 {
-  "csv_path": "flight_emissions.csv",
-  "sources": [
+  "importers": [
     {
       "type": "tripit_ical",
-      "url": "https://www.tripit.com/feed/ical/private/YOUR-FEED-ID/tripit.ics"
+      "url": "https://www.tripit.com/feed/ical/private/YOUR-FEED-ID/tripit.ics",
+      "airline_lookup": true
+    },
+    {
+      "type": "flighty_csv",
+      "path": "flighty/",
+      "airline_lookup": true
     }
   ],
   "emissions": {
-    "provider": "tim",
+    "type": "tim",
     "api_key": "YOUR-GOOGLE-CLOUD-API-KEY"
+  },
+  "storage": {
+    "flights": {
+      "type": "local_csv",
+      "path": "flight_emissions.csv"
+    },
+    "raw_log": {
+      "type": "jsonl",
+      "enabled": true
+    }
+  },
+  "passport": {
+    "output_path": "passport.html"
   }
 }
