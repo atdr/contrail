@@ -34,11 +34,19 @@ FEED_FIELDS = (
     "destination",
 )
 
+# Feed fields a *silent* source doesn't get to blank. Arrival is the one a feed
+# may legitimately omit — an iCal VEVENT need not carry a DTEND — and `backfill`
+# may have filled it from a second source that does state one. Reading that
+# silence as a correction would wipe the value on one sync and refill it on the
+# next. A *stated* arrival still corrects a stored one, because pinning it while
+# `departure_time` moves is how a reschedule ends up with a departure and an
+# arrival that describe no single flight.
+OPTIONAL_FEED_FIELDS = ("arrival_time",)
+
 # Fields a source may *fill in* but never overwrite. A stored value may be a
 # source fact or a hand edit, and either way replacing it would be loss rather
-# than a safe correction. Arrival joins the source-specific descriptive fields
-# because filling a blank changes no pricing or flight identity.
-BACKFILL_FIELDS = ("arrival_time", "cabin_class_known", "aircraft_type", "flight_reason")
+# than a safe correction.
+BACKFILL_FIELDS = ("cabin_class_known", "aircraft_type", "flight_reason")
 
 # What makes two entries the same flight, whichever source found them.
 #
@@ -135,6 +143,21 @@ def feed_view(flight: FlightRecord) -> dict:
     }
 
 
+def stated(view: dict, field: str) -> bool:
+    """Whether the feed said anything about a field it is allowed to omit."""
+    return bool(view[field]) or field not in OPTIONAL_FEED_FIELDS
+
+
+def corrections(view: dict) -> dict:
+    """The feed values that replace what a stored row holds.
+
+    Everything :func:`differences` reports, and nothing it doesn't: a field the
+    two disagree about must be a field the merge then settles, or the row is
+    reported changed on every sync from here to departure and never converges.
+    """
+    return {field: view[field] for field in FEED_FIELDS if stated(view, field)}
+
+
 def differences(row: dict, flight: FlightRecord) -> list[str]:
     """Fields where the feed now disagrees with the stored row.
 
@@ -144,10 +167,16 @@ def differences(row: dict, flight: FlightRecord) -> list[str]:
     one, on the grounds that a rebooked flight is a different flight. Applied to
     a whole file at once that would quietly downgrade every exact figure still
     open, then freeze it that way at departure.
+
+    A feed saying nothing about an optional field is not disagreement either,
+    for the same reason: silence is not a correction, so it cannot be one here
+    and be ignored by the merge.
     """
     view = feed_view(flight)
     return [
-        field for field in FEED_FIELDS if field in row and (row.get(field) or "") != view[field]
+        field
+        for field in FEED_FIELDS
+        if field in row and stated(view, field) and (row.get(field) or "") != view[field]
     ]
 
 

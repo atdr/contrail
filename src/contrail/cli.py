@@ -380,15 +380,21 @@ def _merge_row(row: dict, flight: FlightRecord, result, now_iso: str, changed: b
     """Fold a fresh reading of an upcoming flight into the row already stored.
 
     Two things survive regardless of what the feed says. The back-fill fields
-    (arrival, cabin, aircraft, reason) are only ever filled in, never replaced:
-    a stored value may be a hand edit or a source fact, and either way it is the
-    only copy. And a worse emissions figure is refused on an unchanged flight,
-    so a transient TIM miss can't downgrade a good number. If the flight's
-    details changed, it is a different flight and whatever comes back is the
-    truth.
+    (cabin, aircraft, reason) are only ever filled in, never replaced: a stored
+    value may be a hand edit or a source fact, and either way it is the only
+    copy. And a worse emissions figure is refused on an unchanged flight, so a
+    transient TIM miss can't downgrade a good number. If the flight's details
+    changed, it is a different flight and whatever comes back is the truth.
+
+    Arrival is neither, and `resync.corrections` is what makes it neither: the
+    feed corrects it like any other scheduling fact, but a feed that states none
+    leaves the stored one alone. Filling it in here as well as correcting it
+    would pin it to the first value seen — `differences` would report the same
+    disagreement on every sync forever, and each of those runs would count as a
+    changed flight, which is exactly what lets a worse figure replace a better.
     """
     fresh = _flight_row(flight, result, now_iso)
-    merged = {**row, **{field: fresh[field] for field in resync.FEED_FIELDS}}
+    merged = {**row, **resync.corrections(fresh)}
     # Cancellation is the source's to state, and its absence from a feed is the
     # only other way a row gets marked. Present and not called off means open.
     merged["status"] = STATUS_CANCELLED if flight.cancelled else ""

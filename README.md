@@ -212,8 +212,10 @@ it.
 **A flight that hasn't departed is contrail's to correct. One that has is left
 alone.** Concretely, while `flight_date` is today or later:
 
-- Its date, route and flight numbers are updated if TripIt now says something
-  different — a retimed flight, or a destination changed on the same booking.
+- Its date, route, times and flight numbers are updated if TripIt now says
+  something different — a retimed flight, or a destination changed on the same
+  booking. A source that states no `arrival_time` leaves the stored one alone
+  rather than blanking it, since it may have come from a source that does.
 - It is **re-priced on every run**, even if it already has an `exact` figure.
   That figure depends on the aircraft, and short-haul equipment changes right up
   to departure (A319/A320/A321, ceo against neo), so a number from three weeks
@@ -224,9 +226,9 @@ alone.** Concretely, while `flight_date` is today or later:
   mistaken cancellation would otherwise destroy them permanently. Only
   `emissions_kg_actual` is cleared, which is what drops it out of any total. If
   it reappears, it is restored automatically.
-- `arrival_time`, `cabin_class_known`, `aircraft_type` and `flight_reason` are
-  filled in when blank and never overwritten. A stored value is either your own
-  edit or a source fact, so replacing it would risk losing the only copy.
+- `cabin_class_known`, `aircraft_type` and `flight_reason` are filled in when
+  blank and never overwritten. A stored value is either your own edit or the one
+  source that reports it, so it is the only copy.
 
 From the day after departure a row is frozen, and only your own edits change it
 — with one exception. If a _second_ source turns out to know a flight already in

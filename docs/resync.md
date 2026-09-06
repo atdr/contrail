@@ -24,13 +24,18 @@ tomorrow, so a flight departing that evening would freeze before it left.
 
 ## While a flight is open
 
-- Date, route and flight numbers are corrected from the feed.
+- Date, route, times and flight numbers are corrected from the feed. Arrival is
+  the one field a feed may say nothing about — an iCal `VEVENT` need not carry a
+  `DTEND` — and silence is not a correction, so a stored arrival survives a feed
+  that omits one. A _stated_ arrival does replace it: leaving it fill-only pins
+  it while `departure_time` moves, and a rescheduled flight would end up with
+  two endpoints that describe no single flight.
 - It is re-priced on every run — see [emissions.md](emissions.md) for why even an
   `exact` figure is worth re-asking.
-- `arrival_time`, `cabin_class_known`, `aircraft_type` and `flight_reason` are
-  only ever filled in, never overwritten. A stored value is either a hand edit
-  or a source fact, and replacing it could lose the only copy; a warning names
-  the row when a re-synced flight had a cabin set.
+- `cabin_class_known`, `aircraft_type` and `flight_reason` are only ever filled
+  in, never overwritten. A stored value is either a hand edit or the one source
+  that reports it, and in both cases it is the only copy; a warning names the row
+  when a re-synced flight had a cabin set.
 - Disappearing from the feed marks it `cancelled` rather than deleting it. The
   per-cabin figures stay because TIM will never price a past flight again; only
   `emissions_kg_actual` is cleared, which is the single point that drops it out
