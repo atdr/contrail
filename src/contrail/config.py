@@ -237,11 +237,15 @@ def _entries(value, name: str, source: str) -> list[dict]:
             f"impossible to write down:\n"
             f'  {{"{name}": [{{"type": "tripit_ical", "url": "https://..."}}]}}'
         )
-    for entry in value:
+    for position, entry in enumerate(value, start=1):
         if not isinstance(entry, dict):
+            # The position and the type, never the value. The likely way to get
+            # here is writing the feed URL as a bare list item, and that URL is
+            # a credential: anyone holding it can read the itineraries. The bug
+            # report template asks people to paste what contrail printed.
             raise ConfigError(
-                f"{source}: every '{name}' entry must be a mapping carrying a "
-                f"'type', not a {type(entry).__name__}: {entry!r}"
+                f"{source}: '{name}' entry {position} must be a mapping carrying "
+                f"a 'type', not a {type(entry).__name__}."
             )
     # Copied, because `_env_source` updates an entry in place and the file data
     # is still read afterwards by the 0.4.x block.
@@ -491,15 +495,21 @@ def _check_keys(file_data: dict, storage: dict, passport: dict, source: str) -> 
     the section where a typo is most likely and least visible: the flag is
     spelled `--output`, so `output:` is the natural thing to write, and the
     dashboard would land at the default path in silence.
-    """
-    for key in file_data:
-        if key not in SECTIONS and key not in SUPERSEDED_KEYS:
-            warn(f"{source}: '{key}' is not a section contrail reads. Ignoring it.")
 
-    for key in passport:
-        if key not in PASSPORT_KEYS:
+    Only ever a key's name, never its value: `emissions.api_key` and a TripIt
+    feed URL both live in this file, and an advisory is the kind of line people
+    paste into a bug report. `name` rather than `key` as the loop variable for
+    the same reason at one remove: CodeQL reads an identifier called `key` as a
+    credential, and the flow from one into `warn` as leaking it.
+    """
+    for name in file_data:
+        if name not in SECTIONS and name not in SUPERSEDED_KEYS:
+            warn(f"{source}: '{name}' is not a section contrail reads. Ignoring it.")
+
+    for name in passport:
+        if name not in PASSPORT_KEYS:
             warn(
-                f"{source}: 'passport.{key}' is not a key contrail reads. "
+                f"{source}: 'passport.{name}' is not a key contrail reads. "
                 f"Ignoring it. Expected: {', '.join(PASSPORT_KEYS)}."
             )
 

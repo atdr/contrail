@@ -249,10 +249,18 @@ def test_importers_as_a_mapping_is_a_configuration_error(tmp_path):
 
 
 def test_an_importer_entry_that_is_not_a_mapping_is_a_configuration_error(tmp_path):
-    write_config(tmp_path, {"importers": ["tripit_ical"]})
+    """Reported by position and type, never by value. The likely way to write a
+    bare entry is to paste the feed URL as one, and that URL is a credential:
+    anyone holding it can read the itineraries. The bug report template asks
+    people to paste what contrail printed, so an echoed value travels."""
+    secret = "https://www.tripit.com/feed/ical/private/NOT-A-REAL-FEED-ID/tripit.ics"
+    write_config(tmp_path, {"importers": [secret]})
 
-    with pytest.raises(ConfigError, match="entry must be a mapping"):
+    with pytest.raises(ConfigError, match="'importers' entry 1 must be a mapping") as caught:
         load_config(env={}, directory=str(tmp_path))
+
+    assert secret not in str(caught.value)
+    assert "NOT-A-REAL-FEED-ID" not in str(caught.value)
 
 
 def test_an_unknown_passport_key_is_named_rather_than_ignored_in_silence(tmp_path, capsys):
