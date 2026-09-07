@@ -174,7 +174,9 @@ class LocalCSVStorage:
         fd, tmp_path = tempfile.mkstemp(dir=parent, prefix=".contrail-", suffix=".csv")
         try:
             with os.fdopen(fd, "w", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+                writer = csv.DictWriter(
+                    f, fieldnames=fieldnames, extrasaction="ignore", lineterminator="\n"
+                )
                 writer.writeheader()
                 for row in rows:
                     writer.writerow({field: row.get(field, "") for field in fieldnames})
