@@ -11,15 +11,22 @@ Two things a YAML linter can't catch, because the YAML is valid either way:
 - The "Sources configured" checkboxes in bug_report.yml are typed out by hand,
   so they silently stop matching the importer registry the day a new importer
   is added.
+- The "Command run" dropdown is typed out by hand too, and drifted the same
+  way: it went on offering `sources` after the command was renamed to
+  `importers`, and never gained `passport`. A reporter then cannot say which
+  command they ran, and the form teaches a word `--help` deliberately stopped
+  advertising.
 """
 
 from __future__ import annotations
 
+import argparse
 import re
 from pathlib import Path
 
 import yaml
 
+from contrail.cli import build_parser
 from contrail.importers import IMPORTERS
 
 TEMPLATE_DIR = Path(__file__).parent.parent / ".github" / "ISSUE_TEMPLATE"
@@ -72,3 +79,53 @@ def test_sources_checkboxes_match_the_importer_registry():
         "bug_report.yml's 'Sources configured' checkboxes have drifted from the "
         "importer registry in contrail.importers.IMPORTERS"
     )
+
+
+def _subcommands() -> tuple[set[str], set[str]]:
+    """The CLI's subcommands, split into what `--help` lists and what it hides.
+
+    Read off the parser rather than restated here, or this guard becomes one
+    more hand-typed list to drift. `_choices_actions` holds exactly the rows
+    argparse prints, so it is the set a reporter can actually see, while
+    `choices` also holds the aliases kept working but deliberately unlisted.
+    """
+    action = next(a for a in build_parser()._actions if isinstance(a, argparse._SubParsersAction))
+    visible = {choice.dest for choice in action._choices_actions}
+    return visible, set(action.choices) - visible
+
+
+def _dropdown_options() -> list[str]:
+    form = yaml.safe_load((TEMPLATE_DIR / "bug_report.yml").read_text())
+    field = next(item for item in form["body"] if item.get("id") == "command")
+    return field["attributes"]["options"]
+
+
+def test_the_command_dropdown_offers_every_visible_subcommand():
+    """One option per command, plus flag variants of them. A reporter who ran a
+    command the form does not list has nowhere to say so, and the field is
+    required."""
+    visible, _ = _subcommands()
+    offered = {option.split()[0] for option in _dropdown_options()}
+
+    assert offered == visible, (
+        "bug_report.yml's 'Command run' dropdown has drifted from the "
+        "subcommands contrail.cli.build_parser() puts in --help"
+    )
+
+
+def test_the_command_dropdown_does_not_offer_a_hidden_alias():
+    """`sources` still works and is deliberately absent from `--help`, so the
+    form must not be the place that goes on teaching it."""
+    _, hidden = _subcommands()
+    offered = {option.split()[0] for option in _dropdown_options()}
+
+    assert hidden, "no hidden alias to check: this guard is asserting nothing"
+    assert not offered & hidden, f"bug_report.yml offers a hidden alias: {offered & hidden}"
+
+
+def test_every_dropdown_option_is_a_command_the_parser_accepts():
+    """Including the flags: an option reading `sync --dry-runn` would look
+    right in review and send every reporter to a typo."""
+    parser = build_parser()
+    for option in _dropdown_options():
+        parser.parse_args(option.split())
