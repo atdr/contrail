@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/atdr/contrail/compare/v0.5.0...v0.5.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **storage:** write flight_emissions.csv rows with LF endings ([#50](https://github.com/atdr/contrail/issues/50)) ([9f7ebc9](https://github.com/atdr/contrail/commit/9f7ebc9f2a52da4205157f37f2c7eb5e6e873a67))
+
 ## [0.5.0](https://github.com/atdr/contrail/compare/v0.4.1...v0.5.0) (2026-09-07)
 
 
