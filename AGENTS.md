@@ -59,11 +59,12 @@ Two keys, and the difference matters:
   the filename, so `pr-title / conventional title` names both the file to open
   and what it did. A matrix job's `name:` has to interpolate the matrix value
   (`pytest ${{ matrix.python-version }}`) or all three legs produce checks
-  called the same thing. `atdr/contrail-gh` enforces this in CI; here it is
-  convention. The `Analyze (python)` and `Analyze (actions)` checks are the
-  exception and always will be: CodeQL runs from default setup, which is a repo
-  setting rather than a file, so its name and its timeout are GitHub's to
-  choose.
+  called the same thing. `tests/test_workflow_naming.py` enforces this, the
+  same guard `atdr/contrail-gh#7` added as a shell step in CI there because
+  that repo has no test suite to hold it instead. The `Analyze (python)` and
+  `Analyze (actions)` checks are the exception and always will be: CodeQL runs
+  from default setup, which is a repo setting rather than a file, so its name
+  and its timeout are GitHub's to choose.
 - **Every job that can carry `timeout-minutes` sets one.** GitHub's default is
   six hours, and the failure that matters is a stall rather than an error: a
   `pip` or `npx` fetch that hangs never fails on its own. Ten minutes
