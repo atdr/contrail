@@ -78,15 +78,25 @@ Regenerating `contrail-surface.json`, from the same checkout:
 import json, re, subprocess
 from contrail.emissions import PROVIDERS
 from contrail.importers import IMPORTERS
-from contrail.storage import CSV_FIELDS, RAW_LOGS, STORAGES
+from contrail.storage import CSV_FIELDS
+
+def optional_import(module, name):
+    # None means the pin predates this registry, not an error — see
+    # surface-check.yml, which reads the result the same way.
+    try:
+        mod = __import__(module, fromlist=[name])
+        return sorted(getattr(mod, name))
+    except (ImportError, AttributeError):
+        return None
+
 help_text = subprocess.run(["./venv/bin/contrail", "--help"], capture_output=True, text=True).stdout
 subcommands = sorted(re.search(r"\{([\w,-]+)\}", help_text).group(1).split(","))
 print(json.dumps({
     "csv_fields": list(CSV_FIELDS),
     "importers": sorted(IMPORTERS),
     "providers": sorted(PROVIDERS),
-    "storages": sorted(STORAGES),
-    "raw_logs": sorted(RAW_LOGS),
+    "storages": optional_import("contrail.storage", "STORAGES"),
+    "raw_logs": optional_import("contrail.storage", "RAW_LOGS"),
     "subcommands": subcommands,
 }, indent=2, sort_keys=True))
 ' > ../contrail-gh/contrail-surface.json
