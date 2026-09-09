@@ -531,6 +531,7 @@ changelog are handled by release-please.
 MIT — see [LICENSE](LICENSE).
 
 <!-- This file is wrapped at 100, not the 80 the rest of the repo uses. -->
+
 <!-- markdownlint-configure-file {
   "MD013": { "line_length": 100, "tables": false, "code_blocks": false }
 } -->
