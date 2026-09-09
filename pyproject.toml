@@ -46,6 +46,25 @@ dev = [
     # tools. Optional to use — CI is still the gate — but declared here so
     # `pip install -e ".[dev]"` leaves nothing to install by hand.
     "pre-commit>=4.6.2",
+    # Formats Markdown; markdownlint-cli2 checks what it cannot express. Both
+    # `docs` in ci.yml and the pre-commit hook run 3.13, because .mdformat.toml
+    # sets `exclude` and that key errors below it — see the comment there.
+    #
+    # Never add an mdformat *codeformatter* plugin (mdformat-black and the
+    # like). mdformat enables every installed one by default, which would
+    # reformat the code inside fences — worked examples and commands people
+    # paste, not source to tidy. Prettier needed embeddedLanguageFormatting
+    # off for the same reason.
+    "mdformat>=1.0.0",
+    # Tables. Core CommonMark has none, so without this every padded table is
+    # reflowed into unpadded pipes.
+    "mdformat-gfm>=1.0.0",
+    # YAML frontmatter. mdformat does not recognise it otherwise and rewrites
+    # the block into a horizontal rule and a heading — it did exactly that to a
+    # skill file in contrail-gh. Nothing tracked here carries frontmatter
+    # today, which is why this is a guard rather than a fix: the failure is
+    # silent, and the first .md that needs it would not announce itself.
+    "mdformat-frontmatter>=2.1.2",
     # Self-reference rather than repeating the pyyaml floor: declared once, so
     # the two can't drift, and Dependabot sees pyyaml for what it is — a runtime
     # dependency of the `yaml` extra, not a dev tool.

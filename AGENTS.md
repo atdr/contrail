@@ -7,7 +7,7 @@ Model, writes a CSV.
 ## Commands
 
 ```bash
-python3.12 -m venv venv && ./venv/bin/pip install -e ".[dev]"
+python3.13 -m venv venv && ./venv/bin/pip install -e ".[dev]"
 ./venv/bin/pytest -q
 ./venv/bin/ruff check . && ./venv/bin/ruff format .
 TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics \
@@ -15,8 +15,11 @@ TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics \
 ./venv/bin/python scripts/refresh_airline_codes.py   # needs network; run by hand
 ```
 
-Python 3.11+. The default `python3` on this machine is
-3.7 — use `/usr/local/bin/python3.12` explicitly.
+Python 3.11+ to run, 3.13 to develop: `.mdformat.toml` sets `exclude`, which
+errors below 3.13, so a 3.12 venv would put an `mdformat` on `PATH` that cannot
+read its own config. The published floor is unchanged and the matrix still
+tests 3.11. The default `python3` on this machine is 3.7 — use
+`/usr/local/bin/python3.13` explicitly.
 
 ## Architecture
 
@@ -71,11 +74,12 @@ Two keys, and the difference matters:
   everywhere except `pr-title.yml`, which gets five. A job whose only key is
   `uses:` cannot carry it, which is why the setting lives inside a reusable
   workflow rather than on its callers.
-- **Markdown is formatted, not hand-aligned.** Prettier owns table padding and
+- **Markdown is formatted, not hand-aligned.** mdformat owns table padding and
   whitespace; markdownlint-cli2 owns line length and the rest. Run
-  `npx prettier@3.9.6 --write "**/*.md"` rather than lining a table up by
-  hand. Prose wraps at 80, except `README.md`, which wraps at 100 and says so
-  in a `markdownlint-configure-file` comment at its foot.
+  `./venv/bin/mdformat .` rather than lining a table up by hand. Prose wraps at
+  80, except `README.md`, which wraps at 100 and says so in a
+  `markdownlint-configure-file` comment at its foot — a per-file override only
+  markdownlint honours, and one reason it is still here.
 - This repo is public. Never commit a real CSV, a raw log, or `config.json` —
   all are gitignored.
 - **When updating docs at the end of a change, skim the open issues**
@@ -150,17 +154,17 @@ Two keys, and the difference matters:
   drifted before. A _new_ literal version anywhere else is a bug: import
   `__version__` in code, or wire the file into `extra-files` if it's not code.
 - **release-please needs the repo setting "Allow GitHub Actions to create and
-  approve pull requests"** (Settings → Actions → General). `permissions:
-pull-requests: write` in the workflow is _not_ sufficient on its own, and the
-  API can report the flag as enabled while it is still blocked. Without it the
-  release job fails with "GitHub Actions is not permitted to create or approve
-  pull requests".
+  approve pull requests"** (Settings → Actions → General). Granting
+  `pull-requests: write` in the workflow is _not_ sufficient on its own, and
+  the API can report the flag as enabled while it is still blocked. Without it
+  the release job fails with "GitHub Actions is not permitted to create or
+  approve pull requests".
 - **`CHANGELOG.md` and `CLAUDE.md` are excluded from both Markdown tools.**
   release-please regenerates the changelog from commit subjects, so a
   reformat there is undone on the next release and can desync the manifest;
   `CLAUDE.md` is a symlink to `AGENTS.md`, so linting it reports every line
   twice and formatting it writes the same file twice. Both are named in
-  `.markdownlint-cli2.yaml` and `.prettierignore`.
+  `.markdownlint-cli2.yaml` and `.mdformat.toml`.
 - **`cli._now()` exists to be monkeypatched.** Tests that use the real clock rot
   once the fixture's dates fall into the past.
 - **`src/contrail/data/airline_codes.csv` is generated, never hand-edited.** Fix

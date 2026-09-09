@@ -31,9 +31,22 @@ repos:
         # them twice.
         pass_filenames: false
 
-  # The maintained fork; pre-commit/mirrors-prettier is archived.
-  - repo: https://github.com/rbubley/mirrors-prettier
-    rev: v3.9.6
+  - repo: https://github.com/hukkin/mdformat
+    rev: 1.0.0
     hooks:
-      - id: prettier
-        types_or: [markdown]
+      - id: mdformat
+        # Both are extensions, not core CommonMark. Without mdformat-gfm every
+        # padded table in the repo is reflowed into unpadded pipes; without
+        # mdformat-frontmatter a YAML block at the top of a file is rewritten
+        # into a horizontal rule and a heading. Keep in step with the floors in
+        # pyproject.toml, which explain them.
+        additional_dependencies:
+          - mdformat-gfm==1.0.0
+          - mdformat-frontmatter==2.1.2
+        # .mdformat.toml sets `exclude`, which errors below 3.13. Pinning the
+        # hook's own env means that holds whatever the developer's default
+        # interpreter is.
+        language_version: python3.13
+        # No `exclude:` here on purpose. .mdformat.toml owns that list, and it
+        # applies to the paths pre-commit passes as well as to a directory
+        # walk, so a second copy here could only drift from it.

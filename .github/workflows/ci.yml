@@ -57,23 +57,28 @@ jobs:
 
   docs:
     name: markdown
-    # `npx` fetches Prettier from the registry on every run, and a stalled
-    # fetch hangs rather than failing. The same line in atdr/contrail-gh has
-    # sat silent for exactly 301 seconds, npm's fetch-timeout expiring and the
-    # retry succeeding, in a job that takes twelve seconds when the fetch is
-    # clean. Ten minutes bounds a stall that never recovers.
+    # Ten minutes against a job that takes seconds. The point is a `pip` fetch
+    # that stalls rather than fails, which would otherwise sit until GitHub's
+    # six-hour default.
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # An action rather than `npx`, so the github-actions dependabot ecosystem
-      # already configured for this repo keeps it current. Prettier has no
-      # first-party action, so its pin below is a hand edit — the same deal as
-      # the `rev:` pins in .pre-commit-config.yaml.
+      # A JavaScript action, so GitHub runs it on the runner's own Node: no
+      # toolchain to install, nothing fetched from a registry, and the
+      # github-actions dependabot ecosystem already configured for this repo
+      # keeps the pin current. That is why there is no setup-node step here.
       - uses: DavidAnson/markdownlint-cli2-action@v24
-      - uses: actions/setup-node@v7
+      # 3.13 rather than the 3.12 the other jobs use, and not an oversight:
+      # .mdformat.toml sets `exclude`, which errors below 3.13. It says why.
+      - uses: actions/setup-python@v7
         with:
-          node-version: "24"
-      # Prettier owns table alignment and whitespace; markdownlint owns the
-      # rules it can't express. Neither is redundant.
-      - run: npx prettier@3.9.6 --check "**/*.md"
+          python-version: "3.13"
+      # mdformat's pin lives in pyproject.toml's dev extra, where the pip
+      # dependabot ecosystem bumps it. Prettier's had to be a hand edit in this
+      # file, because it has no first-party action and `npx` fetched it fresh
+      # on every run — a fetch that sat silent for exactly 301 seconds often
+      # enough to dominate a job that otherwise takes twelve.
+      - run: pip install -e ".[dev]"
+      # No filter: .mdformat.toml's `exclude` covers CHANGELOG.md and the rest.
+      - run: mdformat --check .
