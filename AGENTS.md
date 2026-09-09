@@ -7,7 +7,7 @@ Model, writes a CSV.
 ## Commands
 
 ```bash
-python3.12 -m venv venv && ./venv/bin/pip install -e ".[dev]"
+python3.13 -m venv venv && ./venv/bin/pip install -e ".[dev]"
 ./venv/bin/pytest -q
 ./venv/bin/ruff check . && ./venv/bin/ruff format .
 TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics \
@@ -15,8 +15,11 @@ TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics \
 ./venv/bin/python scripts/refresh_airline_codes.py   # needs network; run by hand
 ```
 
-Python 3.11+. The default `python3` on this machine is
-3.7 — use `/usr/local/bin/python3.12` explicitly.
+Python 3.11+ to run, 3.13 to develop: `.mdformat.toml` sets `exclude`, which
+errors below 3.13, so a 3.12 venv would put an `mdformat` on `PATH` that cannot
+read its own config. The published floor is unchanged and the matrix still
+tests 3.11. The default `python3` on this machine is 3.7 — use
+`/usr/local/bin/python3.13` explicitly.
 
 ## Architecture
 
@@ -49,11 +52,14 @@ Two keys, and the difference matters:
 
 - Conventional commits. release-please owns versions, tags and `CHANGELOG.md` —
   never hand-edit the changelog or the version in `pyproject.toml`.
+
 - `__version__` is read from installed package metadata, so `pyproject.toml` is
   the single source of truth. Code that needs the version imports `__version__`
   rather than spelling it out — see the gotcha on version pins for the two
   literals that remain.
+
 - **No test may make a real network call.** Mock `requests` in both directions.
+
 - **Every workflow is named after its own file**, and the description goes on
   the job. GitHub labels a check `<workflow name> / <job name>` and never shows
   the filename, so `pr-title / conventional title` names both the file to open
@@ -65,19 +71,24 @@ Two keys, and the difference matters:
   `Analyze (actions)` checks are the exception and always will be: CodeQL runs
   from default setup, which is a repo setting rather than a file, so its name
   and its timeout are GitHub's to choose.
+
 - **Every job that can carry `timeout-minutes` sets one.** GitHub's default is
   six hours, and the failure that matters is a stall rather than an error: a
   `pip` or `npx` fetch that hangs never fails on its own. Ten minutes
   everywhere except `pr-title.yml`, which gets five. A job whose only key is
   `uses:` cannot carry it, which is why the setting lives inside a reusable
   workflow rather than on its callers.
-- **Markdown is formatted, not hand-aligned.** Prettier owns table padding and
+
+- **Markdown is formatted, not hand-aligned.** mdformat owns table padding and
   whitespace; markdownlint-cli2 owns line length and the rest. Run
-  `npx prettier@3.9.6 --write "**/*.md"` rather than lining a table up by
-  hand. Prose wraps at 80, except `README.md`, which wraps at 100 and says so
-  in a `markdownlint-configure-file` comment at its foot.
+  `./venv/bin/mdformat .` rather than lining a table up by hand. Prose wraps at
+  80, except `README.md`, which wraps at 100 and says so in a
+  `markdownlint-configure-file` comment at its foot — a per-file override only
+  markdownlint honours, and one reason it is still here.
+
 - This repo is public. Never commit a real CSV, a raw log, or `config.json` —
   all are gitignored.
+
 - **When updating docs at the end of a change, skim the open issues**
   (`gh issue list`) for any the change touched. Cheap, and it catches both
   directions: an issue quietly fixed, and one made easier to hit.
@@ -150,17 +161,17 @@ Two keys, and the difference matters:
   drifted before. A _new_ literal version anywhere else is a bug: import
   `__version__` in code, or wire the file into `extra-files` if it's not code.
 - **release-please needs the repo setting "Allow GitHub Actions to create and
-  approve pull requests"** (Settings → Actions → General). `permissions:
-pull-requests: write` in the workflow is _not_ sufficient on its own, and the
-  API can report the flag as enabled while it is still blocked. Without it the
-  release job fails with "GitHub Actions is not permitted to create or approve
-  pull requests".
+  approve pull requests"** (Settings → Actions → General). Granting
+  `pull-requests: write` in the workflow is _not_ sufficient on its own, and
+  the API can report the flag as enabled while it is still blocked. Without it
+  the release job fails with "GitHub Actions is not permitted to create or
+  approve pull requests".
 - **`CHANGELOG.md` and `CLAUDE.md` are excluded from both Markdown tools.**
   release-please regenerates the changelog from commit subjects, so a
   reformat there is undone on the next release and can desync the manifest;
   `CLAUDE.md` is a symlink to `AGENTS.md`, so linting it reports every line
   twice and formatting it writes the same file twice. Both are named in
-  `.markdownlint-cli2.yaml` and `.prettierignore`.
+  `.markdownlint-cli2.yaml` and `.mdformat.toml`.
 - **`cli._now()` exists to be monkeypatched.** Tests that use the real clock rot
   once the fixture's dates fall into the past.
 - **`src/contrail/data/airline_codes.csv` is generated, never hand-edited.** Fix

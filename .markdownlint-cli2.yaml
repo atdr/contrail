@@ -1,12 +1,13 @@
-# Prettier owns whitespace and table alignment. These are the rules it cannot
+# mdformat owns whitespace and table alignment. These are the rules it cannot
 # express. Kept in step by hand across contrail, contrail-gh and any instance
-# created from it — the three files are copies, not a shared package.
+# created from it — the files are copies, not a shared package.
 #
-# .prettierrc.json carries two settings and no room to explain them:
-# `proseWrap: preserve`, because the prose here is wrapped by hand at
-# deliberate points and `always` would rewrap every paragraph in the repo; and
-# `embeddedLanguageFormatting: off`, because the code inside a fence is a
-# worked example or a command someone will paste, not source to be tidied.
+# .mdformat.toml carries the formatter's settings and the shared ignore list,
+# and explains both. Two things it does not have to say, because mdformat's
+# defaults already do what this repo wants: prose is never rewrapped (`wrap`
+# defaults to keep, and the prose here is wrapped by hand at deliberate
+# points), and the code inside a fence is left alone unless a codeformatter
+# plugin is installed, which is why pyproject.toml says never to add one.
 gitignore: true
 
 # Without this, a bare `markdownlint-cli2` finds nothing and reports success.

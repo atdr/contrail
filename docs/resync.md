@@ -110,6 +110,7 @@ exactly. The cost of the clash is double counting, not a wrong figure.
   every stored row changed on the first sync after an upgrade — and `changed` is
   what bypasses the no-downgrade guard, which would replace a whole file of exact
   figures with route averages and then freeze them that way.
+
 - **Only a source that returned something may cancel its own rows.** With several
   sources configured, one silently empty source would otherwise cancel every
   flight it owns while the others kept a global guard happy. Granularity is the
@@ -126,6 +127,7 @@ exactly. The cost of the clash is double counting, not a wrong figure.
 
 - **A feed yielding no flights at all refuses to cancel anything** and exits
   non-zero. `--dry-run` is exempt: it can neither write nor cancel.
+
 - **The file is written only when content actually changed.** Re-pricing runs
   unconditionally, so `_merge_row` keeps the original `sync_timestamp` on a no-op
   and `cmd_sync` compares against the rows as loaded. Otherwise contrail-gh would
