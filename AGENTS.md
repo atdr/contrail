@@ -97,7 +97,8 @@ Two keys, and the difference matters:
   `pip` or `npx` fetch that hangs never fails on its own. Ten minutes
   everywhere except `pr-title.yml`, which gets five. A job whose only key is
   `uses:` cannot carry it, which is why the setting lives inside a reusable
-  workflow rather than on its callers.
+  workflow rather than on its callers, and why the guard in
+  `tests/test_workflow_naming.py` skips such a job instead of failing it.
 
 - **Markdown is formatted, not hand-aligned.** mdformat owns table padding and
   whitespace; markdownlint-cli2 owns line length and the rest. Run
