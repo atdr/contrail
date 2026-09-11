@@ -159,6 +159,18 @@ def test_a_non_numeric_flight_number_does_not_parse(importer, sample_flighty_pat
     assert items[0].partial["flight_number"] == "N/A"
 
 
+def test_an_invalid_date_falls_back_to_the_departure(importer, sample_flighty_path):
+    lines = edited(sample_flighty_path, **{"Date": "not-a-date"})
+
+    assert only_sfo(importer, lines).flight_date.isoformat() == "2019-05-17"
+
+
+def test_a_missing_flighty_id_gets_a_stable_content_id(importer, sample_flighty_path):
+    lines = edited(sample_flighty_path, **{"Flight Flighty ID": ""})
+
+    assert only_sfo(importer, lines).source_id == "row:2019-05-17-BAW-286-SFO-LHR"
+
+
 # -- identity -----------------------------------------------------------------
 
 
@@ -212,6 +224,13 @@ def test_an_empty_directory_yields_nothing(tmp_path, importer):
     error on every scheduled run."""
     assert list(importer.fetch({"path": str(tmp_path)})) == []
     assert list(export_files(str(tmp_path))) == []
+
+
+def test_fetch_can_override_airline_lookup(tmp_path, importer):
+    assert importer.resolver.lookup is False
+
+    assert list(importer.fetch({"path": str(tmp_path), "airline_lookup": True})) == []
+    assert importer.resolver.lookup is True
 
 
 def test_a_path_that_matches_nothing_warns_rather_than_failing(tmp_path, importer, capsys):
