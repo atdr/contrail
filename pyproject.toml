@@ -98,12 +98,13 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 testpaths = ["tests"]
 
 [tool.coverage.run]
-# Scoped to what ships, not to whatever the tests happened to import. Naming a
-# source directory rather than passing `--cov=` paths does two things: files
-# under `tests/` stay out of the report, and a module no test imports at all is
-# reported at 0% rather than being absent from the report entirely. That is the
-# difference between a gap you can see and one you cannot.
-source = ["src/contrail"]
+# Scoped to the package and its maintainer tooling, not to whatever the tests
+# happened to import. Naming source directories rather than passing `--cov=`
+# paths does two things: files under `tests/` stay out of the report, and a
+# module no test imports at all is reported at 0% rather than being absent from
+# the report entirely. That is the difference between a gap you can see and one
+# you cannot.
+source = ["src/contrail", "scripts"]
 branch = true
 
 [tool.coverage.report]

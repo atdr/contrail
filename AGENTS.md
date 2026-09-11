@@ -72,12 +72,13 @@ Two keys, and the difference matters:
 
   `[tool.coverage.run]` in `pyproject.toml`, not the CI command line, is what
   sets the scope, so a local `--cov` run measures what CI measures. Two
-  settings there are load-bearing. `source = ["src/contrail"]` measures what
-  ships rather than what the tests imported: it keeps `tests/` out of the
-  report, and it reports a module no test imports at all at 0% instead of
-  omitting it, which is the difference between a visible gap and an invisible
-  one. `branch = true` counts the untaken side of a condition, which is where
-  the parsing and resync code actually hides its gaps.
+  settings there are load-bearing. `source = ["src/contrail", "scripts"]`
+  measures the package and its maintainer tooling rather than what the tests
+  imported: it keeps `tests/` out of the report, and it reports a module no test
+  imports at all at 0% instead of omitting it, which is the difference between
+  a visible gap and an invisible one. `branch = true` counts the untaken side
+  of a condition, which is where the parsing and resync code actually hides its
+  gaps.
   `tests/test_coverage_config.py` guards the arrangement.
 
 - **Every workflow is named after its own file**, and the description goes on

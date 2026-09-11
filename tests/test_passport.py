@@ -10,6 +10,7 @@ from importlib.resources import files
 
 import pytest
 
+import contrail.passport as passport
 from contrail import __version__
 from contrail.passport import (
     build_data,
@@ -71,6 +72,14 @@ def test_an_airport_with_no_coordinates_has_no_distance():
     assert only([row(destination="ZZZ")])["end"] is None
 
 
+def test_an_airport_with_incomplete_coordinates_is_not_plotted(monkeypatch):
+    """One coordinate cannot place an airport or form a distance, and treating a
+    missing value as zero would draw a plausible but false route."""
+    monkeypatch.setattr(passport, "details_for", lambda _iata: {"lat": 51.5, "lon": None})
+
+    assert great_circle_km("LHR", "JFK") is None
+
+
 # -- scheduled block time -----------------------------------------------------
 
 
@@ -87,6 +96,12 @@ def test_a_naive_instant_is_not_usable():
     """Without an offset there is no telling which zone it was written in, and
     a duration off by the zone difference would look perfectly plausible."""
     assert scheduled_hours(row(arrival_time="2026-03-05T08:15:00")) is None
+
+
+def test_a_malformed_instant_is_not_usable():
+    """A hand-edited timestamp should remove the derived duration instead of
+    preventing the entire Passport from rendering."""
+    assert scheduled_hours(row(arrival_time="not-a-time")) is None
 
 
 @pytest.mark.parametrize("hours", [-2, 0, 37])

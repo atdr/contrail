@@ -6,6 +6,7 @@ resolution, and partial recovery on an unparseable event.
 """
 
 from datetime import date
+from unittest.mock import Mock
 
 import pytest
 
@@ -123,15 +124,49 @@ def test_partial_summary_is_topped_up_from_blob():
     assert (carrier, number) == ("AB", "100")
 
 
+def test_parenthesized_airport_codes_are_the_last_extraction_fallback():
+    """Some calendar prose has neither from/to wording nor a code pair, but two
+    parenthesized airport codes still preserve their source order."""
+    result = extract_flight_fields(
+        summary="AB100 itinerary",
+        description="Depart airport (LHR), arrive airport (JFK)",
+        location="",
+    )
+
+    assert result == ("AB", "100", "LHR", "JFK")
+
+
 def test_fetch_reads_a_local_path(sample_feed_path):
     """Local paths and file:// URLs work, so CI can run --dry-run without network."""
     assert fetch_ical(str(sample_feed_path)).startswith(b"BEGIN:VCALENDAR")
     assert fetch_ical(sample_feed_path.as_uri()).startswith(b"BEGIN:VCALENDAR")
 
 
+def test_fetch_reads_http_with_a_timeout(monkeypatch):
+    """Remote feeds must use the bounded request path and surface HTTP failures
+    before their response body reaches the calendar parser."""
+    response = Mock(content=b"calendar")
+    get = Mock(return_value=response)
+    monkeypatch.setattr("contrail.importers.tripit_ical.requests.get", get)
+
+    assert fetch_ical("https://example.invalid/feed.ics") == b"calendar"
+    get.assert_called_once_with("https://example.invalid/feed.ics", timeout=30)
+    response.raise_for_status.assert_called_once_with()
+
+
 def test_fetch_requires_a_url_in_config():
     with pytest.raises(ValueError, match="needs a 'url'"):
         list(TripItICalImporter().fetch({}))
+
+
+def test_fetch_can_override_airline_lookup(sample_feed_path):
+    """A source can forbid live airline resolution while still parsing its local
+    feed, which keeps scheduled and CI runs hermetic."""
+    importer = TripItICalImporter()
+
+    list(importer.fetch({"url": str(sample_feed_path), "airline_lookup": False}))
+
+    assert importer.resolver.lookup is False
 
 
 UID_LESS_FEED = b"""BEGIN:VCALENDAR
