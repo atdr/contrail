@@ -6,12 +6,15 @@ raises nothing a caller sees — it falls back to the dev version — so the fai
 is silent and only visible to someone who installed the package.
 """
 
+import runpy
 import tomllib
 from pathlib import Path
+from unittest.mock import patch
 
 from contrail import __version__
 
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
+PACKAGE_INIT = PYPROJECT.parent / "src" / "contrail" / "__init__.py"
 
 
 def project() -> dict:
@@ -36,3 +39,12 @@ def test_the_declared_version_is_what_is_installed():
     """`pyproject.toml` is the single source of truth, and release-please owns it.
     A stale editable install is the usual reason these drift apart."""
     assert __version__ == project()["version"]
+
+
+def test_a_source_tree_without_distribution_metadata_uses_the_dev_version():
+    from importlib.metadata import PackageNotFoundError
+
+    with patch("importlib.metadata.version", side_effect=PackageNotFoundError):
+        namespace = runpy.run_path(str(PACKAGE_INIT))
+
+    assert namespace["__version__"] == "0.0.0.dev0"
