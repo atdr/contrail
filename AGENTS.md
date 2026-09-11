@@ -18,9 +18,9 @@ TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics \
 
 Python 3.11+ to run, 3.13 to develop: `.mdformat.toml` sets `exclude`, which
 errors below 3.13, so a 3.12 venv would put an `mdformat` on `PATH` that cannot
-read its own config. The published floor is unchanged and the matrix still
-tests 3.11. The default `python3` on this machine is 3.7 — use
-`/usr/local/bin/python3.13` explicitly.
+read its own config. The published floor is unchanged, and the matrix tests
+every supported minor through 3.14. The default `python3` on this machine is
+3.7. Use `/usr/local/bin/python3.13` explicitly.
 
 ## Architecture
 
@@ -85,7 +85,7 @@ Two keys, and the difference matters:
   the job. GitHub labels a check `<workflow name> / <job name>` and never shows
   the filename, so `pr-title / conventional title` names both the file to open
   and what it did. A matrix job's `name:` has to interpolate the matrix value
-  (`pytest ${{ matrix.python-version }}`) or all three legs produce checks
+  (`pytest ${{ matrix.python-version }}`) or all four legs produce checks
   called the same thing. `tests/test_workflow_naming.py` enforces this, the
   same guard `atdr/contrail-gh#7` added as a shell step in CI there because
   that repo has no test suite to hold it instead. The `Analyze (python)` and
