@@ -167,10 +167,18 @@ Two keys, and the difference matters:
 - **TIM cannot be asked twice.** It won't price a departed flight, so anything not
   captured while it was upcoming is gone permanently.
 - **A runtime dependency bump must be `fix(deps):`, not `chore(deps):`.**
-  release-please hides `chore` by default and counts only `feat` and breaking
-  changes toward a bump, so a `chore(deps)` bump of a runtime dependency changes
-  what users install with nothing in the changelog and no release. Dev
+  `chore` is hidden from the changelog, and a stretch of hidden types alone
+  opens no release PR at all, so a `chore(deps)` bump of a runtime dependency
+  changes what users install with nothing in the changelog and no release. Dev
   dependencies stay `chore(deps-dev):`.
+- **`docs:` cuts a patch release, and that is accepted here.** The `python`
+  release type replaces release-please's default changelog sections with
+  google-cloud-python's, which make `docs` and `deps` visible; the shared
+  default hides `docs`, so the `node` release type would behave differently. Any
+  visible type that is not `feat` or breaking bumps a patch, so a single docs
+  commit on `main` opens a release PR. The hidden types (`chore`, `ci`, `test`,
+  `refactor`, `style`, `build`) render empty notes and are skipped, which is why
+  a run of `ci:` commits stays quiet.
 - **The two install pins in `README.md`, and the two version placeholders in
   `.github/ISSUE_TEMPLATE/bug_report.yml`, are rewritten by release-please**,
   not by hand. They sit inside `x-release-please-start-version` /
