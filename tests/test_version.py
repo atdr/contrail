@@ -42,6 +42,8 @@ def test_the_declared_version_is_what_is_installed():
 
 
 def test_a_source_tree_without_distribution_metadata_uses_the_dev_version():
+    """Importing directly from an unpacked source tree has no installed metadata,
+    but the package must remain importable for development tools."""
     from importlib.metadata import PackageNotFoundError
 
     with patch("importlib.metadata.version", side_effect=PackageNotFoundError):

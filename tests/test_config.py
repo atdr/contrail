@@ -123,6 +123,8 @@ def test_yaml_config(tmp_path):
 
 
 def test_yaml_config_explains_when_pyyaml_is_unavailable(tmp_path, monkeypatch):
+    """YAML is an optional extra, so its import failure should name the extra
+    rather than escape as an implementation-level ModuleNotFoundError."""
     path = tmp_path / "config.yaml"
     path.write_text("{}")
     real_import = builtins.__import__
@@ -138,6 +140,8 @@ def test_yaml_config_explains_when_pyyaml_is_unavailable(tmp_path, monkeypatch):
 
 
 def test_config_top_level_must_be_a_mapping(tmp_path):
+    """A syntactically valid list has no section names and should be rejected at
+    the file boundary, before later config code tries mapping operations on it."""
     path = write_config(tmp_path, [])
 
     with pytest.raises(ConfigError, match="object at the top level"):
@@ -413,6 +417,8 @@ def test_a_new_key_wins_over_the_one_it_replaced(tmp_path, capsys):
 
 
 def test_modern_importers_beat_the_legacy_tripit_url(tmp_path):
+    """Once an importer list exists, the retired flat URL must not append a
+    second source and import the same itinerary twice."""
     write_config(
         tmp_path,
         {

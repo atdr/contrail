@@ -160,12 +160,16 @@ def test_a_non_numeric_flight_number_does_not_parse(importer, sample_flighty_pat
 
 
 def test_an_invalid_date_falls_back_to_the_departure(importer, sample_flighty_path):
+    """The scheduled departure still supplies the local flight date when the
+    redundant Date column is malformed."""
     lines = edited(sample_flighty_path, **{"Date": "not-a-date"})
 
     assert only_sfo(importer, lines).flight_date.isoformat() == "2019-05-17"
 
 
 def test_a_missing_flighty_id_gets_a_stable_content_id(importer, sample_flighty_path):
+    """A row without Flighty's UUID still needs a repeatable nonempty key, or
+    separate flights mask one another and every sync imports them again."""
     lines = edited(sample_flighty_path, **{"Flight Flighty ID": ""})
 
     assert only_sfo(importer, lines).source_id == "row:2019-05-17-BAW-286-SFO-LHR"
@@ -227,6 +231,8 @@ def test_an_empty_directory_yields_nothing(tmp_path, importer):
 
 
 def test_fetch_can_override_airline_lookup(tmp_path, importer):
+    """The per-source switch must reach the resolver even when an empty export
+    directory gives the importer no rows to resolve."""
     assert importer.resolver.lookup is False
 
     assert list(importer.fetch({"path": str(tmp_path), "airline_lookup": True})) == []

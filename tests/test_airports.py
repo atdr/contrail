@@ -30,6 +30,8 @@ def test_unknown_or_missing_airports_return_none():
 
 
 def test_an_invalid_timezone_is_treated_as_unknown(monkeypatch):
+    """A stale database entry must degrade like an unknown airport, not abort
+    every import on a machine whose timezone database cannot resolve it."""
     monkeypatch.setattr(airports, "details_for", lambda _code: {"tz": "Not/A-Timezone"})
     airports._ZONES.pop("BAD", None)
 

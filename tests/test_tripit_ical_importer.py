@@ -125,6 +125,8 @@ def test_partial_summary_is_topped_up_from_blob():
 
 
 def test_parenthesized_airport_codes_are_the_last_extraction_fallback():
+    """Some calendar prose has neither from/to wording nor a code pair, but two
+    parenthesized airport codes still preserve their source order."""
     result = extract_flight_fields(
         summary="AB100 itinerary",
         description="Depart airport (LHR), arrive airport (JFK)",
@@ -141,6 +143,8 @@ def test_fetch_reads_a_local_path(sample_feed_path):
 
 
 def test_fetch_reads_http_with_a_timeout(monkeypatch):
+    """Remote feeds must use the bounded request path and surface HTTP failures
+    before their response body reaches the calendar parser."""
     response = Mock(content=b"calendar")
     get = Mock(return_value=response)
     monkeypatch.setattr("contrail.importers.tripit_ical.requests.get", get)
@@ -156,6 +160,8 @@ def test_fetch_requires_a_url_in_config():
 
 
 def test_fetch_can_override_airline_lookup(sample_feed_path):
+    """A source can forbid live airline resolution while still parsing its local
+    feed, which keeps scheduled and CI runs hermetic."""
     importer = TripItICalImporter()
 
     list(importer.fetch({"url": str(sample_feed_path), "airline_lookup": False}))

@@ -16,6 +16,7 @@ SPEC.loader.exec_module(refresh)
 
 
 def binding(item, iata, icao, name="", aliases="", dissolved=""):
+    """A compact Wikidata binding using the nested value shape its API returns."""
     values = {
         "item": item,
         "iata": iata,
@@ -28,12 +29,16 @@ def binding(item, iata, icao, name="", aliases="", dissolved=""):
 
 
 def test_normalize_and_value_match_runtime_lookup_keys():
+    """Generated names must use the same whitespace and case rules as the
+    resolver that will later read them, including absent optional bindings."""
     assert refresh.normalize("  British   AIRWAYS ") == "british airways"
     assert refresh.value({"name": {"value": "  Example Air  "}}, "name") == "Example Air"
     assert refresh.value({}, "name") == ""
 
 
 def test_fetch_uses_the_wikidata_query_contract(monkeypatch):
+    """The manual refresh identifies itself, asks for JSON, and cannot wait
+    forever on the public SPARQL endpoint."""
     response = Mock()
     response.json.return_value = {"results": {"bindings": [{"item": {"value": "one"}}]}}
     get = Mock(return_value=response)
@@ -53,6 +58,8 @@ def test_fetch_uses_the_wikidata_query_contract(monkeypatch):
 
 
 def test_build_rows_rejects_bad_and_ambiguous_designators():
+    """Invalid shapes, conflicted entities, and live carriers sharing one ICAO
+    code are safer omitted than resolved confidently to the wrong airline."""
     bindings = [
         binding("bad-iata", "ABC", "BAD"),
         binding("bad-icao", "AB", "LONG"),
@@ -71,6 +78,8 @@ def test_build_rows_rejects_bad_and_ambiguous_designators():
 
 
 def test_build_rows_prefers_live_carriers_and_filters_aliases():
+    """A current carrier wins over dissolved records, while designators,
+    duplicates, and aliases beyond the cap stay out of the shipped table."""
     aliases = "Active Air|AA|ACT|Shared|Shared|One|Two|Three|Four|Five|Six|Seven"
     bindings = [
         binding("active", "AA", "ACT", "Active Air", aliases),
@@ -95,6 +104,8 @@ def test_build_rows_prefers_live_carriers_and_filters_aliases():
 
 
 def test_ambiguous_names_are_removed_without_touching_unique_ones():
+    """A prose name owned by several IATA codes must fall back to live lookup,
+    without discarding names and aliases that still resolve uniquely."""
     rows = [
         {"iata": "AA", "name": " Shared Name ", "aliases": "Unique A|Clash||"},
         {"iata": "BB", "name": "Other", "aliases": "shared name|Clash|Unique B"},
@@ -112,6 +123,8 @@ def test_ambiguous_names_are_removed_without_touching_unique_ones():
 
 
 def test_main_writes_lf_csv_and_reports_every_kind_of_ambiguity(tmp_path, monkeypatch, capsys):
+    """The command writes the complete deterministic CSV and makes discarded
+    data visible, while capping a potentially long diagnostic list."""
     output = tmp_path / "nested" / "airline_codes.csv"
     rows = [
         {"iata": "AA", "icao": "AAA", "name": "Alpha", "aliases": "A"},
@@ -141,6 +154,8 @@ def test_main_writes_lf_csv_and_reports_every_kind_of_ambiguity(tmp_path, monkey
 
 
 def test_main_has_no_ambiguity_report_when_nothing_was_dropped(tmp_path, monkeypatch, capsys):
+    """A clean refresh should report its output counts without printing empty
+    warning sections that imply data was discarded."""
     monkeypatch.setattr(refresh, "OUTPUT", tmp_path / "airline_codes.csv")
     monkeypatch.setattr(refresh, "fetch", lambda: [])
     monkeypatch.setattr(refresh, "build_rows", lambda _bindings: ([], []))
@@ -154,6 +169,8 @@ def test_main_has_no_ambiguity_report_when_nothing_was_dropped(tmp_path, monkeyp
 
 
 def test_script_entrypoint_exits_with_main_result(monkeypatch):
+    """Executing the file directly follows the same successful path as calling
+    main, with network and the generated output intercepted by the test."""
     response = Mock()
     response.json.return_value = {"results": {"bindings": []}}
     monkeypatch.setattr(refresh.requests, "get", Mock(return_value=response))

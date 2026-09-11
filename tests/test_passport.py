@@ -73,6 +73,8 @@ def test_an_airport_with_no_coordinates_has_no_distance():
 
 
 def test_an_airport_with_incomplete_coordinates_is_not_plotted(monkeypatch):
+    """One coordinate cannot place an airport or form a distance, and treating a
+    missing value as zero would draw a plausible but false route."""
     monkeypatch.setattr(passport, "details_for", lambda _iata: {"lat": 51.5, "lon": None})
 
     assert great_circle_km("LHR", "JFK") is None
@@ -97,6 +99,8 @@ def test_a_naive_instant_is_not_usable():
 
 
 def test_a_malformed_instant_is_not_usable():
+    """A hand-edited timestamp should remove the derived duration instead of
+    preventing the entire Passport from rendering."""
     assert scheduled_hours(row(arrival_time="not-a-time")) is None
 
 

@@ -194,6 +194,8 @@ def test_actual_kg_prefers_the_known_cabin():
 
 
 def test_actual_kg_falls_back_to_economy():
+    """A blank or unusable stated cabin cannot erase a usable economy estimate,
+    which is the conservative figure the row used before cabin data arrived."""
     assert actual_kg(row("uid-1", "2026-03-04", economy="100")) == "100"
     # An unrecognised or blank cabin must not silently produce nothing.
     assert actual_kg(row("uid-1", "2026-03-04", economy="100", cabin_class_known="couch")) == "100"
@@ -213,6 +215,8 @@ def test_actual_kg_falls_back_to_economy():
 
 @pytest.mark.parametrize("value", [object(), "not-a-number"])
 def test_an_invalid_actual_kg_counts_as_zero(value):
+    """Totals consume old and user-edited CSVs, so one unusable cell must not
+    prevent the remaining valid flights from being summed."""
     assert kg_value({"emissions_kg_actual": value}) == 0.0
 
 

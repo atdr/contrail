@@ -50,6 +50,8 @@ def test_an_unchanged_answer_is_not_recorded_again(tmp_path):
 
 
 def test_unchanged_filtering_can_be_disabled(tmp_path):
+    """Inspection tools may need every observation even when consecutive API
+    answers match, so callers can explicitly opt out of deduplication."""
     log = JSONLRawLog(str(tmp_path / "raw.jsonl"))
     payload = [{"key": "a", "response": {"economy": 100}}]
 
@@ -124,6 +126,8 @@ def test_a_corrupt_line_does_not_break_every_future_sync(tmp_path):
 
 
 def test_blank_lines_and_entries_without_keys_are_ignored_by_latest(tmp_path):
+    """A recoverable append-only log can contain harmless blank lines or valid
+    JSON metadata that does not identify a flight."""
     path = tmp_path / "raw.jsonl"
     path.write_text('\n{"captured_at": "NOW", "response": {"x": 1}}\n')
 
