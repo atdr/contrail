@@ -9,6 +9,7 @@ Model, writes a CSV.
 ```bash
 python3.13 -m venv venv && ./venv/bin/pip install -e ".[dev]"
 ./venv/bin/pytest -q
+./venv/bin/pytest -q --cov --cov-report=term-missing   # what CI reports to Codecov
 ./venv/bin/ruff check . && ./venv/bin/ruff format .
 TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics \
   FLIGHTY_CSV_PATH=tests/fixtures/sample_flighty.csv ./venv/bin/contrail sync --dry-run
@@ -59,6 +60,25 @@ Two keys, and the difference matters:
   literals that remain.
 
 - **No test may make a real network call.** Mock `requests` in both directions.
+
+- **Coverage reports, it never gates.** The `coverage` job in `ci.yml` re-runs
+  the suite once under `pytest --cov` and uploads `coverage.xml` to Codecov,
+  which supplies the README badge, per-PR comments and history. The pytest
+  matrix is what proves the suite passes. Codecov's own two status checks are
+  set `informational` in `codecov.yml` so they can never block a merge, and the
+  upload step is `continue-on-error` because an outage there says nothing about
+  the change under review. The coverage run itself stays blocking: a step that
+  cannot fail is a check that proves nothing.
+
+  `[tool.coverage.run]` in `pyproject.toml`, not the CI command line, is what
+  sets the scope, so a local `--cov` run measures what CI measures. Two
+  settings there are load-bearing. `source = ["src/contrail"]` measures what
+  ships rather than what the tests imported: it keeps `tests/` out of the
+  report, and it reports a module no test imports at all at 0% instead of
+  omitting it, which is the difference between a visible gap and an invisible
+  one. `branch = true` counts the untaken side of a condition, which is where
+  the parsing and resync code actually hides its gaps.
+  `tests/test_coverage_config.py` guards the arrangement.
 
 - **Every workflow is named after its own file**, and the description goes on
   the job. GitHub labels a check `<workflow name> / <job name>` and never shows

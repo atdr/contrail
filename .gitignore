@@ -27,6 +27,11 @@ build/
 dist/
 .pytest_cache/
 .ruff_cache/
+# `pytest --cov` writes all three: the data file, the XML the Codecov upload
+# reads, and the HTML report if asked for one.
+.coverage
+coverage.xml
+htmlcov/
 venv/
 .venv/
 

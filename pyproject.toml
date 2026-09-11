@@ -37,6 +37,11 @@ dependencies = [
 yaml = ["pyyaml>=6.0.3"]
 dev = [
     "pytest>=9.1.1",
+    # Coverage, reported to Codecov by the `coverage` job in ci.yml. What gets
+    # measured is configured under `[tool.coverage.run]` at the foot of this
+    # file rather than on the command line, so a local run and a CI run measure
+    # the same thing.
+    "pytest-cov>=7.1.0",
     # Upper bound deliberate: CI gates on `ruff format --check`, and the
     # formatter's output is not stable across minor releases. Without it the
     # first restyling release turns every unrelated PR red. Bumping past it
@@ -91,3 +96,19 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+# Scoped to what ships, not to whatever the tests happened to import. Naming a
+# source directory rather than passing `--cov=` paths does two things: files
+# under `tests/` stay out of the report, and a module no test imports at all is
+# reported at 0% rather than being absent from the report entirely. That is the
+# difference between a gap you can see and one you cannot.
+source = ["src/contrail"]
+branch = true
+
+[tool.coverage.report]
+exclude_also = [
+    # The protocol method bodies at the three seams. They exist to be
+    # overridden, never called, so counting them missed would be permanent.
+    "^\\s*\\.\\.\\.$",
+]
