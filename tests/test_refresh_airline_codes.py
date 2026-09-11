@@ -2,11 +2,17 @@
 
 import csv
 import runpy
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 from unittest.mock import Mock, mock_open
 
 import pytest
 
-from scripts import refresh_airline_codes as refresh
+SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "refresh_airline_codes.py"
+SPEC = spec_from_file_location("refresh_airline_codes", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+refresh = module_from_spec(SPEC)
+SPEC.loader.exec_module(refresh)
 
 
 def binding(item, iata, icao, name="", aliases="", dissolved=""):
