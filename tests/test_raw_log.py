@@ -49,6 +49,15 @@ def test_an_unchanged_answer_is_not_recorded_again(tmp_path):
     assert len(log.read()) == 2
 
 
+def test_unchanged_filtering_can_be_disabled(tmp_path):
+    log = JSONLRawLog(str(tmp_path / "raw.jsonl"))
+    payload = [{"key": "a", "response": {"economy": 100}}]
+
+    assert log.append(payload) == 1
+    assert log.append(payload, skip_unchanged=False) == 1
+    assert len(log.read()) == 2
+
+
 def test_each_flight_is_tracked_separately(tmp_path):
     log = JSONLRawLog(str(tmp_path / "raw.jsonl"))
     log.append([{"key": "a", "response": {"x": 1}}, {"key": "b", "response": {"x": 2}}])
@@ -112,3 +121,13 @@ def test_a_corrupt_line_does_not_break_every_future_sync(tmp_path):
 
     assert [e["key"] for e in log.read()] == ["a"]
     assert log.append([{"key": "c", "response": {"economy": 5}}]) == 1
+
+
+def test_blank_lines_and_entries_without_keys_are_ignored_by_latest(tmp_path):
+    path = tmp_path / "raw.jsonl"
+    path.write_text('\n{"captured_at": "NOW", "response": {"x": 1}}\n')
+
+    log = JSONLRawLog(str(path))
+
+    assert len(log.read()) == 1
+    assert log.latest_by_key() == {}
