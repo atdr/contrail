@@ -1,5 +1,6 @@
 """Tests for config resolution: CLI flags > env vars > config file > defaults."""
 
+import builtins
 import json
 
 import pytest
@@ -119,6 +120,28 @@ def test_yaml_config(tmp_path):
     config = load_config(env={}, directory=str(tmp_path))
     assert config.csv_path == "y.csv"
     assert config.sources[0]["url"] == "https://y.invalid/f.ics"
+
+
+def test_yaml_config_explains_when_pyyaml_is_unavailable(tmp_path, monkeypatch):
+    path = tmp_path / "config.yaml"
+    path.write_text("{}")
+    real_import = builtins.__import__
+
+    def import_without_yaml(name, *args, **kwargs):
+        if name == "yaml":
+            raise ImportError
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", import_without_yaml)
+    with pytest.raises(ConfigError, match="pip install 'contrail\\[yaml\\]'"):
+        load_config(config_path=str(path), env={})
+
+
+def test_config_top_level_must_be_a_mapping(tmp_path):
+    path = write_config(tmp_path, [])
+
+    with pytest.raises(ConfigError, match="object at the top level"):
+        load_config(config_path=str(path), env={})
 
 
 def test_missing_explicit_config_file_is_an_error(tmp_path):
@@ -387,6 +410,20 @@ def test_a_new_key_wins_over_the_one_it_replaced(tmp_path, capsys):
     assert config.csv_path == "new.csv"
     assert [entry["type"] for entry in config.importers] == ["tripit_ical"]
     assert "storage.flights.path is already set. Drop 'csv_path'." in capsys.readouterr().err
+
+
+def test_modern_importers_beat_the_legacy_tripit_url(tmp_path):
+    write_config(
+        tmp_path,
+        {
+            "importers": [{"type": "flighty_csv", "path": "flighty/"}],
+            "TRIPIT_ICAL_URL": "https://legacy.invalid/feed.ics",
+        },
+    )
+
+    config = load_config(env={}, directory=str(tmp_path))
+
+    assert config.importers == [{"type": "flighty_csv", "path": "flighty/"}]
 
 
 SUPERSEDING_LAYERS = [
