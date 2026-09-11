@@ -35,6 +35,9 @@ jobs:
     name: publish to PyPI
     needs: release-please
     if: needs.release-please.outputs.release_created
+    # The failure that matters here is a `pip install build` that stalls rather
+    # than fails, and this job is the last thing between a tag and a release.
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
