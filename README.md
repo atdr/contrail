@@ -1,5 +1,11 @@
 # contrail
 
+[![PyPI](https://img.shields.io/pypi/v/contrails.svg?style=flat-square)](https://pypi.org/project/contrails/)
+[![Downloads](https://img.shields.io/pepy/dt/contrails?style=flat-square)](https://pepy.tech/project/contrails)
+[![GitHub last commit](https://img.shields.io/github/last-commit/atdr/contrail.svg?style=flat-square)](https://github.com/atdr/contrail)
+[![CI](https://img.shields.io/github/actions/workflow/status/atdr/contrail/ci.yml?style=flat-square&label=CI)](https://github.com/atdr/contrail/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/atdr/contrail?style=flat-square&label=coverage)](https://codecov.io/gh/atdr/contrail)
+
 Estimate the CO2e emissions of flights you've taken or booked, and keep a running log of them.
 
 contrail pulls flights from one or more _sources_ (a TripIt calendar feed, a Flighty export),

@@ -1,0 +1,19 @@
+# Codecov reports; it does not gate. Without `informational`, Codecov adds two
+# status checks of its own to every pull request, and a check this repo neither
+# defines nor controls is exactly the kind that can sit green while never having
+# run. ci.yml is the source of truth for whether a change may merge.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+# The report measures the shipped package, so there is nothing else to ignore
+# here; `[tool.coverage.run] source` in pyproject.toml is what sets the scope,
+# and it is the same scope a local run measures.
+comment:
+  layout: "condensed_header, diff, files"
+  require_changes: true
