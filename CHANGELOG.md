@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.0](https://github.com/atdr/contrail/compare/v0.5.1...v0.6.0) (2026-09-12)
+
+
+### Features
+
+* support Python 3.14 ([#64](https://github.com/atdr/contrail/issues/64)) ([60178c4](https://github.com/atdr/contrail/commit/60178c4a5630c47066343bb5a7d351379c60802d))
+
+
+### Documentation
+
+* **contrail-gh:** document surface-diff tripwire and version tagging ([#52](https://github.com/atdr/contrail/issues/52)) ([c28f7ff](https://github.com/atdr/contrail/commit/c28f7ffda099be35b56ae34f178f4d2845700d30))
+* correct how release-please decides a version bump ([#58](https://github.com/atdr/contrail/issues/58)) ([b2893bf](https://github.com/atdr/contrail/commit/b2893bf1a8b56298a3c34c50e9b1214f6e6563e3))
+
 ## [0.5.1](https://github.com/atdr/contrail/compare/v0.5.0...v0.5.1) (2026-09-07)
 
 
