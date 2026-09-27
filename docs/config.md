@@ -114,6 +114,11 @@ is the only copy of a figure that can ever exist, and the raw log is kept for th
 same reason. Passport is neither. It is a view, rebuilt from the CSV whenever you
 ask, which is why `contrail passport` needs no API key, no feed and no network.
 
+`contrail sync --passport` does not change that. It renders the same view once
+the log is saved, so a failed page can never cost a figure already fetched, and
+it reads `passport.output_path` like `contrail passport` does. It is a flag on
+the command, not a third output of the pipeline.
+
 A `type` there would be an invented choice: there is no protocol and no registry
 behind it. The rule the file follows is that a section naming a seam carries a
 type because something resolves it, and a section naming a package with one

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from datetime import UTC, date, datetime
 from importlib.resources import files
 from pathlib import Path
@@ -153,9 +154,7 @@ def build_data(rows: list[dict], now: datetime | None = None) -> dict:
     }
 
 
-def render(rows: list[dict], output_path: str | Path, now: datetime | None = None) -> Path:
-    """Write Passport as one offline HTML file and return its resolved path."""
-    output = Path(output_path)
+def _document(rows: list[dict], now: datetime | None) -> str:
     package = files(__package__)
     template = package.joinpath("template.html").read_text(encoding="utf-8")
     payload = json.dumps(build_data(rows, now), ensure_ascii=False, separators=(",", ":"))
@@ -175,9 +174,43 @@ def render(rows: list[dict], output_path: str | Path, now: datetime | None = Non
     document = template
     for marker, asset in assets.items():
         document = document.replace(marker, asset.replace("</", "<\\/"), 1)
+    return document
+
+
+def render(rows: list[dict], output_path: str | Path, now: datetime | None = None) -> Path:
+    """Write Passport as one offline HTML file and return its resolved path."""
+    return render_if_changed(rows, output_path, now, force=True)[0]
+
+
+# The one part of the page that moves on every build. Each flight's departed
+# flag also depends on the clock, but that is a real change worth writing.
+_GENERATED_AT = re.compile(r'"generatedAt":"[^"]*"')
+
+
+def render_if_changed(
+    rows: list[dict], output_path: str | Path, now: datetime | None = None, *, force=False
+) -> tuple[Path, bool]:
+    """Write Passport unless the file there differs only in its generatedAt
+    stamp. Returns the resolved path and whether it was written.
+
+    A page rebuilt daily would otherwise be a new ~800 KB version in history
+    every day with nothing in it changed: the same rule the CSV follows."""
+    output = Path(output_path)
+    document = _document(rows, now)
+    if not force and output.is_file():
+        existing = output.read_text(encoding="utf-8")
+        if _GENERATED_AT.sub("", existing) == _GENERATED_AT.sub("", document):
+            return output.resolve(), False
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(document, encoding="utf-8")
-    return output.resolve()
+    return output.resolve(), True
 
 
-__all__ = ["DEFAULT_OUTPUT_PATH", "build_data", "great_circle_km", "render", "scheduled_hours"]
+__all__ = [
+    "DEFAULT_OUTPUT_PATH",
+    "build_data",
+    "great_circle_km",
+    "render",
+    "render_if_changed",
+    "scheduled_hours",
+]
