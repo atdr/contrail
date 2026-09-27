@@ -161,6 +161,8 @@ def test_the_meta_block_says_how_the_derived_figures_were_derived():
 
 # -- the written file ---------------------------------------------------------
 
+MARKERS = ("PASSPORT_DATA", "WORLD_GEOJSON", "LEAFLET_CSS", "LEAFLET_JS", "CHARTJS_JS")
+
 
 def payload(document: str) -> dict:
     start = document.index('<script id="passport-data" type="application/json">')
@@ -173,7 +175,7 @@ def test_render_writes_one_self_contained_file(tmp_path):
 
     document = output.read_text(encoding="utf-8")
     assert output == (tmp_path / "reports" / "passport.html").resolve()  # made the directory
-    for marker in ("PASSPORT_DATA", "WORLD_GEOJSON", "LEAFLET_CSS", "LEAFLET_JS", "CHARTJS_JS"):
+    for marker in MARKERS:
         assert f"__{marker}__" not in document
     assert "L.map" in document and "Chart" in document  # the vendored assets landed
 
@@ -209,3 +211,26 @@ def test_itinerary_text_cannot_close_the_script_element(tmp_path):
 
     document = output.read_text(encoding="utf-8")
     assert payload(document)["flights"][0]["aircraft"] == "</script><b>"
+
+
+@pytest.mark.parametrize("marker", [f"__{name}__" for name in MARKERS])
+def test_itinerary_text_that_spells_a_marker_stays_data(tmp_path, marker):
+    """Substitution is one pass, so a feed value that happens to be a marker
+    name is never mistaken for the marker and filled with a bundle."""
+    output = render([row(aircraft_type=marker)], tmp_path / "passport.html", NOW)
+
+    document = output.read_text(encoding="utf-8")
+    assert payload(document)["flights"][0]["aircraft"] == marker
+    assert document.count(marker) == 1  # only the one inside the data
+    assert "L.map" in document and "Chart" in document
+
+
+@pytest.mark.parametrize("template", ["no marker here", "__A__ and __A__ again"])
+def test_a_template_without_exactly_one_marker_is_refused(template):
+    with pytest.raises(ValueError, match="__A__"):
+        passport._fill(template, {"__A__": "asset"})
+
+
+def test_every_asset_lands_where_its_marker_was():
+    filled = passport._fill("<__A__|__B__>", {"__A__": "__B__</x>", "__B__": "b"})
+    assert filled == "<__B__<\\/x>|b>"
