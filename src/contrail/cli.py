@@ -17,7 +17,7 @@ from contrail.emissions import get_provider
 from contrail.importers import IMPORTERS, get_importer
 from contrail.models import FlightRecord, UnparsedEvent
 from contrail.passport import DEFAULT_OUTPUT_PATH
-from contrail.passport import render as render_passport
+from contrail.passport import render_if_changed as render_passport
 from contrail.storage import get_raw_log, get_storage, kg_value, normalize_rows, total_kg
 from contrail.storage.local_csv import STATUS_CANCELLED, actual_kg, row_key
 from contrail.storage.raw_log import default_path as default_raw_path
@@ -589,9 +589,28 @@ def _dry_run_report(plan: Reconciliation, csv_path: str) -> int:
     return 0
 
 
+# `sync --passport` saved the log but could not build the page. Distinct from
+# 1, where the sync itself failed, so a workflow can still commit the log and
+# fail the run afterwards.
+EXIT_PASSPORT_FAILED = 3
+
+
 def cmd_sync(args) -> int:
     config = load_config(config_path=args.config, csv_path=args.csv_path)
+    status = _sync(args, config)
+    # Only after a successful save, so a render can never cost a figure already
+    # fetched. Also when nothing changed: departed flags move with the clock.
+    if status != 0 or not args.passport:
+        return status
+    try:
+        _write_passport(config, skip_empty=True)
+    except (ValueError, OSError) as exc:
+        print(f"Passport not built: {exc}", file=sys.stderr)
+        return EXIT_PASSPORT_FAILED
+    return 0
 
+
+def _sync(args, config: Config) -> int:
     storage = get_storage(config.storage_type)(config.csv_path)
     existing_rows = storage.load()
     # Snapshot before anything mutates a row, so the file is only rewritten when
@@ -729,24 +748,38 @@ def cmd_passport(args) -> int:
     config = load_config(
         config_path=args.config, csv_path=args.csv_path, passport_output=args.output
     )
+    output = _write_passport(config)
+    if args.open and not webbrowser.open(output.as_uri()):
+        print(f"  Could not open a browser automatically. Open {output} by hand.", file=sys.stderr)
+    return 0
+
+
+def _write_passport(config: Config, skip_empty: bool = False) -> Path | None:
+    """Build Passport from the stored log, leaving the file alone when only its
+    timestamp would change. `skip_empty` is for `sync --passport`: every new
+    setup starts with a header-only log, which is not a failure there."""
     csv_path = Path(config.csv_path)
     if not csv_path.exists():
         raise ValueError(f"Flight log not found: {csv_path}")
 
     rows = get_storage(config.storage_type)(str(csv_path)).load()
     if not rows:
+        if skip_empty:
+            print("No flights in the log yet, so no Passport this run.")
+            return None
         raise ValueError(f"Flight log is empty: {csv_path}")
 
     output_path = Path(config.passport_output)
     if output_path.resolve() == csv_path.resolve():
         raise ValueError("Passport output must not overwrite the flight log")
 
-    output = render_passport(rows, output_path, now=_now())
-    print(f"Wrote {output}.")
-    print("  Passport embeds your flight history. Keep the HTML private.")
-    if args.open and not webbrowser.open(output.as_uri()):
-        print(f"  Could not open a browser automatically. Open {output} by hand.", file=sys.stderr)
-    return 0
+    output, written = render_passport(rows, output_path, now=_now())
+    if written:
+        print(f"Wrote {output}.")
+        print("  Passport embeds your flight history. Keep the HTML private.")
+    else:
+        print(f"Passport unchanged apart from its timestamp: {output}.")
+    return output
 
 
 def cmd_init(args) -> int:
@@ -803,10 +836,20 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help=f"where to write the log (default: ./{DEFAULT_CSV_PATH})",
     )
-    sync.add_argument(
+    # A dry run writes nothing, so there is no saved log to build a page from.
+    after = sync.add_mutually_exclusive_group()
+    after.add_argument(
         "--dry-run",
         action="store_true",
         help="parse and report only: no emissions API calls, no writes",
+    )
+    after.add_argument(
+        "--passport",
+        action="store_true",
+        help=(
+            "then build the Passport at passport.output_path; exits "
+            f"{EXIT_PASSPORT_FAILED} if the log was saved but the page failed"
+        ),
     )
     sync.set_defaults(func=cmd_sync)
 

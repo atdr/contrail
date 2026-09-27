@@ -973,3 +973,93 @@ def test_init_never_overwrites_a_config(tmp_path, monkeypatch, capsys):
 
     assert (tmp_path / "config.json").read_text() == "{}"
     assert "already exists" in capsys.readouterr().err
+
+
+# -- sync --passport -----------------------------------------------------------
+
+EMPTY_FEED = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//contrail//empty//EN\r\nEND:VCALENDAR\r\n"
+
+
+def test_sync_passport_builds_the_page_after_saving(env, capsys):
+    assert run_sync(["sync", "--passport"]) == 0
+
+    out = capsys.readouterr().out
+    assert out.index("Wrote flight_emissions.csv") < out.index("passport.html")
+    assert '"origin":"JFK"' in (env / "passport.html").read_text(encoding="utf-8")
+
+
+def test_sync_passport_leaves_a_page_that_only_changed_its_stamp(env, capsys, monkeypatch):
+    """The CSV's rule, applied to the page: a daily rebuild with nothing new in
+    it must not become an ~800 KB commit."""
+    run_sync(["sync", "--passport"])
+    page = env / "passport.html"
+    before = page.read_bytes()
+    later = FROZEN_NOW.replace(hour=13)  # the stamp moves, no flight departs
+    monkeypatch.setattr("contrail.cli._now", lambda: later)
+    capsys.readouterr()
+
+    assert run_sync(["sync", "--passport"]) == 0
+
+    out = capsys.readouterr().out
+    assert "already up to date" in out  # built even when the log did not move
+    assert "Passport unchanged apart from its timestamp" in out
+    assert page.read_bytes() == before
+
+
+def test_a_flight_departing_is_a_change_worth_writing(env, monkeypatch):
+    """Each flight's departed flag depends on the clock too, and that one is real."""
+    run_sync(["sync", "--passport"])
+    page = env / "passport.html"
+    before = page.read_text(encoding="utf-8")
+    after_departure = datetime(2026, 9, 21, 12, 0, tzinfo=UTC)  # the fixture's 20 Sep flight
+    monkeypatch.setattr("contrail.cli._now", lambda: after_departure)
+
+    assert main(["passport"]) == 0
+
+    assert page.read_text(encoding="utf-8") != before
+
+
+def test_sync_passport_skips_a_log_with_no_flights(env, monkeypatch, capsys):
+    """Where every new setup starts: a header row and nothing else."""
+    run_sync(["sync"])
+    header = (env / "flight_emissions.csv").read_text().splitlines()[0]
+    (env / "flight_emissions.csv").write_text(header + "\n")
+    feed = env / "empty.ics"
+    feed.write_text(EMPTY_FEED)
+    monkeypatch.setenv("TRIPIT_ICAL_URL", str(feed))
+
+    assert run_sync(["sync", "--passport"]) == 0
+
+    assert "no Passport this run" in capsys.readouterr().out
+    assert not (env / "passport.html").exists()
+
+
+def test_sync_passport_is_not_attempted_when_the_sync_fails(env, monkeypatch):
+    run_sync(["sync"])
+    feed = env / "empty.ics"
+    feed.write_text(EMPTY_FEED)
+    monkeypatch.setenv("TRIPIT_ICAL_URL", str(feed))  # refused: looks like a broken feed
+
+    with patch("contrail.cli._write_passport") as write:
+        assert run_sync(["sync", "--passport"]) == 1
+        write.assert_not_called()
+
+
+def test_a_failed_page_exits_3_with_the_log_saved(env, monkeypatch, capsys):
+    """Distinct from 1, so a workflow can commit the log and still go red."""
+    (env / "taken").mkdir()
+    monkeypatch.setenv("PASSPORT_OUTPUT", "taken")  # a directory: the write fails
+
+    assert run_sync(["sync", "--passport"]) == 3
+
+    assert "Passport not built" in capsys.readouterr().err
+    assert len(read_csv(env / "flight_emissions.csv")) == 6
+
+
+def test_sync_passport_and_dry_run_are_exclusive(env, capsys):
+    """A dry run writes nothing, so there is no saved log to build from."""
+    with pytest.raises(SystemExit) as exit_:
+        main(["sync", "--dry-run", "--passport"])
+
+    assert exit_.value.code == 2
+    assert "not allowed with" in capsys.readouterr().err

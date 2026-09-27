@@ -40,6 +40,7 @@ body:
         - init
         - sync
         - sync --dry-run
+        - sync --passport
         - importers
         - passport
     validations:

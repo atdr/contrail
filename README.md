@@ -65,7 +65,7 @@ it hasn't seen before — nothing is ever double-counted or re-priced.
 
 ```text
 contrail init [--yaml] [--output PATH]
-contrail sync [--config PATH] [--csv-path PATH] [--dry-run]
+contrail sync [--config PATH] [--csv-path PATH] [--dry-run | --passport]
 contrail passport [--config PATH] [--csv-path PATH] [--output PATH] [--open]
 contrail importers
 ```
@@ -92,6 +92,20 @@ It reads `./flight_emissions.csv` and writes `./passport.html` by default. Use
 ```bash
 contrail passport --csv-path archive/flights.csv --output reports/passport.html --open
 ```
+
+Either way, an existing page is left alone when the only difference would be the
+time it was generated, so a daily rebuild doesn't rewrite the file for nothing.
+
+To rebuild it after every sync, add `--passport`:
+
+```bash
+contrail sync --passport
+```
+
+It builds the page only once the log is safely saved, at `passport.output_path`
+in the config file (or `PASSPORT_OUTPUT`), and skips a log with no flights yet.
+It exits 0 when both worked, 1 when the sync failed (no page is attempted), and
+3 when the log was saved but the page could not be built.
 
 The result is one self-contained HTML file. It embeds the flight data and
 styles, Chart.js 4.5.1 for the charts, Leaflet 1.9.4 for the map, and stripped
