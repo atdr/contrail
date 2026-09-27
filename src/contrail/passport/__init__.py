@@ -171,10 +171,23 @@ def _document(rows: list[dict], now: datetime | None) -> str:
             encoding="utf-8"
         ),
     }
-    document = template
-    for marker, asset in assets.items():
-        document = document.replace(marker, asset.replace("</", "<\\/"), 1)
-    return document
+    return _fill(template, assets)
+
+
+def _fill(template: str, assets: dict[str, str]) -> str:
+    """Put each asset in place of its marker, in one pass over the template.
+
+    One pass, so nothing inserted is ever scanned again: a payload string that
+    happens to spell a marker stays data rather than drawing a bundle into the
+    data block. Each marker must appear exactly once, so a misspelt or dropped
+    one fails here rather than shipping as literal text in the page."""
+    for marker in assets:
+        count = template.count(marker)
+        if count != 1:
+            raise ValueError(f"Passport template has {count} of {marker}, expected exactly one")
+    escaped = {marker: asset.replace("</", "<\\/") for marker, asset in assets.items()}
+    pattern = re.compile("|".join(map(re.escape, assets)))
+    return pattern.sub(lambda match: escaped[match.group(0)], template)
 
 
 def render(rows: list[dict], output_path: str | Path, now: datetime | None = None) -> Path:
