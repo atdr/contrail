@@ -50,3 +50,12 @@ repos:
         # No `exclude:` here on purpose. .mdformat.toml owns that list, and it
         # applies to the paths pre-commit passes as well as to a directory
         # walk, so a second copy here could only drift from it.
+
+  # Passport's CSS and JS. Keep `rev` in step with the setup-biome `version` in
+  # .github/workflows/ci.yml. biome-ci checks without writing, the same as CI;
+  # run `biome check --write` by hand to apply fixes. Files outside biome.json's
+  # `files.includes` are skipped, so staged JSON elsewhere is not touched.
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v2.5.14
+    hooks:
+      - id: biome-ci
