@@ -110,6 +110,22 @@ jobs:
           path: test-results/
           retention-days: 14
 
+  # Passport's authored styles and script. One standalone binary that lints
+  # and formats both, so no package.json or node_modules. biome.json scopes it
+  # to passport/*.js and *.css, which leaves the vendored bundles alone.
+  biome:
+    name: biome
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Keep `version` in step with the biome-ci hook's `rev` in
+      # .pre-commit-config.yaml, so the hook and CI never disagree.
+      - uses: biomejs/setup-biome@v2
+        with:
+          version: 2.5.14
+      - run: biome ci .
+
   docs:
     name: markdown
     # Ten minutes against a job that takes seconds. The point is a `pip` fetch
