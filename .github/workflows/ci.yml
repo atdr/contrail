@@ -111,7 +111,7 @@ jobs:
           retention-days: 14
 
   # Passport's authored styles and script. One standalone binary that lints
-  # and formats both, so no package.json or node_modules. biome.json scopes it
+  # and formats both, so no package.json or node_modules. biome.jsonc scopes it
   # to passport/*.js and *.css, which leaves the vendored bundles alone.
   biome:
     name: biome

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  // Passport's authored sources only. Non-recursive, so passport/vendor/ and
+  // its upstream builds are never linted or reformatted.
+  "files": {
+    "includes": ["src/contrail/passport/*.js", "src/contrail/passport/*.css"]
+  },
+  // 100 to match ruff's line-length.
+  "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
+  "linter": {
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        // Biome reads every .js file as an ES module, where strict mode is
+        // implied. passport.js is inlined into a classic <script>, where it
+        // is not, so its "use strict" is doing real work.
+        "noRedundantUseStrict": "off"
+      }
+    }
+  },
+  "javascript": {
+    // Provided by the Chart.js and Leaflet bundles inlined ahead of the page's
+    // own script.
+    "globals": ["Chart", "L"],
+    "formatter": { "quoteStyle": "double" }
+  }
+}
