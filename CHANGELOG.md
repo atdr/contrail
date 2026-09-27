@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/atdr/contrail/compare/v0.6.0...v0.7.0) (2026-09-27)
+
+
+### Features
+
+* **cli:** add contrail init to write a starter config ([#71](https://github.com/atdr/contrail/issues/71)) ([1d829c2](https://github.com/atdr/contrail/commit/1d829c207df5be15b06dcfe13f94e9699862eaff)), closes [#48](https://github.com/atdr/contrail/issues/48)
+* **cli:** add sync --passport to render the dashboard after a sync ([#72](https://github.com/atdr/contrail/issues/72)) ([bf84f55](https://github.com/atdr/contrail/commit/bf84f5581fd17e1a48b0747e024a60abc10f5084)), closes [#47](https://github.com/atdr/contrail/issues/47)
+
+
+### Bug Fixes
+
+* **passport:** draw heavier airports above lighter ones on the map ([#67](https://github.com/atdr/contrail/issues/67)) ([9b3f466](https://github.com/atdr/contrail/commit/9b3f4661aba1e351b75c23e5e4bc6287db511a52))
+
 ## [0.6.0](https://github.com/atdr/contrail/compare/v0.5.1...v0.6.0) (2026-09-27)
 
 
