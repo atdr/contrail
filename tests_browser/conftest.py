@@ -93,11 +93,36 @@ def browser_context_args(browser_context_args):
     return {**browser_context_args, "locale": "en-GB", "timezone_id": "Europe/London"}
 
 
+class Problems(list):
+    """What `problems` found, and how much of it the call phase already reported."""
+
+    reported = 0
+
+    def unreported(self) -> list[str]:
+        return self[self.reported :]
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_call(item):
+    """Fail the test itself, not its teardown, on anything `problems` found.
+
+    pytest-playwright keeps a retain-on-failure trace only when the call phase
+    fails, so a violation first raised at fixture teardown would discard the
+    very trace that explains it."""
+    result = yield
+    found = item.funcargs.get("problems")
+    if found:
+        found.reported = len(found)
+        raise AssertionError(f"the page misbehaved: {list(found)}")
+    return result
+
+
 @pytest.fixture
 def problems(page):
     """Page errors, console errors and non-local requests, collected as the
-    page runs and asserted empty when the test ends."""
-    found: list[str] = []
+    page runs. Asserted empty as the test body ends, by pytest_runtest_call
+    above, and again at teardown for anything that arrived after it."""
+    found = Problems()
     page.on("pageerror", lambda error: found.append(f"page error: {error}"))
     page.on(
         "console",
@@ -111,7 +136,7 @@ def problems(page):
     )
     page.context.route("http*://**", lambda route: route.abort())
     yield found
-    assert found == []
+    assert found.unreported() == []
 
 
 @pytest.fixture
