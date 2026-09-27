@@ -1,0 +1,30 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "pytest",
+            "type": "process",
+            "command": "./venv/bin/pytest",
+            "args": ["-q"],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Ruff: check",
+            "type": "process",
+            "command": "./venv/bin/ruff",
+            "args": ["check", "."],
+            "problemMatcher": []
+        },
+        {
+            "label": "Ruff: format",
+            "type": "process",
+            "command": "./venv/bin/ruff",
+            "args": ["format", "."],
+            "problemMatcher": []
+        }
+    ]
+}
