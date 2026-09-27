@@ -53,7 +53,7 @@ repos:
 
   # Passport's CSS and JS. Keep `rev` in step with the setup-biome `version` in
   # .github/workflows/ci.yml. biome-ci checks without writing, the same as CI;
-  # run `biome check --write` by hand to apply fixes. Files outside biome.json's
+  # run `biome check --write` by hand to apply fixes. Files outside biome.jsonc's
   # `files.includes` are skipped, so staged JSON elsewhere is not touched.
   - repo: https://github.com/biomejs/pre-commit
     rev: v2.5.14

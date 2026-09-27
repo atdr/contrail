@@ -39,6 +39,11 @@ body {
   margin: 0;
   background: var(--page);
 }
+h2,
+h3,
+p {
+  margin-top: 0;
+}
 button {
   font: inherit;
 }
@@ -157,11 +162,6 @@ section {
   box-shadow: var(--shadow);
 }
 
-h2,
-h3,
-p {
-  margin-top: 0;
-}
 h2 {
   margin-bottom: 4px;
   font-size: clamp(1.45rem, 3vw, 2.25rem);
@@ -285,8 +285,13 @@ h3 {
 }
 .leaflet-control-zoom a {
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.2);
   background: rgba(8, 45, 37, 0.88);
+}
+/* Leaflet greys a disabled button's border with a (0, 2, 1) selector, which
+   outranks the rule above. Match that rather than use !important. */
+.leaflet-control-zoom a.leaflet-disabled {
+  border-color: rgba(255, 255, 255, 0.2);
 }
 .leaflet-control-zoom a:hover {
   color: #fff;
@@ -345,6 +350,14 @@ h3 {
   align-items: center;
   gap: 18px;
   flex-wrap: wrap;
+}
+.pattern-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-soft);
 }
 .chart-controls .pattern-tabs + .pattern-tabs,
 .driver-controls .pattern-tabs + .pattern-tabs {
@@ -495,14 +508,6 @@ h3 {
   text-align: right;
 }
 
-.pattern-tabs {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  padding: 4px;
-  border-radius: 999px;
-  background: var(--surface-soft);
-}
 .pattern-tabs button {
   min-height: 36px;
   padding: 7px 13px;

@@ -84,9 +84,9 @@
     button.setAttribute("aria-pressed", String(state.year === year));
     button.addEventListener("click", () => {
       state.year = year;
-      document
-        .querySelectorAll("#periods button")
-        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document.querySelectorAll("#periods button").forEach((peer) => {
+        peer.setAttribute("aria-pressed", String(peer === button));
+      });
       update();
     });
     return button;
@@ -95,7 +95,9 @@
   function buildPeriods() {
     const nav = $("periods");
     nav.append(makeButton("All time", null));
-    data.years.forEach((year) => nav.append(makeButton(String(year), year)));
+    data.years.forEach((year) => {
+      nav.append(makeButton(String(year), year));
+    });
     const updateControls = () => {
       $("period-newer").disabled = nav.scrollLeft <= 1;
       $("period-older").disabled = nav.scrollLeft + nav.clientWidth >= nav.scrollWidth - 1;
@@ -239,33 +241,6 @@
     const chart = new Chart($(id), configuration);
     charts.set(id, chart);
     return chart;
-  }
-
-  function valueLabels(axis, formatter) {
-    return {
-      id: `passport-value-labels-${axis}`,
-      afterDatasetsDraw(chart) {
-        const { ctx } = chart;
-        const theme = chartTheme();
-        ctx.save();
-        ctx.fillStyle = theme.text;
-        ctx.font = `500 12px ${chartFont}`;
-        chart.getDatasetMeta(0).data.forEach((bar, index) => {
-          const value = chart.data.datasets[0].data[index];
-          const label = formatter(value);
-          if (axis === "y") {
-            ctx.textAlign = "left";
-            ctx.textBaseline = "middle";
-            ctx.fillText(label, bar.x + 8, bar.y);
-          } else {
-            ctx.textAlign = "center";
-            ctx.textBaseline = "bottom";
-            ctx.fillText(label, bar.x, bar.y - 7);
-          }
-        });
-        ctx.restore();
-      },
-    };
   }
 
   function rankingValueLabels(totals, metric) {
@@ -413,12 +388,12 @@
     const maximum = Math.max(1, ...totals);
     const categoryTotals = new Map();
     if (breakdown !== "total") {
-      entries.forEach((entry) =>
+      entries.forEach((entry) => {
         entry[breakdown].forEach((_, label) => {
           const value = rankingCategoryValue(entry, breakdown, label, metric);
           categoryTotals.set(label, (categoryTotals.get(label) || 0) + value);
-        }),
-      );
+        });
+      });
     }
     const categories = [...categoryTotals.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -749,8 +724,8 @@
         : null;
     const airportEntries = impactByValues(rows, (flight) => [flight.origin, flight.destination]);
     const countryEntries = impactByValues(rows, (flight) => [
-      flight.start && flight.start.country,
-      flight.end && flight.end.country,
+      flight.start?.country,
+      flight.end?.country,
     ]).map((entry) => ({
       ...entry,
       label: `${countryFlag(entry.label)} ${countryDisplay ? countryDisplay.of(entry.label) || entry.label : entry.label}`,
@@ -922,7 +897,7 @@
 
   function openRanking(key) {
     const ranking = rankingData.get(key);
-    if (!ranking || !ranking.entries.length) return;
+    if (!ranking?.entries.length) return;
     const metric = ranking.metric || "total";
     const breakdown = ranking.breakdown || "total";
     const metricLabel =
@@ -1210,12 +1185,11 @@
     $("trend-note-value").innerHTML = current
       ? formatKg(current.completed, trendUnit)
       : "No flights";
-    $("trend-note-copy").textContent =
-      current && current.planned
-        ? `${formatMassText(current.planned, trendUnit)} CO₂e comes from upcoming flights.`
-        : current
-          ? "No upcoming impact remains in this period."
-          : "Add flights, then regenerate your Passport.";
+    $("trend-note-copy").textContent = current?.planned
+      ? `${formatMassText(current.planned, trendUnit)} CO₂e comes from upcoming flights.`
+      : current
+        ? "No upcoming impact remains in this period."
+        : "Add flights, then regenerate your Passport.";
   }
 
   function updateQuality(rows) {
@@ -1235,12 +1209,7 @@
       done.flatMap((flight) => [flight.origin, flight.destination]).filter(Boolean),
     );
     const countries = new Set(
-      done
-        .flatMap((flight) => [
-          flight.start && flight.start.country,
-          flight.end && flight.end.country,
-        ])
-        .filter(Boolean),
+      done.flatMap((flight) => [flight.start?.country, flight.end?.country]).filter(Boolean),
     );
     const partition = (count) => `${count} · ${pct(count, done.length)}%`;
     $("quality-total").textContent = formatNumber(done.length);
@@ -1276,9 +1245,9 @@
   document.querySelectorAll("#metric-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.metric = button.dataset.metric;
-      document
-        .querySelectorAll("#metric-tabs button")
-        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document.querySelectorAll("#metric-tabs button").forEach((peer) => {
+        peer.setAttribute("aria-pressed", String(peer === button));
+      });
       updateHero(scoped());
     });
   });
@@ -1286,9 +1255,9 @@
   document.querySelectorAll("#pattern-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.pattern = button.dataset.pattern;
-      document
-        .querySelectorAll("#pattern-tabs button")
-        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document.querySelectorAll("#pattern-tabs button").forEach((peer) => {
+        peer.setAttribute("aria-pressed", String(peer === button));
+      });
       updatePatterns(scoped());
     });
   });
@@ -1296,9 +1265,9 @@
   document.querySelectorAll("#trend-breakdown-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.trendBreakdown = button.dataset.trendBreakdown;
-      document
-        .querySelectorAll("#trend-breakdown-tabs button")
-        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document.querySelectorAll("#trend-breakdown-tabs button").forEach((peer) => {
+        peer.setAttribute("aria-pressed", String(peer === button));
+      });
       updateTrend();
     });
   });
@@ -1306,9 +1275,9 @@
   document.querySelectorAll("#pattern-breakdown-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.patternBreakdown = button.dataset.patternBreakdown;
-      document
-        .querySelectorAll("#pattern-breakdown-tabs button")
-        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document.querySelectorAll("#pattern-breakdown-tabs button").forEach((peer) => {
+        peer.setAttribute("aria-pressed", String(peer === button));
+      });
       updatePatterns(scoped());
     });
   });
@@ -1316,9 +1285,9 @@
   document.querySelectorAll("#driver-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.driverBreakdown = button.dataset.breakdown;
-      document
-        .querySelectorAll("#driver-tabs button")
-        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document.querySelectorAll("#driver-tabs button").forEach((peer) => {
+        peer.setAttribute("aria-pressed", String(peer === button));
+      });
       updateRankings(scoped());
     });
   });
@@ -1326,9 +1295,9 @@
   document.querySelectorAll("#driver-metric-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.driverMetric = button.dataset.driverMetric;
-      document
-        .querySelectorAll("#driver-metric-tabs button")
-        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document.querySelectorAll("#driver-metric-tabs button").forEach((peer) => {
+        peer.setAttribute("aria-pressed", String(peer === button));
+      });
       updateRankings(scoped());
     });
   });

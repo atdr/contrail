@@ -110,6 +110,12 @@ Two keys, and the difference matters:
   `markdownlint-configure-file` comment at its foot — a per-file override only
   markdownlint honours, and one reason it is still here.
 
+- **Passport's CSS and JS are Biome's.** `biome.jsonc` scopes it to
+  `passport/*.js` and `*.css`, never `vendor/`, and says why each setting is
+  there. `pre-commit run biome-ci --all-files` checks without installing Biome
+  yourself; `biome check --write` applies fixes. The version is pinned twice,
+  in `ci.yml` and `.pre-commit-config.yaml`, and the two move together.
+
 - This repo is public. Never commit a real CSV, a raw log, or `config.json` —
   all are gitignored.
 
