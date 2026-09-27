@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Contrail: sync fixture (dry run)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "contrail.cli",
+            "args": ["sync", "--dry-run"],
+            "env": {
+                "TRIPIT_ICAL_URL": "${workspaceFolder}/tests/fixtures/sample_feed.ics",
+                "FLIGHTY_CSV_PATH": "${workspaceFolder}/tests/fixtures/sample_flighty.csv"
+            },
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

@@ -38,7 +38,11 @@ venv/
 # Editors / OS
 .DS_Store
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
 
 # Planning notes stay local — this repo is public.
 _planning/
