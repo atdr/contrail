@@ -1,7 +1,14 @@
 name: pr-title
 
 on:
-  pull_request_target:
+  # pull_request, not the pull_request_target the action's README suggests.
+  # release-please opens and updates its PR with GITHUB_TOKEN, and events that
+  # token causes start no pull_request_target run at all, so this required
+  # check never reported and the release PR sat blocked. A pull_request run is
+  # created instead, held for approval alongside ci.yml's, and one approval
+  # releases both. The job reads the title and nothing else, so it needs no
+  # more than the read-only token a pull_request run gets.
+  pull_request:
     types: [opened, edited, synchronize, reopened]
 
 permissions:

@@ -22,9 +22,12 @@ jobs:
       # Merging it bumps the version in pyproject.toml, updates CHANGELOG.md,
       # tags the release, and publishes it.
       #
-      # Note: PRs opened by the default GITHUB_TOKEN do not trigger other
-      # workflows, so the release PR itself shows no CI run. The commits it
-      # releases were already tested on main.
+      # Note: this opens the release PR with the default GITHUB_TOKEN. Its
+      # pull_request runs (ci.yml, pr-title.yml) are created but held for
+      # "Approve and run" before they start, and branch protection requires
+      # them, so the release PR cannot merge until someone approves. A
+      # pull_request_target workflow would get no run at all and block the
+      # PR for good, which is why pr-title.yml does not use that trigger.
       - uses: googleapis/release-please-action@v5
         id: release
         with:
