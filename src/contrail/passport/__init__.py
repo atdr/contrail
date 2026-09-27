@@ -170,6 +170,10 @@ def _document(rows: list[dict], now: datetime | None) -> str:
         "__CHARTJS_JS__": package.joinpath("vendor", "chart.umd.min.js").read_text(
             encoding="utf-8"
         ),
+        # The authored styles and script. Separate files so each can be read,
+        # reviewed and checked as the language it is.
+        "__PASSPORT_CSS__": package.joinpath("passport.css").read_text(encoding="utf-8"),
+        "__PASSPORT_JS__": package.joinpath("passport.js").read_text(encoding="utf-8"),
     }
     return _fill(template, assets)
 

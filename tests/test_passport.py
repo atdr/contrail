@@ -161,7 +161,16 @@ def test_the_meta_block_says_how_the_derived_figures_were_derived():
 
 # -- the written file ---------------------------------------------------------
 
-MARKERS = ("PASSPORT_DATA", "WORLD_GEOJSON", "LEAFLET_CSS", "LEAFLET_JS", "CHARTJS_JS")
+MARKERS = (
+    "PASSPORT_DATA",
+    "WORLD_GEOJSON",
+    "LEAFLET_CSS",
+    "LEAFLET_JS",
+    "CHARTJS_JS",
+    "PASSPORT_CSS",
+    "PASSPORT_JS",
+)
+AUTHORED = ("template.html", "passport.css", "passport.js")
 
 
 def payload(document: str) -> dict:
@@ -184,19 +193,29 @@ def test_the_page_fetches_nothing_when_it_opens(tmp_path):
     """The whole reason the assets are vendored: a dashboard of someone's travel
     history must not announce itself to a CDN or a tile server to render.
 
-    The authored template is what this guards. The vendored bundles carry URLs
+    The authored sources are what this guards. The vendored bundles carry URLs
     of their own — Leaflet writes its attribution as an anchor — so scanning the
     rendered file for a hostname says nothing; scanning it for a map tile
     server, the one fetch this design could regrow, says plenty.
     """
-    template = files("contrail.passport").joinpath("template.html").read_text(encoding="utf-8")
-    for fetched in ('href="http', "href='http", 'src="http', "src='http", "url(http", "@import"):
-        assert fetched not in template
+    fetches = ('href="http', "href='http", 'src="http', "src='http", "url(http", "@import")
+    package = files("contrail.passport")
+    for name in AUTHORED:
+        source = package.joinpath(name).read_text(encoding="utf-8")
+        for fetched in fetches:
+            assert fetched not in source, f"{name} fetches {fetched!r}"
 
     document = render([row()], tmp_path / "passport.html", NOW).read_text(encoding="utf-8")
     assert "<script src" not in document
     assert "tile.openstreetmap" not in document
     assert "L.tileLayer" not in document
+
+
+def test_the_authored_styles_hold_nothing_the_inline_escape_would_corrupt():
+    """Every inlined asset has `</` escaped to `<\\/` so it cannot close its
+    element. Harmless in JS, but in CSS it would change what the rule says."""
+    css = files("contrail.passport").joinpath("passport.css").read_text(encoding="utf-8")
+    assert "</" not in css
 
 
 def test_the_embedded_data_is_what_build_data_produced(tmp_path):
