@@ -1,13 +1,13 @@
-# contrail configuration — copy to config.yaml and edit.
+# contrail configuration. Write it out with this, then edit it:
 #
-#   cp config.example.yaml config.yaml
+#   contrail init --yaml
 #
-# YAML needs PyYAML:  pip install "contrail[yaml]"
-# If you'd rather not add that dependency, use config.example.json instead —
-# same fields, no comments.
+# YAML needs PyYAML:  pip install "contrails[yaml]"
+# If you'd rather not add that dependency, run `contrail init` for the JSON
+# version instead — same fields, no comments.
 #
-# config.yaml and config.json are gitignored. Never commit either: both hold
-# secrets.
+# Never commit config.yaml or config.json: both hold secrets. Add them to
+# .gitignore if you keep them in a repository.
 #
 # Anything set as an environment variable wins over this file, so a GitHub
 # Actions or cron setup can inject TRIPIT_ICAL_URL / TIM_API_KEY without you

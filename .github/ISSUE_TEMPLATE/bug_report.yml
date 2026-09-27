@@ -37,6 +37,7 @@ body:
     attributes:
       label: Command run
       options:
+        - init
         - sync
         - sync --dry-run
         - importers

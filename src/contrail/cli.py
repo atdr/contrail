@@ -6,6 +6,7 @@ import argparse
 import sys
 import webbrowser
 from datetime import UTC, datetime
+from importlib.resources import files
 from pathlib import Path
 
 import requests
@@ -748,6 +749,25 @@ def cmd_passport(args) -> int:
     return 0
 
 
+def cmd_init(args) -> int:
+    """Write the shipped example config, so a pip install has one to edit."""
+    name = "config.yaml" if args.yaml else "config.json"
+    output = Path(args.output or name)
+    example = files("contrail.data").joinpath(f"config.example.{name.rsplit('.', 1)[1]}")
+    # Exclusive create, so it never overwrites: the file it would replace holds
+    # a feed URL and an API key, and deleting it by hand is the deliberate step.
+    try:
+        with output.open("xb") as handle:
+            handle.write(example.read_bytes())
+    except FileExistsError:
+        raise ValueError(f"{output} already exists; not overwriting it") from None
+    except OSError as exc:
+        raise ValueError(f"Could not write {output}: {exc.strerror}") from None
+    print(f"Wrote {output}. Fill in your feed URL and TIM API key.")
+    print("  It holds secrets: never commit it.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="contrail",
@@ -760,8 +780,21 @@ def build_parser() -> argparse.ArgumentParser:
     # that line only appears beside a mistake, where naming a command that
     # does work is the useful answer.
     subparsers = parser.add_subparsers(
-        dest="command", required=True, metavar="{sync,importers,passport}"
+        dest="command", required=True, metavar="{init,sync,importers,passport}"
     )
+
+    init = subparsers.add_parser("init", help="write a starter config file to edit")
+    init.add_argument(
+        "--yaml",
+        action="store_true",
+        help='write commented YAML (reading it needs pip install "contrails[yaml]")',
+    )
+    init.add_argument(
+        "--output",
+        metavar="PATH",
+        help="file to write (default: ./config.json, or ./config.yaml with --yaml)",
+    )
+    init.set_defaults(func=cmd_init)
 
     sync = subparsers.add_parser("sync", help="fetch flights, price them, update the CSV")
     sync.add_argument("--config", metavar="PATH", help="path to a config.json/config.yaml")

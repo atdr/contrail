@@ -937,3 +937,39 @@ def test_the_conflict_check_ignores_records_it_cannot_identify():
     b = record(source_id="2", destination="")
 
     assert _through_conflicts(keyed(a, b), {}) == []
+
+
+@pytest.mark.parametrize(
+    ("flags", "name"), [([], "config.json"), (["--yaml"], "config.yaml")], ids=["json", "yaml"]
+)
+def test_init_writes_the_shipped_example(tmp_path, monkeypatch, flags, name):
+    """A pip install has no checkout to copy an example from, so `init` writes
+    the one packaged with contrail, byte for byte."""
+    monkeypatch.chdir(tmp_path)
+    data = pathlib.Path(__file__).parent.parent / "src/contrail/data"
+    shipped = data / f"config.example.{name[7:]}"
+
+    assert main(["init", *flags]) == 0
+
+    assert (tmp_path / name).read_bytes() == shipped.read_bytes()
+
+
+def test_init_writes_where_it_is_told(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["init", "--output", "setup/contrail.json"]) == 1  # no such directory
+    (tmp_path / "setup").mkdir()
+    assert main(["init", "--output", "setup/contrail.json"]) == 0
+
+    assert json.loads((tmp_path / "setup/contrail.json").read_text())["emissions"]["type"] == "tim"
+
+
+def test_init_never_overwrites_a_config(tmp_path, monkeypatch, capsys):
+    """The file it would replace holds a feed URL and an API key."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.json").write_text("{}")
+
+    assert main(["init"]) == 1
+
+    assert (tmp_path / "config.json").read_text() == "{}"
+    assert "already exists" in capsys.readouterr().err

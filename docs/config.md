@@ -35,8 +35,10 @@ passport:
   output_path: passport.html
 ```
 
-`config.example.json` and `config.example.yaml` are the same configuration in
-both formats, and a test asserts they stay that way.
+`contrail init` writes this file as `config.json`, and `contrail init --yaml`
+writes the commented YAML version. Both ship inside the package, in
+`src/contrail/data/`, so a pip install has them. They are the same
+configuration in both formats, and a test asserts they stay that way.
 
 ## Resolution order
 
