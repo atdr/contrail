@@ -11,6 +11,8 @@ python3.13 -m venv venv && ./venv/bin/pip install -e ".[dev]"
 ./venv/bin/pytest -q
 ./venv/bin/pytest -q --cov --cov-report=term-missing   # what CI reports to Codecov
 ./venv/bin/ruff check . && ./venv/bin/ruff format .
+./venv/bin/pip install -e ".[dev,browser]" && ./venv/bin/python -m playwright install chromium
+./venv/bin/pytest tests_browser --browser-channel chrome   # Passport in a browser; see CONTRIBUTING.md
 TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics \
   FLIGHTY_CSV_PATH=tests/fixtures/sample_flighty.csv ./venv/bin/contrail sync --dry-run
 ./venv/bin/python scripts/refresh_airline_codes.py   # needs network; run by hand

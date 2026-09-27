@@ -84,6 +84,32 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
+  # The generated Passport, opened in Chromium. The only job that installs a
+  # browser: tests_browser/ sits outside pytest's testpaths and its driver in
+  # its own extra, so the matrix above stays browser independent.
+  browser:
+    name: playwright
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev,browser]"
+      # Chromium only, with the system libraries it needs on the runner.
+      - run: python -m playwright install --with-deps chromium
+      - name: Run browser tests
+        run: pytest tests_browser -q --browser chromium --tracing retain-on-failure --output test-results
+      # A trace holds the console, network and DOM at every step, which is
+      # what makes a failure here investigable without reproducing it.
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 14
+
   docs:
     name: markdown
     # Ten minutes against a job that takes seconds. The point is a `pip` fetch

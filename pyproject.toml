@@ -36,6 +36,10 @@ dependencies = [
 
 [project.optional-dependencies]
 yaml = ["pyyaml>=6.0.3"]
+# The browser suite in tests_browser/, run by the `playwright` job in ci.yml.
+# Its own extra, not part of dev, so the Python matrix and coverage job never
+# download a browser driver they have no use for.
+browser = ["pytest-playwright>=0.9.0"]
 dev = [
     "pytest>=9.1.1",
     # Coverage, reported to Codecov by the `coverage` job in ci.yml. What gets
