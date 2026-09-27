@@ -22,7 +22,7 @@ prices each one using Google's [Travel Impact Model](https://travelimpactmodel.o
 <!-- x-release-please-start-version -->
 
 ```bash
-pip install contrails==0.5.1
+pip install contrails==0.6.0
 ```
 
 <!-- x-release-please-end -->
@@ -96,8 +96,9 @@ The result is one self-contained HTML file. It embeds the flight data and
 styles, Chart.js 4.5.1 for the charts, Leaflet 1.9.4 for the map, and stripped
 Natural Earth 1:110m country boundaries. It requests no external scripts or map
 tiles, so it works offline and makes no network requests. That also means the
-HTML contains your itinerary. Keep it private: `passport.html` is gitignored by
-default, and a custom output path needs the same care.
+HTML contains your itinerary, so keep it as private as the log itself. If you
+commit it, commit it only to a private repo, the way the
+[contrail-gh](https://github.com/atdr/contrail-gh) template does.
 
 Passport compares all time with individual years, and shows total CO2e, CO2e
 per kilometre and CO2e per scheduled block hour alongside the flights and
@@ -439,7 +440,7 @@ One more is anticipated but not built:
 
 Use the **[atdr/contrail-gh](https://github.com/atdr/contrail-gh)** template. Click "Use this
 template", make your new repo **private**, add `TRIPIT_ICAL_URL` and `TIM_API_KEY` as Actions
-secrets, and it syncs daily and commits the updated CSV back to your own repo.
+secrets, and it syncs daily and commits the updated CSV and its Passport back to your own repo.
 
 ### Raspberry Pi, VPS, or any host with cron
 
@@ -447,7 +448,7 @@ secrets, and it syncs daily and commits the updated CSV back to your own repo.
 
 ```bash
 python3 -m venv ~/contrail-venv
-~/contrail-venv/bin/pip install contrails==0.5.1
+~/contrail-venv/bin/pip install contrails==0.6.0
 crontab -e
 ```
 

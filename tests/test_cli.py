@@ -3,14 +3,20 @@
 import csv
 import json
 import pathlib
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from unittest.mock import patch
 
 import pytest
+import requests
 
-from contrail.cli import main
-from contrail.models import EmissionsResult
+from contrail.cli import _collapse, _now, _through_conflicts, main
+from contrail.models import EmissionsResult, FlightRecord
 from contrail.storage import total_kg
+
+# Captured at import, before the autouse fixture below replaces the module
+# attribute: `_now` exists to be monkeypatched, so this is the only handle on
+# the real one.
+REAL_NOW = _now
 
 
 class FakeProvider:
@@ -703,3 +709,231 @@ def test_the_sources_alias_works_but_is_not_advertised(env, capsys):
     assert "SUPPRESS" not in help_text
     assert "\n    sources" not in help_text
     assert "\n    importers" in help_text
+
+
+# -- edges of the sync flow ---------------------------------------------------
+
+
+def test_a_source_entry_without_a_type_is_reported(tmp_path, monkeypatch, capsys):
+    """A config that lists a source but never says what kind must name the entry,
+    not fail somewhere further down with a KeyError."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TRIPIT_ICAL_URL", raising=False)
+    monkeypatch.setenv("TIM_API_KEY", "test-key")
+    (tmp_path / "config.json").write_text(
+        json.dumps({"importers": [{"url": "https://example.invalid/feed.ics"}]})
+    )
+
+    assert main(["sync"]) == 1
+    err = capsys.readouterr().err
+    assert "missing a 'type'" in err
+    assert "example.invalid" in err  # says which entry
+
+
+def test_a_network_failure_is_reported_without_a_traceback(env, capsys):
+    """A 403 or a quota error is an ordinary outcome, and cron setups routinely
+    pipe stderr to a log file."""
+
+    class Unreachable:
+        def __init__(self, api_key):
+            pass
+
+        def compute(self, flights, now=None):
+            raise requests.ConnectionError("travelimpactmodel.googleapis.com unreachable")
+
+    with patch("contrail.cli.get_provider", return_value=Unreachable):
+        assert main(["sync"]) == 1
+
+    assert "Network error talking to an API" in capsys.readouterr().err
+
+
+def test_the_route_average_fallback_is_counted(env, capsys):
+    """Route averages are a materially worse figure, so a run that used one has
+    to say how often."""
+
+    class Typical(FakeProvider):
+        def compute(self, flights, now=None):
+            return {
+                f.key: EmissionsResult(method="typical_route_average", grams_economy=90000)
+                for f in flights
+            }
+
+    with patch("contrail.cli.get_provider", return_value=Typical):
+        assert main(["sync"]) == 0
+
+    assert "had no exact figure" in capsys.readouterr().out
+
+
+def test_provider_responses_are_recorded_in_the_raw_log(env, capsys):
+    """TIM will not price a departed flight again, so the whole answer is kept,
+    not only the columns the CSV has."""
+
+    class WithRaw(FakeProvider):
+        def compute(self, flights, now=None):
+            return {
+                f.key: EmissionsResult(
+                    method="exact", grams_economy=100000, raw={"stub": True, "key": f.key}
+                )
+                for f in flights
+            }
+
+    with patch("contrail.cli.get_provider", return_value=WithRaw):
+        assert main(["sync"]) == 0
+
+    out = capsys.readouterr().out
+    assert "provider response(s) in" in out
+    assert (env / "flight_emissions.raw.jsonl").exists()
+
+
+def test_a_stored_cabin_is_flagged_when_the_row_changes(env, capsys):
+    """A stored cabin is never overwritten, so a row that changed around one has
+    to say the cabin stayed put. Whether it still applies after a reschedule is
+    a question only the traveller can answer."""
+    run_sync(["sync"])
+    path = env / "flight_emissions.csv"
+    rows = read_csv(path)
+    target = next(r for r in rows if r["source_id"] == UPCOMING_UID)
+    target["cabin_class_known"] = "business"
+    target["flight_date"] = "2026-10-01"  # a disagreement the feed will correct
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    capsys.readouterr()
+
+    run_sync(["sync"])
+
+    assert "Kept cabin_class_known='business'" in capsys.readouterr().out
+
+
+def test_the_real_clock_is_what_now_returns():
+    """`_now` exists to be monkeypatched, which is why nothing else executes its
+    body. It still has to return a tz-aware instant."""
+    instant = REAL_NOW()
+    assert instant.tzinfo is not None
+    assert abs((instant - datetime.now(UTC)).total_seconds()) < 60
+
+
+# -- the importers command ----------------------------------------------------
+
+
+def test_importers_command_survives_an_unreadable_config(tmp_path, monkeypatch, capsys):
+    """Listing what contrail can do must not need a working config: a broken one
+    is exactly when someone runs this."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TRIPIT_ICAL_URL", raising=False)
+    (tmp_path / "config.json").write_text(json.dumps({"emissions": [{"type": "tim"}]}))
+
+    assert main(["importers"]) == 0
+    captured = capsys.readouterr()
+    assert "could not read config" in captured.err
+    assert "tripit_ical      not configured" in captured.out
+
+
+def test_importers_command_flags_a_type_it_has_never_heard_of(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TRIPIT_ICAL_URL", raising=False)
+    (tmp_path / "config.json").write_text(json.dumps({"importers": [{"type": "nope"}]}))
+
+    assert main(["importers"]) == 1  # non-zero: the config names something unusable
+    assert "CONFIGURED BUT UNKNOWN" in capsys.readouterr().out
+
+
+def test_passport_says_so_when_it_cannot_open_a_browser(env, capsys):
+    """A headless box has no browser to open. The path is still on disk, so say
+    where rather than failing the command."""
+    run_sync(["sync"])
+    capsys.readouterr()
+
+    with patch("contrail.cli.webbrowser.open", return_value=False):
+        assert main(["passport", "--open"]) == 0
+
+    assert "Could not open a browser automatically" in capsys.readouterr().err
+
+
+def test_a_run_with_nothing_to_do_says_so(env, tmp_path, monkeypatch, capsys):
+    """Silence reads as a failed run, so a sync that found nothing new says that
+    it looked. An export of flights that have all gone is the ordinary case:
+    every row is frozen, so there is nothing to change and nothing to re-price."""
+    rows = list(csv.DictReader(FIXTURE_FLIGHTY.open()))
+    export = tmp_path / "past-only.csv"
+    with open(export, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(r for r in rows if r["Date"] < "2026-08-14")
+    monkeypatch.delenv("TRIPIT_ICAL_URL")
+    monkeypatch.setenv("FLIGHTY_CSV_PATH", str(export))
+
+    run_sync(["sync"])
+    capsys.readouterr()
+    FakeProvider.seen = []
+    run_sync(["sync"])
+
+    out = capsys.readouterr().out
+    assert "No new or changed flights found." in out
+    assert "already up to date" in out
+    assert FakeProvider.seen == []  # the API is not called to learn nothing
+
+
+# -- folding records that are the same flight ---------------------------------
+
+
+def record(source="tripit_ical", source_id="1", origin="LHR", destination="JFK", number="16", **kw):
+    """One record, with only the fields these folding tests care about set."""
+    return FlightRecord(
+        source=source,
+        source_id=source_id,
+        flight_date=date(2026, 9, 20),
+        carrier_code="BA",
+        flight_number=number,
+        origin=origin,
+        destination=destination,
+        **kw,
+    )
+
+
+def keyed(*records):
+    return {r.key: r for r in records}
+
+
+def test_a_half_parsed_record_is_folded_into_nothing():
+    """Identity is None when a field is missing, which is what keeps two
+    unparseable records from matching each other and losing one."""
+    a = record(source_id="1", destination="")
+    b = record(source_id="2", destination="")
+    assert a.identity is None
+
+    survivors, collapsed = _collapse(keyed(a, b))
+
+    assert len(survivors) == 2
+    assert collapsed == []
+
+
+def test_a_link_already_recorded_is_not_recorded_twice():
+    """also_seen_as is rebuilt from scratch on every sync, so a second pass must
+    not append the same key again and grow the column forever."""
+    winner = record(source_id="1", also_seen=["flighty_csv:dup"])
+    loser = record(source="flighty_csv", source_id="dup")
+
+    survivors, collapsed = _collapse(keyed(winner, loser))
+
+    assert list(survivors) == ["tripit_ical:1"]
+    assert len(collapsed) == 1
+    assert winner.also_seen == ["flighty_csv:dup"]
+
+
+def test_a_same_number_round_trip_is_not_a_through_flight():
+    """Two legs sharing a number only describe one journey if they chain. A
+    rotation out and back has no single origin and no single destination, so
+    there is nothing a through entry could be double-counting."""
+    out = record(source_id="1", origin="LHR", destination="JFK")
+    back = record(source_id="2", origin="JFK", destination="LHR")
+
+    assert _through_conflicts(keyed(out, back), {}) == []
+
+
+def test_the_conflict_check_ignores_records_it_cannot_identify():
+    a = record(source_id="1", destination="")
+    b = record(source_id="2", destination="")
+
+    assert _through_conflicts(keyed(a, b), {}) == []

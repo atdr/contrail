@@ -2,7 +2,14 @@
 
 from datetime import UTC, date, datetime, timedelta, timezone
 
-from contrail.airports import departure_date, timezone_for
+import contrail.airports as airports
+from contrail.airports import (
+    arrival_datetime,
+    departure_date,
+    departure_datetime,
+    details_for,
+    timezone_for,
+)
 
 
 def utc(y, m, d, hh, mm=0):
@@ -19,6 +26,16 @@ def test_unknown_or_missing_airports_return_none():
     assert timezone_for("QQQ") is None
     assert timezone_for("") is None
     assert timezone_for(None) is None
+    assert details_for(None) is None
+
+
+def test_an_invalid_timezone_is_treated_as_unknown(monkeypatch):
+    """A stale database entry must degrade like an unknown airport, not abort
+    every import on a machine whose timezone database cannot resolve it."""
+    monkeypatch.setattr(airports, "details_for", lambda _code: {"tz": "Not/A-Timezone"})
+    airports._ZONES.pop("BAD", None)
+
+    assert timezone_for("BAD") is None
 
 
 def test_evening_departure_west_of_utc_keeps_its_own_date():
@@ -67,6 +84,8 @@ def test_naive_datetimes_are_treated_as_already_local():
     wrong — it is already the date the traveller would say."""
     naive = datetime(2026, 7, 4, 21, 30)
     assert departure_date(naive, "JFK") == date(2026, 7, 4)
+    assert departure_datetime(naive, "JFK") is naive
+    assert arrival_datetime(naive, "LHR") is naive
 
 
 def test_non_utc_offsets_are_honoured():

@@ -7,9 +7,10 @@ going red: `source` narrowed to a path that skips a module, `branch` dropped,
 the upload so a Codecov outage fails a pull request that is fine.
 
 The scope settings in particular look like defaults worth deleting and are
-not. `source` naming the package is what makes a module no test imports appear
-at 0% instead of vanishing from the report; without it the least covered files
-are the ones that silently leave, and the number goes *up*.
+not. `source` naming the package and maintainer scripts is what makes a module
+no test imports appear at 0% instead of vanishing from the report; without it
+the least covered files are the ones that silently leave, and the number goes
+*up*.
 """
 
 from __future__ import annotations
@@ -26,13 +27,13 @@ CI = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
 COVERAGE_JOB = CI["jobs"]["coverage"]
 
 
-def test_coverage_measures_the_shipped_package():
+def test_coverage_measures_the_package_and_maintainer_scripts():
     """Not `--cov=` on the CI command line: the config is what a local run reads too."""
     source = PYPROJECT["tool"]["coverage"]["run"]["source"]
 
-    assert source == ["src/contrail"], (
-        f"coverage source is {source!r}; it should name the package directory so "
-        "a module no test imports is reported at 0% rather than left out"
+    assert source == ["src/contrail", "scripts"], (
+        f"coverage source is {source!r}; it should name the package and maintainer "
+        "script directories so an untested module is reported at 0% rather than left out"
     )
     for package in PYPROJECT["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]:
         assert package in source, f"{package} ships but is not measured"

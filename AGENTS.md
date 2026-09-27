@@ -18,9 +18,9 @@ TRIPIT_ICAL_URL=tests/fixtures/sample_feed.ics \
 
 Python 3.11+ to run, 3.13 to develop: `.mdformat.toml` sets `exclude`, which
 errors below 3.13, so a 3.12 venv would put an `mdformat` on `PATH` that cannot
-read its own config. The published floor is unchanged and the matrix still
-tests 3.11. The default `python3` on this machine is 3.7 — use
-`/usr/local/bin/python3.13` explicitly.
+read its own config. The published floor is unchanged, and the matrix tests
+every supported minor through 3.14. The default `python3` on this machine is
+3.7. Use `/usr/local/bin/python3.13` explicitly.
 
 ## Architecture
 
@@ -72,19 +72,20 @@ Two keys, and the difference matters:
 
   `[tool.coverage.run]` in `pyproject.toml`, not the CI command line, is what
   sets the scope, so a local `--cov` run measures what CI measures. Two
-  settings there are load-bearing. `source = ["src/contrail"]` measures what
-  ships rather than what the tests imported: it keeps `tests/` out of the
-  report, and it reports a module no test imports at all at 0% instead of
-  omitting it, which is the difference between a visible gap and an invisible
-  one. `branch = true` counts the untaken side of a condition, which is where
-  the parsing and resync code actually hides its gaps.
+  settings there are load-bearing. `source = ["src/contrail", "scripts"]`
+  measures the package and its maintainer tooling rather than what the tests
+  imported: it keeps `tests/` out of the report, and it reports a module no test
+  imports at all at 0% instead of omitting it, which is the difference between
+  a visible gap and an invisible one. `branch = true` counts the untaken side
+  of a condition, which is where the parsing and resync code actually hides its
+  gaps.
   `tests/test_coverage_config.py` guards the arrangement.
 
 - **Every workflow is named after its own file**, and the description goes on
   the job. GitHub labels a check `<workflow name> / <job name>` and never shows
   the filename, so `pr-title / conventional title` names both the file to open
   and what it did. A matrix job's `name:` has to interpolate the matrix value
-  (`pytest ${{ matrix.python-version }}`) or all three legs produce checks
+  (`pytest ${{ matrix.python-version }}`) or all four legs produce checks
   called the same thing. `tests/test_workflow_naming.py` enforces this, the
   same guard `atdr/contrail-gh#7` added as a shell step in CI there because
   that repo has no test suite to hold it instead. The `Analyze (python)` and
