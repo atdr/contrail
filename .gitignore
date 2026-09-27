@@ -31,6 +31,8 @@ dist/
 # reads, and the HTML report if asked for one.
 .coverage
 coverage.xml
+# Playwright traces kept from a failed browser test.
+test-results/
 htmlcov/
 venv/
 .venv/

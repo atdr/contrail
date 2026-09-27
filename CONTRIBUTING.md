@@ -21,6 +21,24 @@ python3.12 -m venv venv && ./venv/bin/pip install -e ".[dev]"
 ./venv/bin/ruff check . && ./venv/bin/ruff format .
 ```
 
+### Browser tests
+
+`tests_browser/` opens a rendered Passport in Chromium. It is outside the
+default test path, so the commands above never need a browser:
+
+```bash
+./venv/bin/pip install -e ".[dev,browser]"
+./venv/bin/python -m playwright install chromium
+./venv/bin/pytest tests_browser
+```
+
+Where Playwright ships no Chromium build for the OS (macOS 13, for one), use
+an installed Chrome instead:
+
+```bash
+./venv/bin/pytest tests_browser --browser-channel chrome
+```
+
 ## Conventions
 
 Commit style, the PR/issue workflow, architecture, and the gotchas most likely
