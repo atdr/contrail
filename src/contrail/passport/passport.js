@@ -9,7 +9,7 @@
     trendBreakdown: "total",
     patternBreakdown: "total",
     driverBreakdown: "total",
-    driverMetric: "total"
+    driverMetric: "total",
   };
   const charts = new Map();
   const rankingData = new Map();
@@ -17,18 +17,26 @@
   let routeLayer;
   let airportLayer;
   const $ = (id) => document.getElementById(id);
-  const chartFont = getComputedStyle(document.documentElement).getPropertyValue("--font-sans").trim();
+  const chartFont = getComputedStyle(document.documentElement)
+    .getPropertyValue("--font-sans")
+    .trim();
   Chart.defaults.font.family = chartFont;
   Chart.defaults.plugins.tooltip.titleFont = { family: chartFont, weight: "600" };
   Chart.defaults.plugins.tooltip.bodyFont = { family: chartFont };
   Chart.defaults.plugins.tooltip.footerFont = { family: chartFont };
   const sum = (rows, field) => rows.reduce((total, row) => total + (row[field] || 0), 0);
-  const pct = (part, whole) => whole ? Math.round(part / whole * 100) : 0;
-  const formatNumber = (value, digits = 0) => Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
-  const formatKg = (kg, unit = kg >= 1000 ? "t" : "kg") => unit === "t" ? `${formatNumber(kg / 1000, 1)} <small>t CO₂e</small>` : `${formatNumber(kg, 1)} <small>kg CO₂e</small>`;
-  const formatMassText = (kg, unit = kg >= 1000 ? "t" : "kg") => unit === "t" ? `${formatNumber(kg / 1000, 1)} t` : `${formatNumber(kg, 1)} kg`;
+  const pct = (part, whole) => (whole ? Math.round((part / whole) * 100) : 0);
+  const formatNumber = (value, digits = 0) =>
+    Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
+  const formatKg = (kg, unit = kg >= 1000 ? "t" : "kg") =>
+    unit === "t"
+      ? `${formatNumber(kg / 1000, 1)} <small>t CO₂e</small>`
+      : `${formatNumber(kg, 1)} <small>kg CO₂e</small>`;
+  const formatMassText = (kg, unit = kg >= 1000 ? "t" : "kg") =>
+    unit === "t" ? `${formatNumber(kg / 1000, 1)} t` : `${formatNumber(kg, 1)} kg`;
   const formatMassAxisTick = (kg, maximum) => formatMassText(kg, maximum >= 1000 ? "t" : "kg");
-  const cssColor = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const cssColor = (name) =>
+    getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const totalColor = () => cssColor("--total-value");
 
   function categoryColor(kind, label) {
@@ -49,7 +57,11 @@
   }
 
   function visualCategory(row, kind) {
-    if (kind === "cabin" && (!row.cabinKnown || (row.cabin || "").toLowerCase().includes("assumed"))) return "Economy";
+    if (
+      kind === "cabin" &&
+      (!row.cabinKnown || (row.cabin || "").toLowerCase().includes("assumed"))
+    )
+      return "Economy";
     return row[kind] || "Unknown";
   }
 
@@ -72,7 +84,9 @@
     button.setAttribute("aria-pressed", String(state.year === year));
     button.addEventListener("click", () => {
       state.year = year;
-      document.querySelectorAll("#periods button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document
+        .querySelectorAll("#periods button")
+        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
       update();
     });
     return button;
@@ -86,8 +100,12 @@
       $("period-newer").disabled = nav.scrollLeft <= 1;
       $("period-older").disabled = nav.scrollLeft + nav.clientWidth >= nav.scrollWidth - 1;
     };
-    $("period-newer").addEventListener("click", () => nav.scrollBy({ left: -nav.clientWidth * 0.75, behavior: "smooth" }));
-    $("period-older").addEventListener("click", () => nav.scrollBy({ left: nav.clientWidth * 0.75, behavior: "smooth" }));
+    $("period-newer").addEventListener("click", () =>
+      nav.scrollBy({ left: -nav.clientWidth * 0.75, behavior: "smooth" }),
+    );
+    $("period-older").addEventListener("click", () =>
+      nav.scrollBy({ left: nav.clientWidth * 0.75, behavior: "smooth" }),
+    );
     nav.addEventListener("scroll", updateControls, { passive: true });
     window.addEventListener("resize", updateControls);
     requestAnimationFrame(updateControls);
@@ -112,10 +130,14 @@
     let value;
     let context;
     if (state.metric === "distance") {
-      value = distanceKm ? `${formatNumber(totalKgFor(distanceRows) * 1000 / distanceKm, 1)} <small>g CO₂e / passenger-km</small>` : "Not available";
+      value = distanceKm
+        ? `${formatNumber((totalKgFor(distanceRows) * 1000) / distanceKm, 1)} <small>g CO₂e / passenger-km</small>`
+        : "Not available";
       context = "Weighted intensity using one consistent great-circle distance method";
     } else if (state.metric === "duration") {
-      value = durationHours ? `${formatNumber(totalKgFor(durationRows) / durationHours, 1)} <small>kg CO₂e / block hour</small>` : "Needs arrival times";
+      value = durationHours
+        ? `${formatNumber(totalKgFor(durationRows) / durationHours, 1)} <small>kg CO₂e / block hour</small>`
+        : "Needs arrival times";
       context = "Weighted intensity using scheduled gate-to-gate time";
     } else {
       value = formatKg(totalKg);
@@ -125,8 +147,12 @@
     $("hero-value").innerHTML = value;
     $("hero-context").textContent = context;
     $("flight-count").textContent = formatNumber(completedRows.length);
-    $("distance-total").textContent = allDistanceRows.length ? `${formatNumber(sum(allDistanceRows, "distanceKm"))} km` : "Not available";
-    $("duration-total").textContent = allDurationRows.length ? `${formatNumber(sum(allDurationRows, "durationHours"), 1)} h` : "Needs arrival times";
+    $("distance-total").textContent = allDistanceRows.length
+      ? `${formatNumber(sum(allDistanceRows, "distanceKm"))} km`
+      : "Not available";
+    $("duration-total").textContent = allDurationRows.length
+      ? `${formatNumber(sum(allDurationRows, "durationHours"), 1)} h`
+      : "Needs arrival times";
     $("planned-total").innerHTML = formatKg(sum(planned, "kg"));
   }
 
@@ -151,14 +177,18 @@
   }
 
   function metricValue(bucket, metric) {
-    if (metric === "distance") return bucket.distanceKm ? bucket.distanceKg * 1000 / bucket.distanceKm : null;
-    if (metric === "duration") return bucket.durationHours ? bucket.durationKg / bucket.durationHours : null;
+    if (metric === "distance")
+      return bucket.distanceKm ? (bucket.distanceKg * 1000) / bucket.distanceKm : null;
+    if (metric === "duration")
+      return bucket.durationHours ? bucket.durationKg / bucket.durationHours : null;
     return bucket.totalKg;
   }
 
   function formatRankingValue(value, metric, includeCarbon = false) {
-    if (metric === "distance") return `${formatNumber(value, 1)} g${includeCarbon ? " CO₂e / passenger-km" : "/km"}`;
-    if (metric === "duration") return `${formatNumber(value, 1)} kg${includeCarbon ? " CO₂e / block hour" : "/hr"}`;
+    if (metric === "distance")
+      return `${formatNumber(value, 1)} g${includeCarbon ? " CO₂e / passenger-km" : "/km"}`;
+    if (metric === "duration")
+      return `${formatNumber(value, 1)} kg${includeCarbon ? " CO₂e / block hour" : "/hr"}`;
     return `${formatMassText(value)}${includeCarbon ? " CO₂e" : ""}`;
   }
 
@@ -175,7 +205,13 @@
     const values = new Map();
     withEmissions(completed(rows)).forEach((row) => {
       const label = labeler(row) || "Unknown";
-      const entry = values.get(label) || { label, total: 0, metrics: emptyMetricBucket(), cabin: new Map(), reason: new Map() };
+      const entry = values.get(label) || {
+        label,
+        total: 0,
+        metrics: emptyMetricBucket(),
+        cabin: new Map(),
+        reason: new Map(),
+      };
       addToMetricBucket(entry.metrics, row);
       entry.total = entry.metrics.totalKg;
       ["cabin", "reason"].forEach((kind) => {
@@ -194,7 +230,7 @@
     return {
       text: getComputedStyle(document.body).color,
       muted: dark ? "#a5b2aa" : "#647068",
-      grid: dark ? "rgba(165,178,170,0.18)" : "rgba(100,112,104,0.16)"
+      grid: dark ? "rgba(165,178,170,0.18)" : "rgba(100,112,104,0.16)",
     };
   }
 
@@ -228,7 +264,7 @@
           }
         });
         ctx.restore();
-      }
+      },
     };
   }
 
@@ -242,15 +278,20 @@
         ctx.fillStyle = theme.text;
         ctx.font = `500 12px ${chartFont}`;
         totals.forEach((total, index) => {
-          const bars = chart.data.datasets.map((_, datasetIndex) => chart.getDatasetMeta(datasetIndex).data[index]).filter(Boolean);
-          const anchor = bars.reduce((furthest, bar) => !furthest || bar.x > furthest.x ? bar : furthest, null);
+          const bars = chart.data.datasets
+            .map((_, datasetIndex) => chart.getDatasetMeta(datasetIndex).data[index])
+            .filter(Boolean);
+          const anchor = bars.reduce(
+            (furthest, bar) => (!furthest || bar.x > furthest.x ? bar : furthest),
+            null,
+          );
           if (!anchor) return;
           ctx.textAlign = "left";
           ctx.textBaseline = "middle";
           ctx.fillText(formatRankingValue(total, metric), anchor.x + 8, anchor.y);
         });
         ctx.restore();
-      }
+      },
     };
   }
 
@@ -265,16 +306,21 @@
         ctx.font = `500 12px ${chartFont}`;
         totals.forEach((total, index) => {
           const bars = chart.data.datasets
-            .map((dataset, datasetIndex) => dataset.data[index] ? chart.getDatasetMeta(datasetIndex).data[index] : null)
+            .map((dataset, datasetIndex) =>
+              dataset.data[index] ? chart.getDatasetMeta(datasetIndex).data[index] : null,
+            )
             .filter(Boolean);
-          const anchor = bars.reduce((highest, bar) => !highest || bar.y < highest.y ? bar : highest, null);
+          const anchor = bars.reduce(
+            (highest, bar) => (!highest || bar.y < highest.y ? bar : highest),
+            null,
+          );
           if (!anchor) return;
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
           ctx.fillText(formatMassText(total, unit), anchor.x, anchor.y - 7);
         });
         ctx.restore();
-      }
+      },
     };
   }
 
@@ -311,7 +357,7 @@
   function stackedBorderRadius(axis, radius = 7) {
     return (context) => {
       const active = context.chart.data.datasets
-        .map((dataset, index) => Number(dataset.data[context.dataIndex]) > 0 ? index : null)
+        .map((dataset, index) => (Number(dataset.data[context.dataIndex]) > 0 ? index : null))
         .filter((index) => index !== null);
       const last = active.at(-1);
       if (axis === "y") {
@@ -319,14 +365,14 @@
           topLeft: 0,
           bottomLeft: 0,
           topRight: context.datasetIndex === last ? radius : 0,
-          bottomRight: context.datasetIndex === last ? radius : 0
+          bottomRight: context.datasetIndex === last ? radius : 0,
         };
       }
       return {
         bottomLeft: 0,
         bottomRight: 0,
         topLeft: context.datasetIndex === last ? radius : 0,
-        topRight: context.datasetIndex === last ? radius : 0
+        topRight: context.datasetIndex === last ? radius : 0,
       };
     };
   }
@@ -340,9 +386,12 @@
     const bucket = entry[breakdown].get(category);
     if (!bucket) return 0;
     if (metric === "total") return bucket.totalKg;
-    const denominator = metric === "distance" ? entry.metrics.distanceKm : entry.metrics.durationHours;
+    const denominator =
+      metric === "distance" ? entry.metrics.distanceKm : entry.metrics.durationHours;
     if (!denominator) return 0;
-    return metric === "distance" ? bucket.distanceKg * 1000 / denominator : bucket.durationKg / denominator;
+    return metric === "distance"
+      ? (bucket.distanceKg * 1000) / denominator
+      : bucket.durationKg / denominator;
   }
 
   function rankForMetric(entries, metric) {
@@ -353,37 +402,69 @@
       .map((item) => item.entry);
   }
 
-  function renderRanking(id, entries, breakdown = state.driverBreakdown, metric = state.driverMetric) {
+  function renderRanking(
+    id,
+    entries,
+    breakdown = state.driverBreakdown,
+    metric = state.driverMetric,
+  ) {
     const theme = chartTheme();
     const totals = entries.map((entry) => rankingMetricValue(entry, metric));
     const maximum = Math.max(1, ...totals);
     const categoryTotals = new Map();
     if (breakdown !== "total") {
-      entries.forEach((entry) => entry[breakdown].forEach((_, label) => {
-        const value = rankingCategoryValue(entry, breakdown, label, metric);
-        categoryTotals.set(label, (categoryTotals.get(label) || 0) + value);
-      }));
+      entries.forEach((entry) =>
+        entry[breakdown].forEach((_, label) => {
+          const value = rankingCategoryValue(entry, breakdown, label, metric);
+          categoryTotals.set(label, (categoryTotals.get(label) || 0) + value);
+        }),
+      );
     }
-    const categories = [...categoryTotals.entries()].sort((a, b) => b[1] - a[1]).map((entry) => entry[0]);
-    const datasets = breakdown === "total" ? [{ label: "Total", data: totals, backgroundColor: totalColor(), hoverBackgroundColor: totalColor(), borderSkipped: false, borderRadius: { topLeft: 0, bottomLeft: 0, topRight: 7, bottomRight: 7 }, barPercentage: 0.72 }] : categories.map((category) => ({
-      label: category,
-      data: entries.map((entry) => rankingCategoryValue(entry, breakdown, category, metric)),
-      backgroundColor: categoryColor(breakdown, category),
-      hoverBackgroundColor: categoryColor(breakdown, category),
-      borderSkipped: false,
-      borderRadius: stackedBorderRadius("y"),
-      barPercentage: 0.72
-    }));
+    const categories = [...categoryTotals.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map((entry) => entry[0]);
+    const datasets =
+      breakdown === "total"
+        ? [
+            {
+              label: "Total",
+              data: totals,
+              backgroundColor: totalColor(),
+              hoverBackgroundColor: totalColor(),
+              borderSkipped: false,
+              borderRadius: { topLeft: 0, bottomLeft: 0, topRight: 7, bottomRight: 7 },
+              barPercentage: 0.72,
+            },
+          ]
+        : categories.map((category) => ({
+            label: category,
+            data: entries.map((entry) => rankingCategoryValue(entry, breakdown, category, metric)),
+            backgroundColor: categoryColor(breakdown, category),
+            hoverBackgroundColor: categoryColor(breakdown, category),
+            borderSkipped: false,
+            borderRadius: stackedBorderRadius("y"),
+            barPercentage: 0.72,
+          }));
     $(id).setAttribute("role", "img");
-    $(id).setAttribute("aria-label", entries.length ? entries.map((entry) => {
-      const categoriesText = breakdown === "total" ? "" : `; ${[...entry[breakdown].keys()].map((label) => `${label} ${formatRankingValue(rankingCategoryValue(entry, breakdown, label, metric), metric, true)}`).join(", ")}`;
-      return `${entry.label}: ${formatRankingValue(rankingMetricValue(entry, metric), metric, true)}${categoriesText}`;
-    }).join(", ") : `No flights with the data required for ${metric === "distance" ? "distance intensity" : metric === "duration" ? "time intensity" : "total impact"} in this period`);
+    $(id).setAttribute(
+      "aria-label",
+      entries.length
+        ? entries
+            .map((entry) => {
+              const categoriesText =
+                breakdown === "total"
+                  ? ""
+                  : `; ${[...entry[breakdown].keys()].map((label) => `${label} ${formatRankingValue(rankingCategoryValue(entry, breakdown, label, metric), metric, true)}`).join(", ")}`;
+              return `${entry.label}: ${formatRankingValue(rankingMetricValue(entry, metric), metric, true)}${categoriesText}`;
+            })
+            .join(", ")
+        : `No flights with the data required for ${metric === "distance" ? "distance intensity" : metric === "duration" ? "time intensity" : "total impact"} in this period`,
+    );
     replaceChart(id, {
       type: "bar",
       data: {
         labels: entries.map((entry) => entry.label),
-        datasets
+        datasets,
       },
       plugins: [rankingValueLabels(totals, metric)],
       options: {
@@ -394,13 +475,23 @@
         layout: { padding: { right: metric === "total" ? 58 : 88 } },
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatRankingValue(context.raw, metric, true)}` } }
+          tooltip: {
+            callbacks: {
+              label: (context) =>
+                `${context.dataset.label}: ${formatRankingValue(context.raw, metric, true)}`,
+            },
+          },
         },
         scales: {
           x: { display: false, stacked: true, beginAtZero: true, max: maximum * 1.24 },
-          y: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { autoSkip: false, color: theme.text, font: { size: 12 } } }
-        }
-      }
+          y: {
+            stacked: true,
+            grid: { display: false },
+            border: { display: false },
+            ticks: { autoSkip: false, color: theme.text, font: { size: 12 } },
+          },
+        },
+      },
     });
   }
 
@@ -410,7 +501,17 @@
     icon.className = "category-icon";
     icon.setAttribute("aria-hidden", "true");
     if (kind === "cabin") {
-      const badge = key.includes("premium") ? "E+" : key === "business" ? "B" : key === "first" ? "F" : key === "private" ? "VIP" : key.includes("economy") ? "E" : "?";
+      const badge = key.includes("premium")
+        ? "E+"
+        : key === "business"
+          ? "B"
+          : key === "first"
+            ? "F"
+            : key === "private"
+              ? "VIP"
+              : key.includes("economy")
+                ? "E"
+                : "?";
       icon.textContent = badge;
       icon.style.setProperty("--icon-bg", categoryColor(kind, label));
       if (badge === "VIP") icon.classList.add("wide");
@@ -432,7 +533,14 @@
   function renderComposition(id, entries, kind) {
     const total = entries.reduce((value, entry) => value + entry[1], 0);
     $(`${id}-chart`).setAttribute("role", "img");
-    $(`${id}-chart`).setAttribute("aria-label", entries.length ? entries.map(([label, kg]) => `${label}: ${formatNumber(total ? kg / total * 100 : 0, 1)}%`).join(", ") : "No priced flights in this period");
+    $(`${id}-chart`).setAttribute(
+      "aria-label",
+      entries.length
+        ? entries
+            .map(([label, kg]) => `${label}: ${formatNumber(total ? (kg / total) * 100 : 0, 1)}%`)
+            .join(", ")
+        : "No priced flights in this period",
+    );
     replaceChart(`${id}-chart`, {
       type: "bar",
       data: {
@@ -443,9 +551,14 @@
           backgroundColor: categoryColor(kind, label),
           hoverBackgroundColor: categoryColor(kind, label),
           borderSkipped: false,
-          borderRadius: index === 0 ? { topLeft: 14, bottomLeft: 14 } : index === entries.length - 1 ? { topRight: 14, bottomRight: 14 } : 0,
-          barThickness: 28
-        }))
+          borderRadius:
+            index === 0
+              ? { topLeft: 14, bottomLeft: 14 }
+              : index === entries.length - 1
+                ? { topRight: 14, bottomRight: 14 }
+                : 0,
+          barThickness: 28,
+        })),
       },
       options: {
         animation: false,
@@ -454,19 +567,24 @@
         indexAxis: "y",
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e · ${formatNumber(total ? context.raw / total * 100 : 0, 1)}%` } }
+          tooltip: {
+            callbacks: {
+              label: (context) =>
+                `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e · ${formatNumber(total ? (context.raw / total) * 100 : 0, 1)}%`,
+            },
+          },
         },
         scales: {
           x: { display: false, stacked: true, max: total || 1 },
-          y: { display: false, stacked: true }
-        }
-      }
+          y: { display: false, stacked: true },
+        },
+      },
     });
 
     const legend = $(`${id}-legend`);
     legend.replaceChildren();
     entries.forEach(([label, kg]) => {
-      const percentage = total ? kg / total * 100 : 0;
+      const percentage = total ? (kg / total) * 100 : 0;
       const row = document.createElement("div");
       row.className = "composition-row";
       const swatch = document.createElement("span");
@@ -495,7 +613,7 @@
           total: 0,
           metrics: emptyMetricBucket(),
           cabin: new Map(),
-          reason: new Map()
+          reason: new Map(),
         };
         addToMetricBucket(entry.metrics, flight);
         entry.total = entry.metrics.totalKg;
@@ -515,31 +633,69 @@
     const validDates = withEmissions(completed(rows)).filter((flight) => flight.date);
     const definitions = {
       month: {
-        labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-        value: (flight) => ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(flight.date.slice(5, 7)) - 1]
+        labels: [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ],
+        value: (flight) =>
+          ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][
+            Number(flight.date.slice(5, 7)) - 1
+          ],
       },
       weekday: {
         labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-        value: (flight) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(`${flight.date}T00:00:00Z`).getUTCDay()]
-      }
+        value: (flight) =>
+          ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
+            new Date(`${flight.date}T00:00:00Z`).getUTCDay()
+          ],
+      },
     };
     const definition = definitions[state.pattern];
     const categories = breakdownCategories(validDates, state.patternBreakdown);
     const values = new Map(
-      definition.labels.map((label) => [label, new Map(categories.map((category) => [category, 0]))])
+      definition.labels.map((label) => [
+        label,
+        new Map(categories.map((category) => [category, 0])),
+      ]),
     );
     validDates.forEach((flight) => {
       const label = definition.value(flight);
-      const category = state.patternBreakdown === "total" ? "Total" : visualCategory(flight, state.patternBreakdown);
+      const category =
+        state.patternBreakdown === "total"
+          ? "Total"
+          : visualCategory(flight, state.patternBreakdown);
       values.get(label).set(category, values.get(label).get(category) + flight.kg);
     });
-    const totals = definition.labels.map((label) => sum([...values.get(label).values()].map((kg) => ({ kg })), "kg"));
+    const totals = definition.labels.map((label) =>
+      sum(
+        [...values.get(label).values()].map((kg) => ({ kg })),
+        "kg",
+      ),
+    );
     const maximum = Math.max(0, ...totals);
     const theme = chartTheme();
-    $("pattern-chart").setAttribute("aria-label", definition.labels.map((label, index) => {
-      const details = state.patternBreakdown === "total" ? "" : `; ${categories.map((category) => `${category} ${formatMassText(values.get(label).get(category))}`).join(", ")}`;
-      return `${label}: ${formatMassText(totals[index])} CO₂e${details}`;
-    }).join(", "));
+    $("pattern-chart").setAttribute(
+      "aria-label",
+      definition.labels
+        .map((label, index) => {
+          const details =
+            state.patternBreakdown === "total"
+              ? ""
+              : `; ${categories.map((category) => `${category} ${formatMassText(values.get(label).get(category))}`).join(", ")}`;
+          return `${label}: ${formatMassText(totals[index])} CO₂e${details}`;
+        })
+        .join(", "),
+    );
     replaceChart("pattern-chart", {
       type: "bar",
       data: {
@@ -551,8 +707,8 @@
           hoverBackgroundColor: breakdownColor(state.patternBreakdown, category),
           borderSkipped: false,
           borderRadius: stackedBorderRadius("x"),
-          barPercentage: 0.66
-        }))
+          barPercentage: 0.66,
+        })),
       },
       plugins: [periodValueLabels(totals, maximum >= 1000 ? "t" : "kg")],
       options: {
@@ -562,28 +718,52 @@
         layout: { padding: { top: 28 } },
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e` } }
+          tooltip: {
+            callbacks: {
+              label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e`,
+            },
+          },
         },
         scales: {
-          x: { stacked: true, grid: { display: false }, border: { color: theme.grid }, ticks: { autoSkip: false, color: theme.muted } },
-          y: { stacked: true, beginAtZero: true, suggestedMax: maximum * 1.12, grid: { color: theme.grid }, border: { display: false }, ticks: { color: theme.muted, callback: (value) => formatMassAxisTick(value, maximum) } }
-        }
-      }
+          x: {
+            stacked: true,
+            grid: { display: false },
+            border: { color: theme.grid },
+            ticks: { autoSkip: false, color: theme.muted },
+          },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            suggestedMax: maximum * 1.12,
+            grid: { color: theme.grid },
+            border: { display: false },
+            ticks: { color: theme.muted, callback: (value) => formatMassAxisTick(value, maximum) },
+          },
+        },
+      },
     });
 
-    const countryDisplay = typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(undefined, { type: "region" }) : null;
+    const countryDisplay =
+      typeof Intl.DisplayNames === "function"
+        ? new Intl.DisplayNames(undefined, { type: "region" })
+        : null;
     const airportEntries = impactByValues(rows, (flight) => [flight.origin, flight.destination]);
-    const countryEntries = impactByValues(rows, (flight) => [flight.start && flight.start.country, flight.end && flight.end.country])
-      .map((entry) => ({ ...entry, label: `${countryFlag(entry.label)} ${countryDisplay ? countryDisplay.of(entry.label) || entry.label : entry.label}` }));
+    const countryEntries = impactByValues(rows, (flight) => [
+      flight.start && flight.start.country,
+      flight.end && flight.end.country,
+    ]).map((entry) => ({
+      ...entry,
+      label: `${countryFlag(entry.label)} ${countryDisplay ? countryDisplay.of(entry.label) || entry.label : entry.label}`,
+    }));
     [
       ["airports", "All airport connections", airportEntries],
-      ["countries", "All country connections", countryEntries]
+      ["countries", "All country connections", countryEntries],
     ].forEach(([key, title, entries]) => {
       rankingData.set(key, {
         title,
         entries,
         breakdown: state.patternBreakdown,
-        metric: "total"
+        metric: "total",
       });
       renderRanking(key, entries.slice(0, 6), state.patternBreakdown, "total");
       document.querySelector(`[data-ranking="${key}"]`).hidden = entries.length <= 6;
@@ -591,7 +771,9 @@
   }
 
   function countryFlag(code) {
-    return /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map((letter) => 127397 + letter.charCodeAt())) : "🌐";
+    return /^[A-Z]{2}$/.test(code)
+      ? String.fromCodePoint(...[...code].map((letter) => 127397 + letter.charCodeAt()))
+      : "🌐";
   }
 
   function routeName(flight) {
@@ -611,17 +793,24 @@
     const cabin = visualCategory(flight, "cabin");
     const cabinKey = cabin.toLowerCase();
     if (cabinKey === "first") tags.append(flightTag("First", "cabin-first", "cabin", cabin));
-    else if (cabinKey === "business") tags.append(flightTag("Business", "cabin-business", "cabin", cabin));
-    else if (cabinKey.includes("premium")) tags.append(flightTag(cabin, "cabin-premium", "cabin", cabin));
-    else if (cabinKey === "private") tags.append(flightTag("Private", "cabin-private", "cabin", cabin));
-    else if (cabinKey.includes("economy")) tags.append(flightTag(cabin, "cabin-economy", "cabin", cabin));
+    else if (cabinKey === "business")
+      tags.append(flightTag("Business", "cabin-business", "cabin", cabin));
+    else if (cabinKey.includes("premium"))
+      tags.append(flightTag(cabin, "cabin-premium", "cabin", cabin));
+    else if (cabinKey === "private")
+      tags.append(flightTag("Private", "cabin-private", "cabin", cabin));
+    else if (cabinKey.includes("economy"))
+      tags.append(flightTag(cabin, "cabin-economy", "cabin", cabin));
     else tags.append(flightTag(cabin, "tag-unknown", "cabin", cabin));
 
     const reason = flight.reason || "Unknown";
     const reasonKey = reason.toLowerCase();
-    if (reasonKey === "business") tags.append(flightTag("Business trip", "reason-business", "reason", reason));
-    else if (reasonKey === "leisure") tags.append(flightTag("Leisure", "reason-leisure", "reason", reason));
-    else if (reasonKey === "personal") tags.append(flightTag("Personal", "reason-leisure", "reason", reason));
+    if (reasonKey === "business")
+      tags.append(flightTag("Business trip", "reason-business", "reason", reason));
+    else if (reasonKey === "leisure")
+      tags.append(flightTag("Leisure", "reason-leisure", "reason", reason));
+    else if (reasonKey === "personal")
+      tags.append(flightTag("Personal", "reason-leisure", "reason", reason));
     else if (reasonKey === "crew") tags.append(flightTag("Crew", "reason-crew", "reason", reason));
     else tags.append(flightTag("Reason unknown", "tag-unknown", "reason", reason));
     return tags;
@@ -650,24 +839,72 @@
   function updateExtremes(rows) {
     const done = withEmissions(completed(rows));
     const total = done.map((flight) => [flight, flight.kg]).sort((a, b) => a[1] - b[1]);
-    const distance = done.filter((flight) => flight.distanceKm).map((flight) => [flight, flight.kg * 1000 / flight.distanceKm]).sort((a, b) => a[1] - b[1]);
-    const duration = done.filter((flight) => flight.durationHours).map((flight) => [flight, flight.kg / flight.durationHours]).sort((a, b) => a[1] - b[1]);
-    renderExtreme("lightest-total", "Lightest", total[0], (value) => `${formatMassText(value)} CO₂e`);
-    renderExtreme("heaviest-total", "Heaviest", total.at(-1), (value) => `${formatMassText(value)} CO₂e`);
-    renderExtreme("lightest-distance", "Lightest", distance[0], (value) => `${formatNumber(value, 1)} g CO₂e / passenger-km`);
-    renderExtreme("heaviest-distance", "Heaviest", distance.at(-1), (value) => `${formatNumber(value, 1)} g CO₂e / passenger-km`);
-    renderExtreme("lightest-duration", "Lightest", duration[0], (value) => `${formatNumber(value, 1)} kg CO₂e / block hour`);
-    renderExtreme("heaviest-duration", "Heaviest", duration.at(-1), (value) => `${formatNumber(value, 1)} kg CO₂e / block hour`);
+    const distance = done
+      .filter((flight) => flight.distanceKm)
+      .map((flight) => [flight, (flight.kg * 1000) / flight.distanceKm])
+      .sort((a, b) => a[1] - b[1]);
+    const duration = done
+      .filter((flight) => flight.durationHours)
+      .map((flight) => [flight, flight.kg / flight.durationHours])
+      .sort((a, b) => a[1] - b[1]);
+    renderExtreme(
+      "lightest-total",
+      "Lightest",
+      total[0],
+      (value) => `${formatMassText(value)} CO₂e`,
+    );
+    renderExtreme(
+      "heaviest-total",
+      "Heaviest",
+      total.at(-1),
+      (value) => `${formatMassText(value)} CO₂e`,
+    );
+    renderExtreme(
+      "lightest-distance",
+      "Lightest",
+      distance[0],
+      (value) => `${formatNumber(value, 1)} g CO₂e / passenger-km`,
+    );
+    renderExtreme(
+      "heaviest-distance",
+      "Heaviest",
+      distance.at(-1),
+      (value) => `${formatNumber(value, 1)} g CO₂e / passenger-km`,
+    );
+    renderExtreme(
+      "lightest-duration",
+      "Lightest",
+      duration[0],
+      (value) => `${formatNumber(value, 1)} kg CO₂e / block hour`,
+    );
+    renderExtreme(
+      "heaviest-duration",
+      "Heaviest",
+      duration.at(-1),
+      (value) => `${formatNumber(value, 1)} kg CO₂e / block hour`,
+    );
   }
 
   function updateRankings(rows) {
-    renderComposition("cabins", groupAll(rows, "cabin", (row) => visualCategory(row, "cabin")), "cabin");
+    renderComposition(
+      "cabins",
+      groupAll(rows, "cabin", (row) => visualCategory(row, "cabin")),
+      "cabin",
+    );
     renderComposition("reasons", groupAll(rows, "reason"), "reason");
     const rankings = [
       ["routes", "All routes", rankAll(rows, (row) => row.route)],
       ["carriers", "All operating airlines", rankAll(rows, (row) => row.carrier)],
       ["aircraft", "All aircraft", rankAll(rows, (row) => row.aircraft)],
-      ["flights", "All flights by impact", rankAll(rows, (row) => `${row.flight || "Unknown"} · ${row.origin || "?"}–${row.destination || "?"} · ${row.date || "date unknown"}`)]
+      [
+        "flights",
+        "All flights by impact",
+        rankAll(
+          rows,
+          (row) =>
+            `${row.flight || "Unknown"} · ${row.origin || "?"}–${row.destination || "?"} · ${row.date || "date unknown"}`,
+        ),
+      ],
     ];
     rankings.forEach(([key, title, entries]) => {
       const ranked = rankForMetric(entries, state.driverMetric);
@@ -675,7 +912,7 @@
         title,
         entries: ranked,
         breakdown: state.driverBreakdown,
-        metric: state.driverMetric
+        metric: state.driverMetric,
       });
       renderRanking(key, ranked.slice(0, 6));
       const button = document.querySelector(`[data-ranking="${key}"]`);
@@ -688,12 +925,19 @@
     if (!ranking || !ranking.entries.length) return;
     const metric = ranking.metric || "total";
     const breakdown = ranking.breakdown || "total";
-    const metricLabel = metric === "distance" ? "average CO₂e per km" : metric === "duration" ? "average CO₂e per hour" : "total CO₂e";
+    const metricLabel =
+      metric === "distance"
+        ? "average CO₂e per km"
+        : metric === "duration"
+          ? "average CO₂e per hour"
+          : "total CO₂e";
     const breakdownLabel = breakdown === "total" ? "" : ` by ${breakdown}`;
     $("ranking-dialog-title").textContent = `${ranking.title} · ${metricLabel}${breakdownLabel}`;
     $("ranking-dialog-chart").style.height = `${Math.max(360, ranking.entries.length * 34)}px`;
     $("ranking-dialog").showModal();
-    requestAnimationFrame(() => renderRanking("ranking-dialog-canvas", ranking.entries, breakdown, metric));
+    requestAnimationFrame(() =>
+      renderRanking("ranking-dialog-canvas", ranking.entries, breakdown, metric),
+    );
   }
 
   function setupMap() {
@@ -704,8 +948,11 @@
       zoomSnap: 0.25,
       zoomDelta: 0.5,
       worldCopyJump: false,
-      maxBounds: [[-85, -220], [85, 220]],
-      maxBoundsViscosity: 0.72
+      maxBounds: [
+        [-85, -220],
+        [85, 220],
+      ],
+      maxBoundsViscosity: 0.72,
     });
     routeMap.createPane("land").style.zIndex = "200";
     routeMap.createPane("routes").style.zIndex = "410";
@@ -713,7 +960,7 @@
     L.geoJSON(world, {
       pane: "land",
       interactive: false,
-      style: { color: "#5f8c80", weight: 0.7, fillColor: "#173f35", fillOpacity: 1 }
+      style: { color: "#5f8c80", weight: 0.7, fillColor: "#173f35", fillOpacity: 1 },
     }).addTo(routeMap);
     routeLayer = L.layerGroup().addTo(routeMap);
     airportLayer = L.layerGroup().addTo(routeMap);
@@ -731,8 +978,14 @@
     };
     const first = vector(start);
     const last = vector(end);
-    const angle = Math.acos(Math.min(1, Math.max(-1, first[0] * last[0] + first[1] * last[1] + first[2] * last[2])));
-    if (angle < 0.000001) return [[start.lat, start.lon], [end.lat, end.lon]];
+    const angle = Math.acos(
+      Math.min(1, Math.max(-1, first[0] * last[0] + first[1] * last[1] + first[2] * last[2])),
+    );
+    if (angle < 0.000001)
+      return [
+        [start.lat, start.lon],
+        [end.lat, end.lon],
+      ];
     const denominator = Math.sin(angle);
     return Array.from({ length: steps + 1 }, (_, index) => {
       const fraction = index / steps;
@@ -746,11 +999,16 @@
   }
 
   function splitAtDateLine(points) {
-    return points.reduce((segments, point, index) => {
-      if (index && Math.abs(point[1] - points[index - 1][1]) > 180) segments.push([]);
-      segments.at(-1).push(point);
-      return segments;
-    }, [[]]).filter((segment) => segment.length > 1);
+    return points
+      .reduce(
+        (segments, point, index) => {
+          if (index && Math.abs(point[1] - points[index - 1][1]) > 180) segments.push([]);
+          segments.at(-1).push(point);
+          return segments;
+        },
+        [[]],
+      )
+      .filter((segment) => segment.length > 1);
   }
 
   function updateMap(rows) {
@@ -759,17 +1017,31 @@
     const routes = new Map();
     withEmissions(completed(rows)).forEach((flight) => {
       if (!flight.start || !flight.end) return;
-      const existing = routes.get(flight.route) || { kg: 0, start: flight.start, end: flight.end, distanceKm: flight.distanceKm };
+      const existing = routes.get(flight.route) || {
+        kg: 0,
+        start: flight.start,
+        end: flight.end,
+        distanceKm: flight.distanceKm,
+      };
       existing.kg += flight.kg;
       routes.set(flight.route, existing);
     });
     const airports = new Map();
-    const maximumDensity = Math.max(1, ...[...routes.values()].map((route) => route.kg / Math.max(1, route.distanceKm || 1)));
+    const maximumDensity = Math.max(
+      1,
+      ...[...routes.values()].map((route) => route.kg / Math.max(1, route.distanceKm || 1)),
+    );
     routes.forEach((route, label) => {
       const density = route.kg / Math.max(1, route.distanceKm || 1);
-      const weight = Math.max(0.85, 8 * density / maximumDensity);
+      const weight = Math.max(0.85, (8 * density) / maximumDensity);
       splitAtDateLine(greatCircle(route.start, route.end)).forEach((segment) => {
-        L.polyline(segment, { pane: "routes", color: "#f5faf7", opacity: 0.7, weight, lineCap: "round" })
+        L.polyline(segment, {
+          pane: "routes",
+          color: "#f5faf7",
+          opacity: 0.7,
+          weight,
+          lineCap: "round",
+        })
           .bindTooltip(`${label}<br>${formatMassText(route.kg)} CO₂e`)
           .addTo(routeLayer);
       });
@@ -779,73 +1051,120 @@
         airports.set(airport.iata, existing);
       });
     });
-    const maximumAirportImpact = Math.max(1, ...[...airports.values()].map((airport) => airport.kg));
+    const maximumAirportImpact = Math.max(
+      1,
+      ...[...airports.values()].map((airport) => airport.kg),
+    );
     // SVG stacks in draw order, so the heaviest airport is drawn last and sits on top.
-    [...airports.values()].sort((a, b) => a.kg - b.kg).forEach((airport) => {
-      const share = airport.kg / maximumAirportImpact;
-      const fillColor = `hsl(${46 - 34 * share} 92% ${63 - 10 * share}%)`;
-      L.circleMarker([airport.lat, airport.lon], { pane: "airports", radius: 3.5 + 4 * Math.sqrt(share), color: "#fff", weight: 1.2, fillColor, fillOpacity: 1 })
-        .bindTooltip(`<strong>${airport.iata}</strong><br>${formatMassText(airport.kg)} CO₂e connected`, { direction: "top", offset: [0, -4] })
-        .addTo(airportLayer);
-    });
+    [...airports.values()]
+      .sort((a, b) => a.kg - b.kg)
+      .forEach((airport) => {
+        const share = airport.kg / maximumAirportImpact;
+        const fillColor = `hsl(${46 - 34 * share} 92% ${63 - 10 * share}%)`;
+        L.circleMarker([airport.lat, airport.lon], {
+          pane: "airports",
+          radius: 3.5 + 4 * Math.sqrt(share),
+          color: "#fff",
+          weight: 1.2,
+          fillColor,
+          fillOpacity: 1,
+        })
+          .bindTooltip(
+            `<strong>${airport.iata}</strong><br>${formatMassText(airport.kg)} CO₂e connected`,
+            { direction: "top", offset: [0, -4] },
+          )
+          .addTo(airportLayer);
+      });
     const caption = document.querySelector(".map-caption span");
-    caption.textContent = routes.size ? "Line area · airport colour = CO₂e" : "No priced routes in this period";
+    caption.textContent = routes.size
+      ? "Line area · airport colour = CO₂e"
+      : "No priced routes in this period";
     requestAnimationFrame(() => routeMap.invalidateSize());
   }
 
   function updateTrend() {
-    const series = [...data.years].sort((a, b) => a - b).map((year) => {
-      const rows = data.flights.filter((flight) => flight.year === year);
-      return {
-        year,
-        rows,
-        completed: sum(withEmissions(rows.filter((flight) => flight.departed)), "kg"),
-        planned: sum(withEmissions(rows.filter((flight) => !flight.departed)), "kg")
-      };
-    });
+    const series = [...data.years]
+      .sort((a, b) => a - b)
+      .map((year) => {
+        const rows = data.flights.filter((flight) => flight.year === year);
+        return {
+          year,
+          rows,
+          completed: sum(withEmissions(rows.filter((flight) => flight.departed)), "kg"),
+          planned: sum(withEmissions(rows.filter((flight) => !flight.departed)), "kg"),
+        };
+      });
     const maximum = Math.max(0, ...series.map((item) => item.completed + item.planned));
     const totals = series.map((item) => item.completed + item.planned);
     const theme = chartTheme();
     const categories = breakdownCategories(withEmissions(data.flights), state.trendBreakdown);
-    $("trend-chart").setAttribute("aria-label", series.map((item) => {
-      const details = state.trendBreakdown === "total" ? "" : `; ${categories.map((category) => {
-        const kg = sum(withEmissions(item.rows.filter((row) => visualCategory(row, state.trendBreakdown) === category)), "kg");
-        return `${category} ${formatMassText(kg)}`;
-      }).join(", ")}`;
-      return `${item.year}: ${formatMassText(item.completed)} completed${item.planned ? `, ${formatMassText(item.planned)} upcoming` : ""}${details}`;
-    }).join(", "));
+    $("trend-chart").setAttribute(
+      "aria-label",
+      series
+        .map((item) => {
+          const details =
+            state.trendBreakdown === "total"
+              ? ""
+              : `; ${categories
+                  .map((category) => {
+                    const kg = sum(
+                      withEmissions(
+                        item.rows.filter(
+                          (row) => visualCategory(row, state.trendBreakdown) === category,
+                        ),
+                      ),
+                      "kg",
+                    );
+                    return `${category} ${formatMassText(kg)}`;
+                  })
+                  .join(", ")}`;
+          return `${item.year}: ${formatMassText(item.completed)} completed${item.planned ? `, ${formatMassText(item.planned)} upcoming` : ""}${details}`;
+        })
+        .join(", "),
+    );
     const datasets = categories.flatMap((category) => {
       const color = breakdownColor(state.trendBreakdown, category);
       const upcomingPattern = hatchPattern($("trend-chart"), color);
-      const filterCategory = (row) => state.trendBreakdown === "total" || visualCategory(row, state.trendBreakdown) === category;
+      const filterCategory = (row) =>
+        state.trendBreakdown === "total" || visualCategory(row, state.trendBreakdown) === category;
       return [
         {
           label: state.trendBreakdown === "total" ? "Completed" : `${category} · completed`,
-          data: series.map((item) => sum(withEmissions(item.rows.filter((row) => row.departed && filterCategory(row))), "kg")),
+          data: series.map((item) =>
+            sum(
+              withEmissions(item.rows.filter((row) => row.departed && filterCategory(row))),
+              "kg",
+            ),
+          ),
           backgroundColor: color,
           hoverBackgroundColor: color,
           borderSkipped: false,
           borderRadius: stackedBorderRadius("x"),
-          barPercentage: 0.72
+          barPercentage: 0.72,
         },
         {
           label: state.trendBreakdown === "total" ? "Upcoming" : `${category} · upcoming`,
-          data: series.map((item) => sum(withEmissions(item.rows.filter((row) => !row.departed && filterCategory(row))), "kg")),
+          data: series.map((item) =>
+            sum(
+              withEmissions(item.rows.filter((row) => !row.departed && filterCategory(row))),
+              "kg",
+            ),
+          ),
           backgroundColor: upcomingPattern,
           hoverBackgroundColor: upcomingPattern,
           borderColor: color,
           borderWidth: 1,
           borderSkipped: false,
           borderRadius: stackedBorderRadius("x"),
-          barPercentage: 0.72
-        }
+          barPercentage: 0.72,
+        },
       ];
     });
     replaceChart("trend-chart", {
       type: "bar",
       data: {
         labels: series.map((item) => item.year),
-        datasets
+        datasets,
       },
       plugins: [periodValueLabels(totals, maximum >= 1000 ? "t" : "kg")],
       options: {
@@ -856,34 +1175,73 @@
         layout: { padding: { top: 28 } },
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e` } }
+          tooltip: {
+            callbacks: {
+              label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e`,
+            },
+          },
         },
         scales: {
-          x: { stacked: true, grid: { display: false }, border: { color: theme.grid }, ticks: { autoSkip: false, color: theme.muted, font: { size: 11 } } },
-          y: { stacked: true, beginAtZero: true, grid: { color: theme.grid }, border: { display: false }, ticks: { color: theme.muted, callback: (value) => formatMassAxisTick(value, maximum) } }
-        }
-      }
+          x: {
+            stacked: true,
+            grid: { display: false },
+            border: { color: theme.grid },
+            ticks: { autoSkip: false, color: theme.muted, font: { size: 11 } },
+          },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            grid: { color: theme.grid },
+            border: { display: false },
+            ticks: { color: theme.muted, callback: (value) => formatMassAxisTick(value, maximum) },
+          },
+        },
+      },
     });
 
     const year = state.year || data.years[0];
     const current = series.find((item) => item.year === year);
     const trendUnit = current && Math.max(current.completed, current.planned) >= 1000 ? "t" : "kg";
-    $("trend-note-label").textContent = state.year ? String(state.year) : data.years.length ? "Latest year" : "No dated flights";
-    $("trend-note-value").innerHTML = current ? formatKg(current.completed, trendUnit) : "No flights";
-    $("trend-note-copy").textContent = current && current.planned ? `${formatMassText(current.planned, trendUnit)} CO₂e comes from upcoming flights.` : current ? "No upcoming impact remains in this period." : "Add flights, then regenerate your Passport.";
+    $("trend-note-label").textContent = state.year
+      ? String(state.year)
+      : data.years.length
+        ? "Latest year"
+        : "No dated flights";
+    $("trend-note-value").innerHTML = current
+      ? formatKg(current.completed, trendUnit)
+      : "No flights";
+    $("trend-note-copy").textContent =
+      current && current.planned
+        ? `${formatMassText(current.planned, trendUnit)} CO₂e comes from upcoming flights.`
+        : current
+          ? "No upcoming impact remains in this period."
+          : "Add flights, then regenerate your Passport.";
   }
 
   function updateQuality(rows) {
     const done = completed(rows);
     const exact = done.filter((flight) => flight.emissionsSource === "exact").length;
-    const typical = done.filter((flight) => flight.emissionsSource === "typical_route_average").length;
+    const typical = done.filter(
+      (flight) => flight.emissionsSource === "typical_route_average",
+    ).length;
     const missing = done.length - exact - typical;
     const cabinKnown = done.filter((flight) => flight.cabinKnown).length;
-    const reasonKnown = done.filter((flight) => flight.reason && flight.reason.toLowerCase() !== "unknown").length;
+    const reasonKnown = done.filter(
+      (flight) => flight.reason && flight.reason.toLowerCase() !== "unknown",
+    ).length;
     const distance = done.filter((flight) => flight.distanceKm !== null).length;
     const duration = done.filter((flight) => flight.durationHours !== null).length;
-    const airports = new Set(done.flatMap((flight) => [flight.origin, flight.destination]).filter(Boolean));
-    const countries = new Set(done.flatMap((flight) => [flight.start && flight.start.country, flight.end && flight.end.country]).filter(Boolean));
+    const airports = new Set(
+      done.flatMap((flight) => [flight.origin, flight.destination]).filter(Boolean),
+    );
+    const countries = new Set(
+      done
+        .flatMap((flight) => [
+          flight.start && flight.start.country,
+          flight.end && flight.end.country,
+        ])
+        .filter(Boolean),
+    );
     const partition = (count) => `${count} · ${pct(count, done.length)}%`;
     $("quality-total").textContent = formatNumber(done.length);
     $("exact-count").textContent = partition(exact);
@@ -900,7 +1258,8 @@
     $("airport-count").textContent = String(airports.size);
     $("country-count").textContent = String(countries.size);
     const assumed = done.length - cabinKnown;
-    $("methodology").textContent = `Impact figures are per passenger. Distance intensity uses ${data.meta.distanceMethod}. Time intensity uses ${data.meta.durationMethod}. ${assumed ? `${assumed} flight${assumed === 1 ? "" : "s"} without cabin data ${assumed === 1 ? "is" : "are"} shown as Economy in charts.` : "Every flight has cabin data."} Missing values are never extrapolated.`;
+    $("methodology").textContent =
+      `Impact figures are per passenger. Distance intensity uses ${data.meta.distanceMethod}. Time intensity uses ${data.meta.durationMethod}. ${assumed ? `${assumed} flight${assumed === 1 ? "" : "s"} without cabin data ${assumed === 1 ? "is" : "are"} shown as Economy in charts.` : "Every flight has cabin data."} Missing values are never extrapolated.`;
   }
 
   function update() {
@@ -917,7 +1276,9 @@
   document.querySelectorAll("#metric-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.metric = button.dataset.metric;
-      document.querySelectorAll("#metric-tabs button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document
+        .querySelectorAll("#metric-tabs button")
+        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
       updateHero(scoped());
     });
   });
@@ -925,7 +1286,9 @@
   document.querySelectorAll("#pattern-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.pattern = button.dataset.pattern;
-      document.querySelectorAll("#pattern-tabs button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document
+        .querySelectorAll("#pattern-tabs button")
+        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
       updatePatterns(scoped());
     });
   });
@@ -933,7 +1296,9 @@
   document.querySelectorAll("#trend-breakdown-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.trendBreakdown = button.dataset.trendBreakdown;
-      document.querySelectorAll("#trend-breakdown-tabs button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document
+        .querySelectorAll("#trend-breakdown-tabs button")
+        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
       updateTrend();
     });
   });
@@ -941,7 +1306,9 @@
   document.querySelectorAll("#pattern-breakdown-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.patternBreakdown = button.dataset.patternBreakdown;
-      document.querySelectorAll("#pattern-breakdown-tabs button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document
+        .querySelectorAll("#pattern-breakdown-tabs button")
+        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
       updatePatterns(scoped());
     });
   });
@@ -949,7 +1316,9 @@
   document.querySelectorAll("#driver-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.driverBreakdown = button.dataset.breakdown;
-      document.querySelectorAll("#driver-tabs button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document
+        .querySelectorAll("#driver-tabs button")
+        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
       updateRankings(scoped());
     });
   });
@@ -957,7 +1326,9 @@
   document.querySelectorAll("#driver-metric-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.driverMetric = button.dataset.driverMetric;
-      document.querySelectorAll("#driver-metric-tabs button").forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
+      document
+        .querySelectorAll("#driver-metric-tabs button")
+        .forEach((peer) => peer.setAttribute("aria-pressed", String(peer === button)));
       updateRankings(scoped());
     });
   });
@@ -972,6 +1343,7 @@
 
   buildPeriods();
   setupMap();
-  $("generated").textContent = `Generated ${new Date(data.meta.generatedAt).toLocaleString()} with contrail ${data.meta.contrailVersion}. Keep this file private.`;
+  $("generated").textContent =
+    `Generated ${new Date(data.meta.generatedAt).toLocaleString()} with contrail ${data.meta.contrailVersion}. Keep this file private.`;
   update();
 })();
