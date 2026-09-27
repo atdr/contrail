@@ -42,7 +42,10 @@ to PyPI closes that gap indirectly — contrail-gh pins a plain version in
 can see and bump it. contrail's only obligation is that the release actually
 reaches PyPI, which the `publish` job in `release-please.yml` now does on
 its own. Someone still has to review and merge the Dependabot PR — see
-contrail-gh's own README for that side of it.
+contrail-gh's own README for that side of it. The reactions this table
+calls for go on the Dependabot branch, and the PR is squash merged;
+[contrail-gh's AGENTS.md](https://github.com/atdr/contrail-gh/blob/main/AGENTS.md#when-contrail-changes)
+is the canonical statement of why.
 
 Dependabot closes the mechanical gap — a bump PR always opens, unprompted. It
 does not close the content gap: whether that release also needs one of the other
