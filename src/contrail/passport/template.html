@@ -1628,7 +1628,8 @@
             });
           });
           const maximumAirportImpact = Math.max(1, ...[...airports.values()].map((airport) => airport.kg));
-          airports.forEach((airport) => {
+          // SVG stacks in draw order, so the heaviest airport is drawn last and sits on top.
+          [...airports.values()].sort((a, b) => a.kg - b.kg).forEach((airport) => {
             const share = airport.kg / maximumAirportImpact;
             const fillColor = `hsl(${46 - 34 * share} 92% ${63 - 10 * share}%)`;
             L.circleMarker([airport.lat, airport.lon], { pane: "airports", radius: 3.5 + 4 * Math.sqrt(share), color: "#fff", weight: 1.2, fillColor, fillOpacity: 1 })
