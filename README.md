@@ -64,6 +64,7 @@ That writes `./flight_emissions.csv` in the current directory. Running it again 
 it hasn't seen before — nothing is ever double-counted or re-priced.
 
 ```text
+contrail init [--yaml] [--output PATH]
 contrail sync [--config PATH] [--csv-path PATH] [--dry-run]
 contrail passport [--config PATH] [--csv-path PATH] [--output PATH] [--open]
 contrail importers
@@ -159,16 +160,17 @@ Resolution order, highest priority first:
 Environment variables come before the file because that's what every deployment target injects:
 GitHub Actions secrets, a cron environment, and Lambda environment variables all arrive that way.
 
-Copy one of the shipped examples and edit it:
+Write out the example that ships with contrail, then edit it:
 
 ```bash
-cp config.example.json config.json      # no extra dependencies
-cp config.example.yaml config.yaml      # commented; needs pip install "contrails[yaml]"
+contrail init           # config.json, no extra dependencies
+contrail init --yaml    # config.yaml, commented; needs pip install "contrails[yaml]"
 ```
 
-Both are gitignored once renamed. A config file also lets you run several importers in one sync.
-It has one section per package under `src/contrail`, and a section that names a protocol seam
-carries the `type` a registry resolves:
+`init` never overwrites an existing file. The config holds secrets, so never commit it: this
+repository gitignores both names, and your own should too. A config file also lets you run
+several importers in one sync. It has one section per package under `src/contrail`, and a section
+that names a protocol seam carries the `type` a registry resolves:
 
 ```json
 {

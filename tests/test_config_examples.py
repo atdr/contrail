@@ -16,9 +16,9 @@ from contrail.emissions import PROVIDERS
 from contrail.importers import IMPORTERS
 from contrail.storage import RAW_LOGS, STORAGES
 
-ROOT = Path(__file__).resolve().parent.parent
-JSON = ROOT / "config.example.json"
-YAML = ROOT / "config.example.yaml"
+DATA = Path(__file__).resolve().parent.parent / "src" / "contrail" / "data"
+JSON = DATA / "config.example.json"
+YAML = DATA / "config.example.yaml"
 
 
 def load(path: Path):
