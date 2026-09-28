@@ -1,3 +1,5 @@
+![contrail: the carbon cost of every flight you take](https://raw.githubusercontent.com/atdr/contrail/main/docs/assets/banner.png)
+
 # contrail
 
 [![PyPI](https://img.shields.io/pypi/v/contrails.svg?style=flat-square)](https://pypi.org/project/contrails/)
@@ -555,6 +557,9 @@ MIT — see [LICENSE](LICENSE).
 
 <!-- This file is wrapped at 100, not the 80 the rest of the repo uses. -->
 
+<!-- The banner image sits above the heading, so MD041 is off here. -->
+
 <!-- markdownlint-configure-file {
-  "MD013": { "line_length": 100, "tables": false, "code_blocks": false }
+  "MD013": { "line_length": 100, "tables": false, "code_blocks": false },
+  "MD041": false
 } -->
