@@ -107,7 +107,8 @@ contrail sync --passport
 It builds the page only once the log is safely saved, at `passport.output_path`
 in the config file (or `PASSPORT_OUTPUT`), and skips a log with no flights yet.
 It exits 0 when both worked, 1 when the sync failed (no page is attempted), and
-3 when the log was saved but the page could not be built.
+3 when the log was saved but the page could not be built, whatever the reason.
+A workflow can rely on that: on 3, commit the log and fail the run afterwards.
 
 The result is one self-contained HTML file. It embeds the flight data and
 styles, Chart.js 4.5.1 for the charts, Leaflet 1.9.4 for the map, and stripped
