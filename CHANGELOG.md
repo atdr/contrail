@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.1](https://github.com/atdr/contrail/compare/v0.7.0...v0.7.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **cli:** exit 3 for any Passport failure after sync --passport saves ([#83](https://github.com/atdr/contrail/issues/83)) ([5111745](https://github.com/atdr/contrail/commit/5111745be653642fd91e831a82b8815773d288ba))
+* **passport:** substitute template markers in one pass ([#75](https://github.com/atdr/contrail/issues/75)) ([73804bf](https://github.com/atdr/contrail/commit/73804bfe3b8fc60336f6c4a3f9b64542b4d147c7)), closes [#69](https://github.com/atdr/contrail/issues/69)
+
+
+### Documentation
+
+* **readme:** add banner image ([#82](https://github.com/atdr/contrail/issues/82)) ([f1c7e95](https://github.com/atdr/contrail/commit/f1c7e957caf55fc5a5e3c44127ef67e434579b59))
+
 ## [0.7.0](https://github.com/atdr/contrail/compare/v0.6.0...v0.7.0) (2026-09-27)
 
 
