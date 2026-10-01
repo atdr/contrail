@@ -24,7 +24,7 @@ prices each one using Google's [Travel Impact Model](https://travelimpactmodel.o
 <!-- x-release-please-start-version -->
 
 ```bash
-pip install contrails==0.7.0
+pip install contrails==0.7.1
 ```
 
 <!-- x-release-please-end -->
@@ -467,7 +467,7 @@ secrets, and it syncs daily and commits the updated CSV and its Passport back to
 
 ```bash
 python3 -m venv ~/contrail-venv
-~/contrail-venv/bin/pip install contrails==0.7.0
+~/contrail-venv/bin/pip install contrails==0.7.1
 crontab -e
 ```
 
