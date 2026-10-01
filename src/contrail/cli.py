@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import traceback
 import webbrowser
 from datetime import UTC, datetime
 from importlib.resources import files
@@ -606,6 +607,15 @@ def cmd_sync(args) -> int:
         _write_passport(config, skip_empty=True)
     except (ValueError, OSError) as exc:
         print(f"Passport not built: {exc}", file=sys.stderr)
+        return EXIT_PASSPORT_FAILED
+    except Exception:
+        # A bug, not a bad input, but the log is saved all the same, so this is
+        # still 3. Anything else reads as a failed sync, and a workflow stops
+        # before its commit: this run's figures would be lost, and TIM will not
+        # price a flight again once it has departed. The traceback is for the
+        # bug report.
+        print("Passport not built: unexpected error", file=sys.stderr)
+        traceback.print_exc()
         return EXIT_PASSPORT_FAILED
     return 0
 

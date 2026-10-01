@@ -1056,6 +1056,18 @@ def test_a_failed_page_exits_3_with_the_log_saved(env, monkeypatch, capsys):
     assert len(read_csv(env / "flight_emissions.csv")) == 6
 
 
+def test_an_unexpected_page_error_still_exits_3_with_the_log_saved(env, capsys):
+    """A rendering bug must not read as a failed sync: a workflow stops before
+    committing on any exit but 0 or 3, and the run's figures would be lost."""
+    with patch("contrail.cli.render_passport", side_effect=KeyError("cabin_class")):
+        assert run_sync(["sync", "--passport"]) == 3
+
+    err = capsys.readouterr().err
+    assert "Passport not built: unexpected error" in err
+    assert "KeyError" in err
+    assert len(read_csv(env / "flight_emissions.csv")) == 6
+
+
 def test_sync_passport_and_dry_run_are_exclusive(env, capsys):
     """A dry run writes nothing, so there is no saved log to build from."""
     with pytest.raises(SystemExit) as exit_:
