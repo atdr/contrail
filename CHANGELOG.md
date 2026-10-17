@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/atdr/contrail/compare/v0.7.1...v0.7.2) (2026-10-17)
+
+
+### Documentation
+
+* **contrail-gh:** record the template's reliance on sync --passport ([#85](https://github.com/atdr/contrail/issues/85)) ([474342f](https://github.com/atdr/contrail/commit/474342f9fcb651116b327835d8b2b428529c61ae))
+
 ## [0.7.1](https://github.com/atdr/contrail/compare/v0.7.0...v0.7.1) (2026-10-01)
 
 
