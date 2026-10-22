@@ -1033,6 +1033,8 @@ def test_a_near_miss_warning_doubts_the_hand_typed_side(capsys):
     err = capsys.readouterr().err
     assert "is one day off BA16 LHR->JFK on 2026-09-21 [flighty_csv]" in err
     assert "openflights_csv is typed by hand, so check its date first" in err
+    # A real sync writes the row in the same run, and no later sync removes it.
+    assert "delete the wrongly dated row from the log" in err
 
 
 @pytest.mark.parametrize(

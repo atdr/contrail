@@ -99,8 +99,12 @@ flights from a different source on the same route a day either side, and warns
 is ordinary. Pairs from one source are skipped, since a source listing two days
 is describing two flights. Only new flights are checked, so the warning appears
 on the run that would add the flight and not on every sync after, which is why
-the README says to dry-run a backup first. When one side comes from an importer
-marked `user_entered`, the warning says to doubt that side.
+the README says to dry-run a backup first. A real sync writes the row in the
+same run that warns, and correcting the date afterwards cannot take it back:
+the date is in an OpenFlights key, so the corrected flight arrives under a new
+key, and the old row has departed and is never removed. The warning says to
+delete it by hand. When one side comes from an importer marked `user_entered`,
+the warning says to doubt that side.
 
 ## Open: a through flight alongside its legs
 

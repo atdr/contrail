@@ -593,8 +593,10 @@ def _describe(plan: Reconciliation) -> None:
         print(
             f"WARNING: {_label(flight)} is one day off {label}.\n"
             "  If they are one flight, it is about to be counted twice, because "
-            f"a flight is matched by route and date. {advice}, correct it at the source "
-            "and sync again. If they are two flights, ignore this.",
+            f"a flight is matched by route and date. {advice} and correct it at the "
+            "source. A sync also writes the row, and a departed row is never removed "
+            "by a later one, so delete the wrongly dated row from the log as well. "
+            "If they are two flights, ignore this.",
             file=sys.stderr,
         )
     if filled:

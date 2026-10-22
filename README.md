@@ -363,8 +363,10 @@ dry run first:
 OPENFLIGHTS_CSV_PATH=~/Downloads/openflights-backup-2026-10-22-1914.csv contrail sync --dry-run
 ```
 
-`path` takes a file, a directory, or a glob, as for Flighty. Like a Flighty export, **a backup is
-your entire flight history**: keep it out of any public repository.
+`path` takes a file, a directory, or a glob, as for Flighty, but **only the newest backup is
+read**. Each one is your whole account, and an older one would bring back a row whose date you have
+since corrected. Like a Flighty export, **a backup is your entire flight history**: keep it out of
+any public repository.
 
 OpenFlights is a log people type in themselves, not schedule data, and the importer treats it that
 way:
@@ -381,7 +383,9 @@ way:
   and then it matches no other source's reading of the flight and is counted twice. contrail warns
   when a leg in the backup departs before the previous one lands, and when a new flight is one day
   off another source's flight on the same route (`DAY OFF?` in a dry run). Both only warn: fix
-  the date in OpenFlights and export again.
+  the date in OpenFlights and export again. If a sync has already written the wrongly dated row,
+  delete it from the CSV too. Correcting the date changes the row's key, and a departed row is
+  never removed by a later sync, so the old one would otherwise keep counting.
 - **Flight numbers are normalized.** `BA0123` and `0123` both become `123`; a prefix names the
   airline when the `Airline` name doesn't resolve. A letter-suffixed charter number (`714K`)
   can't be sent to TIM and lands as `unparsed`.
