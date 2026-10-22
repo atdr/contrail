@@ -10,7 +10,15 @@ from unittest.mock import patch
 import pytest
 import requests
 
-from contrail.cli import _collapse, _describe, _now, _through_conflicts, main, reconcile
+from contrail.cli import (
+    _collapse,
+    _describe,
+    _dry_run_report,
+    _now,
+    _through_conflicts,
+    main,
+    reconcile,
+)
 from contrail.models import EmissionsResult, FlightRecord
 from contrail.storage import total_kg
 
@@ -988,6 +996,33 @@ def test_one_source_on_consecutive_days_is_not_a_near_miss():
     flight = record(source="flighty_csv", source_id="x")
 
     assert reconcile([stored()], [flight], [], FROZEN_NOW).near_misses == []
+
+
+def test_a_cancelled_flight_is_no_near_miss():
+    """A flight called off was never going to be counted, so it cannot be the
+    other half of a double count."""
+    called_off = record(source="tripit_ical", source_id="a", cancelled=True)
+    flight = replace(record(source="flighty_csv", source_id="b"), flight_date=date(2026, 9, 21))
+
+    assert reconcile([], [called_off, flight], [], FROZEN_NOW).near_misses == []
+
+
+def test_a_near_miss_between_schedule_backed_sources_doubts_neither(capsys):
+    flight = record(source="tripit_ical", source_id="x")
+
+    _describe(reconcile([stored()], [flight], [], FROZEN_NOW))
+
+    assert "Check which date is right" in capsys.readouterr().err
+
+
+def test_a_dry_run_lists_a_near_miss(capsys):
+    flight = record(source="openflights_csv", source_id="x")
+
+    _dry_run_report(reconcile([stored()], [flight], [], FROZEN_NOW), "log.csv")
+
+    assert "DAY OFF?  BA16 LHR->JFK on 2026-09-20 [openflights_csv] is one day off" in (
+        capsys.readouterr().out
+    )
 
 
 def test_a_near_miss_warning_doubts_the_hand_typed_side(capsys):

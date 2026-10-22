@@ -373,6 +373,8 @@ def _near_misses(
 
     found, reported = [], set()
     for flight in new_flights:
+        if flight.cancelled:
+            continue  # never counted, so it can't be half of a double count
         day = flight.flight_date
         for offset in (-1, 1):
             identity = ((day + timedelta(days=offset)).isoformat(), *flight.identity[1:])
