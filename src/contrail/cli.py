@@ -6,7 +6,7 @@ import argparse
 import sys
 import traceback
 import webbrowser
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from importlib.resources import files
 from pathlib import Path
 
@@ -214,6 +214,9 @@ class Reconciliation:
         self.duplicates: list[tuple[dict, FlightRecord, list[str]]] = []  # row, flight, filled
         self.collapsed: list[tuple[FlightRecord, FlightRecord]] = []  # kept, folded in
         self.conflicts: list[tuple[str, list[FlightRecord], tuple]] = []
+        # A new flight, and another source's flight on the same route a day
+        # either side: (new, the other's label, the other's source).
+        self.near_misses: list[tuple[FlightRecord, str, str]] = []
         self.cancellations: list[dict] = []
         self.restorations: list[dict] = []
 
@@ -338,7 +341,59 @@ def reconcile(existing_rows, flights, unparsed, now) -> Reconciliation:
         if resync.can_cancel(row, now):
             plan.cancellations.append(row)
 
+    plan.near_misses = _near_misses(plan.new_flights, feed_flights, by_identity)
     return plan
+
+
+def _near_misses(
+    new_flights, feed_flights: dict, rows: dict
+) -> list[tuple[FlightRecord, str, str]]:
+    """New flights one day off another source's flight on the same route.
+
+    Identity is route and date, so a flight one source dates a day wrong never
+    matches the other source's reading of it: both are kept and it is counted
+    twice. A departure just after midnight entered under the day before is the
+    usual way to get there, and a hand-typed log is where it happens.
+
+    Report it and change nothing. A route flown on two consecutive days is
+    ordinary, so this cannot decide. Pairs from one source are skipped
+    outright: a source that lists two days is describing two flights, and a
+    commuter's daily shuttle would otherwise warn on every run.
+
+    Only new flights are checked, so a pair is reported on the run that would
+    add it, which is the run ``--dry-run`` is there to preview, and not on
+    every sync after.
+    """
+    others: dict[tuple, list[tuple[str, str]]] = {}
+    for identity, row in rows.items():
+        others.setdefault(identity, []).append((_row_label(row), row.get("source", "")))
+    for flight in feed_flights.values():
+        if flight.identity and not flight.cancelled:
+            others.setdefault(flight.identity, []).append((_label(flight), flight.source))
+
+    found, reported = [], set()
+    for flight in new_flights:
+        day = flight.flight_date
+        for offset in (-1, 1):
+            identity = ((day + timedelta(days=offset)).isoformat(), *flight.identity[1:])
+            for label, source in others.get(identity, []):
+                pair = frozenset((_label(flight), label))
+                if source != flight.source and pair not in reported:
+                    reported.add(pair)
+                    found.append((flight, label, source))
+    return found
+
+
+def _row_label(row: dict) -> str:
+    return (
+        f"{row.get('carrier_code', '')}{row.get('flight_number', '')} "
+        f"{row.get('origin', '')}->{row.get('destination', '')} on {row.get('flight_date', '')} "
+        f"[{row.get('source', '')}]"
+    )
+
+
+def _user_entered(source: str) -> bool:
+    return getattr(IMPORTERS.get(source), "user_entered", False)
 
 
 def _flight_row(flight: FlightRecord, result, now_iso: str) -> dict:
@@ -527,6 +582,19 @@ def _describe(plan: Reconciliation) -> None:
             "single row can't express — so delete whichever you don't want.",
             file=sys.stderr,
         )
+    for flight, label, source in plan.near_misses:
+        if _user_entered(flight.source) == _user_entered(source):
+            advice = "Check which date is right"
+        else:
+            hand = flight.source if _user_entered(flight.source) else source
+            advice = f"{hand} is typed by hand, so check its date first"
+        print(
+            f"WARNING: {_label(flight)} is one day off {label}.\n"
+            "  If they are one flight, it is about to be counted twice, because "
+            f"a flight is matched by route and date. {advice}, correct it at the source "
+            "and sync again. If they are two flights, ignore this.",
+            file=sys.stderr,
+        )
     if filled:
         print(f"{len(filled)} stored flight(s) gained details from another source:")
         for row, _flight, fields in filled:
@@ -587,6 +655,8 @@ def _dry_run_report(plan: Reconciliation, csv_path: str) -> int:
         )
     for row in plan.cancellations:
         print(f"  CANCEL    {row['flight_date']}  {row['carrier_code']}{row['flight_number']}")
+    for flight, label, _source in plan.near_misses:
+        print(f"  DAY OFF?  {_label(flight)} is one day off {label}")
     return 0
 
 
