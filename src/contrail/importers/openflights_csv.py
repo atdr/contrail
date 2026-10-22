@@ -256,27 +256,29 @@ def warn_overlaps(rows: list[dict]) -> None:
 
     The usual cause is a post-midnight departure entered under the previous
     day. Uncorrected, it matches no other source's reading of the flight and is
-    counted twice. Only rows with a time, a placeable origin and a duration are
-    compared, and ``Duration`` is only used here: it may be an estimate, which
-    is close enough to catch a whole day's error.
+    counted twice. Every row with a time and a placeable origin takes part;
+    only the earlier leg of a pair needs a ``Duration``, since that is what
+    says when it lands. It is only used here: it may be an estimate, which is
+    close enough to catch a whole day's error.
     """
     legs = []
     for row in rows:
         departure = departure_datetime(_text(row, "Date"), _text(row, "From").upper())
-        length = duration(_text(row, "Duration"))
-        if departure is None or departure.tzinfo is None or length is None:
+        if departure is None or departure.tzinfo is None:
             continue
-        legs.append((departure, departure + length, row))
+        length = duration(_text(row, "Duration"))
+        legs.append((departure, departure + length if length else None, row))
     legs.sort(key=lambda leg: leg[0])
 
     for (_, landed, before), (departed, _, after) in pairwise(legs):
-        if departed < landed:
+        if landed is not None and departed < landed:
             warn(
                 f"WARNING: OpenFlights has {_describe(after)} departing before "
                 f"{_describe(before)} lands.\n"
                 "  One of the two dates is probably a day off, often a departure just "
                 "after midnight entered under the day before. Correct it in OpenFlights "
-                "and export again."
+                "and export again, and delete any row a sync already wrote under the "
+                "wrong date: a departed row is never removed by a later sync."
             )
 
 

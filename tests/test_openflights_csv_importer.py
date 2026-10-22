@@ -234,6 +234,19 @@ def test_a_three_letter_prefix_that_is_no_airline_is_left_alone(importer):
     assert importer.carrier_and_number("British Airways", "XYZ123") == ("BA", "XYZ123")
 
 
+def test_a_leg_with_no_duration_is_still_checked_against_the_one_before(importer, capsys):
+    """Only the earlier leg's duration says anything about the overlap."""
+    list(
+        importer.parse(
+            lines(
+                row(date="2019-05-17 10:00:00", origin="SFO", dest="LAX", duration="04:00"),
+                row(date="2019-05-17 12:00:00", origin="SFO", dest="SEA", duration=""),
+            )
+        )
+    )
+    assert "SFO-SEA at 2019-05-17 12:00:00 departing before" in capsys.readouterr().err
+
+
 def test_only_the_newest_backup_is_read(tmp_path, importer):
     """Each backup is the whole account. Reading an older one too would bring
     back a row whose date has since been corrected, under its old key."""
