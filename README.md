@@ -10,7 +10,8 @@
 
 Estimate the CO2e emissions of flights you've taken or booked, and keep a running log of them.
 
-contrail pulls flights from one or more _sources_ (a TripIt calendar feed, a Flighty export),
+contrail pulls flights from one or more _sources_ (a TripIt calendar feed, a Flighty export, an
+OpenFlights backup),
 prices each one using Google's [Travel Impact Model](https://travelimpactmodel.org/about-tim)
 (TIM) API, and writes the result to a CSV.
 
@@ -312,7 +313,7 @@ never does; a Flighty export does, which is what the `flighty_csv` importer is f
 
 ## Importers
 
-Two ship today:
+Three ship today:
 
 - **`tripit_ical`** — reads a TripIt calendar feed. Finds events tagged `[Flight]` in the
   description (TripIt's own marker), with a regex fallback for other calendar tools. Extracts the
@@ -321,6 +322,9 @@ Two ship today:
   source that reports **the cabin you actually flew**, which on a long-haul business seat is
   roughly a fourfold difference against the economy assumption. It also carries your whole flight
   history, where TripIt's feed only exposes recent and upcoming trips.
+- **`openflights_csv`** — reads a CSV backup from [OpenFlights](https://openflights.org), often
+  the only record of flights logged years before anything else. Every value in it was typed by
+  hand, so it belongs **last** in `importers:`.
 
 ### Using a Flighty export
 
@@ -350,6 +354,41 @@ Two details worth knowing:
   airliner and say nothing useful about a charter, so those rows are left blank and fall back to
   economy — worth correcting by hand if you have a better number.
 
+### Using an OpenFlights backup
+
+Download it from OpenFlights (Settings → Backup to CSV), then point contrail at it, ideally with a
+dry run first:
+
+```bash
+OPENFLIGHTS_CSV_PATH=~/Downloads/openflights-backup-2026-10-22-1914.csv contrail sync --dry-run
+```
+
+`path` takes a file, a directory, or a glob, as for Flighty. Like a Flighty export, **a backup is
+your entire flight history**: keep it out of any public repository.
+
+OpenFlights is a log people type in themselves, not schedule data, and the importer treats it that
+way:
+
+- **List it after any other source.** The first source listed owns a flight two of them report,
+  so a flight Flighty or TripIt also knows keeps their data, and OpenFlights only fills in what
+  they left blank (cabin, reason, aircraft). `OPENFLIGHTS_CSV_PATH` is added last for you. A
+  flight only OpenFlights knows keeps what you typed, and a schedule-backed source added later can
+  only fill its blanks, since past rows are never rewritten. So add OpenFlights after your other
+  sources have synced.
+- **No arrival time.** OpenFlights may have estimated `Duration` from the distance, and nothing in
+  the file says which, so contrail never presents it as a schedule.
+- **Check the warnings.** A departure just after midnight is easily entered under the day before,
+  and then it matches no other source's reading of the flight and is counted twice. contrail warns
+  when a leg in the backup departs before the previous one lands, and when a new flight is one day
+  off another source's flight on the same route (`DAY OFF?` in a dry run). Both only warn: fix
+  the date in OpenFlights and export again.
+- **Flight numbers are normalized.** `BA0123` and `0123` both become `123`; a prefix names the
+  airline when the `Airline` name doesn't resolve. A letter-suffixed charter number (`714K`)
+  can't be sent to TIM and lands as `unparsed`.
+- **The key is the date and route** (`openflights_csv:2019-05-17:SFO-LHR`), since OpenFlights has
+  no flight id. Correcting a row's number, cabin or time keeps its key; correcting its date or
+  route does not.
+
 ### Running more than one source
 
 Sources overlap. Flighty and TripIt will both know your upcoming trips, so contrail matches them
@@ -362,6 +401,8 @@ up rather than logging the flight twice.
   row and is never priced; it fills in blanks and leaves its key in `also_seen_as`.
 - If one source lists a flight twice — a codeshare entered under both its marketing and operating
   number, say — the same matching collapses it, and says so.
+- If a new flight is one day off another source's flight on the same route, contrail can't tell a
+  mistyped date from two flights, so it warns and keeps both.
 - If one source reports a journey as a single through segment while another reports its legs,
   contrail **can't** tell which is right, warns that the journey is being counted twice, and leaves
   both. Delete whichever you don't want.
