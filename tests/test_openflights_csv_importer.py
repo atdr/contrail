@@ -234,6 +234,21 @@ def test_a_three_letter_prefix_that_is_no_airline_is_left_alone(importer):
     assert importer.carrier_and_number("British Airways", "XYZ123") == ("BA", "XYZ123")
 
 
+def test_only_the_newest_backup_is_read(tmp_path, importer):
+    """Each backup is the whole account. Reading an older one too would bring
+    back a row whose date has since been corrected, under its old key."""
+    (tmp_path / "openflights-backup-2026-01-01-0900.csv").write_text(
+        HEADER + row(date="2019-05-16 16:25:00") + "\n"
+    )
+    (tmp_path / "openflights-backup-2026-02-01-0900.csv").write_text(
+        HEADER + row(date="2019-05-17 16:25:00") + "\n"
+    )
+
+    (flight,) = importer.fetch({"path": str(tmp_path)})
+
+    assert flight.flight_date.isoformat() == "2019-05-17"
+
+
 @pytest.mark.parametrize(
     "second",
     [

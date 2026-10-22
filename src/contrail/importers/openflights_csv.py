@@ -136,7 +136,11 @@ class OpenFlightsCSVImporter:
         if "airline_lookup" in config:
             self.resolver.lookup = bool(config["airline_lookup"])
 
-        for export in export_files(str(path)):
+        # Only the newest backup. Each one is the whole account, so an older
+        # one adds nothing but rows since corrected: the date is part of the
+        # key, so a row whose date was fixed would come back from the older
+        # file under its old key and be counted twice.
+        for export in export_files(str(path))[:1]:
             # The backup starts with a byte order mark, which would otherwise
             # become part of the first column's name.
             with open(export, newline="", encoding="utf-8-sig") as f:
