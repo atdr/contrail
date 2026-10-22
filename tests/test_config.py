@@ -463,6 +463,26 @@ def test_a_superseded_key_beaten_by_a_flag_says_so(tmp_path, capsys):
     assert "--csv-path is overriding it on this run" in capsys.readouterr().err
 
 
+def test_an_openflights_path_is_added_after_the_schedule_backed_sources(tmp_path):
+    """Everything in an OpenFlights backup is typed by hand, so it goes last:
+    the first source listed owns a flight two of them report."""
+    config = load_config(
+        env={
+            "OPENFLIGHTS_CSV_PATH": "openflights/",
+            "FLIGHTY_CSV_PATH": "flighty/",
+            "TRIPIT_ICAL_URL": "https://example.invalid/f.ics",
+        },
+        directory=str(tmp_path),
+    )
+
+    assert config.importers[-1] == {"type": "openflights_csv", "path": "openflights/"}
+    assert [entry["type"] for entry in config.importers] == [
+        "tripit_ical",
+        "flighty_csv",
+        "openflights_csv",
+    ]
+
+
 def test_an_environment_only_setup_warns_about_nothing(tmp_path, capsys):
     """The contrail-gh tripwire. The template and every instance created from it
     configure contrail through environment variables alone and ship no config
