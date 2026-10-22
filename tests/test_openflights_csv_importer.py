@@ -211,3 +211,38 @@ def test_export_files_sorts_newest_first(tmp_path):
     for name in names:
         (tmp_path / name).touch()
     assert [p.name for p in export_files(str(tmp_path))] == list(reversed(names))
+
+
+def test_an_unreadable_date_is_unparsed_under_a_key_of_its_own(importer):
+    """Without a date there is no identity to key on, and a shared fallback
+    key would let one such row mask the rest."""
+    a, b = importer.parse(lines(row(date="unknown"), row(date="unknown", origin="LAX")))
+    assert isinstance(a, UnparsedEvent)
+    assert a.source_id == "row:unknown-SFO-LHR-286"
+    assert a.key != b.key
+
+
+def test_an_unreadable_time_keeps_the_date_but_states_no_departure(importer):
+    (flight,) = importer.parse(lines(row(date="2019-05-17 25:61:00")))
+    assert flight.flight_date.isoformat() == "2019-05-17"
+    assert flight.departure_time is None
+
+
+def test_a_three_letter_prefix_that_is_no_airline_is_left_alone(importer):
+    """An unresolved ICAO-shaped prefix is not stripped, so the number stays
+    unpriceable rather than being priced against the wrong airline."""
+    assert importer.carrier_and_number("British Airways", "XYZ123") == ("BA", "XYZ123")
+
+
+@pytest.mark.parametrize(
+    "second",
+    [
+        row(date="2019-05-17 20:00:00", origin="LHR", dest="SFO", duration=""),
+        # An airport contrail can't place has no instant to compare.
+        row(date="2019-05-17 20:00:00", origin="ZZZ", dest="SFO"),
+    ],
+    ids=["no duration", "unplaceable airport"],
+)
+def test_a_leg_that_cannot_be_timed_is_not_compared(importer, capsys, second):
+    list(importer.parse(lines(row(date="2019-05-17 16:25:00"), second)))
+    assert capsys.readouterr().err == ""
