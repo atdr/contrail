@@ -67,6 +67,21 @@ importers:
     # set this to false to stop it looking up the rest on Wikidata.
     airline_lookup: true
 
+  # An OpenFlights backup, for history older than any other source. Keep it
+  # last: everything in it was typed by hand, so where another source also has
+  # a flight, that source owns the row and this one only fills in blanks.
+  # Delete this entry if you have no backup.
+  - type: openflights_csv
+
+    # A backup CSV, a directory of them, or a glob. Export it from OpenFlights
+    # (Settings -> Backup to CSV). Like the Flighty export, it is your whole
+    # flight history: keep it out of any public repository.
+    path: openflights/
+
+    # OpenFlights names airlines in words; this resolves those it can't find
+    # in the shipped table on Wikidata. False keeps it offline.
+    airline_lookup: true
+
   # Each entry is passed to its own importer, so different importers can take
   # completely different fields. contrail reads only `type` and never checks
   # the rest — see src/contrail/importers/base.py.

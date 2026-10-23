@@ -28,11 +28,11 @@ every supported minor through 3.14. The default `python3` on this machine is
 
 Three protocol seams:
 
-| Seam         | Protocol                                                                | Implementations              |
-| ------------ | ----------------------------------------------------------------------- | ---------------------------- |
-| `importers/` | `Importer.fetch(config) -> Iterable[FlightRecord \| UnparsedEvent]`     | `tripit_ical`, `flighty_csv` |
-| `emissions/` | `EmissionsProvider.compute(flights, now) -> dict[key, EmissionsResult]` | `tim`                        |
-| `storage/`   | `Storage.load() -> list[dict]`, `save(rows)`                            | `local_csv`                  |
+| Seam         | Protocol                                                                | Implementations                                 |
+| ------------ | ----------------------------------------------------------------------- | ----------------------------------------------- |
+| `importers/` | `Importer.fetch(config) -> Iterable[FlightRecord \| UnparsedEvent]`     | `tripit_ical`, `flighty_csv`, `openflights_csv` |
+| `emissions/` | `EmissionsProvider.compute(flights, now) -> dict[key, EmissionsResult]` | `tim`                                           |
+| `storage/`   | `Storage.load() -> list[dict]`, `save(rows)`                            | `local_csv`                                     |
 
 Each seam has a registry keyed by the implementation's own `id`, and one
 `lookup_type` in `config.py` resolves a config `type:` against it. The raw log

@@ -3,13 +3,22 @@
 import csv
 import json
 import pathlib
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from unittest.mock import patch
 
 import pytest
 import requests
 
-from contrail.cli import _collapse, _now, _through_conflicts, main
+from contrail.cli import (
+    _collapse,
+    _describe,
+    _dry_run_report,
+    _now,
+    _through_conflicts,
+    main,
+    reconcile,
+)
 from contrail.models import EmissionsResult, FlightRecord
 from contrail.storage import total_kg
 
@@ -937,6 +946,95 @@ def test_the_conflict_check_ignores_records_it_cannot_identify():
     b = record(source_id="2", destination="")
 
     assert _through_conflicts(keyed(a, b), {}) == []
+
+
+def stored(source="flighty_csv", flight_date="2026-09-21", **kw):
+    """A stored row on the same route as `record`, enough for reconcile."""
+    return {
+        "source": source,
+        "source_id": "stored",
+        "flight_date": flight_date,
+        "carrier_code": "BA",
+        "flight_number": "16",
+        "origin": "LHR",
+        "destination": "JFK",
+        "emissions_source": "typical_route_average",
+        **kw,
+    }
+
+
+def test_a_new_flight_a_day_off_a_stored_one_is_reported():
+    """The post-midnight trap: a hand-typed date a day early matches nothing,
+    so the flight would be added and counted a second time."""
+    flight = record(source="openflights_csv", source_id="x")
+
+    plan = reconcile([stored()], [flight], [], FROZEN_NOW)
+
+    assert plan.new_flights == [flight]
+    assert [(f, source) for f, _, source in plan.near_misses] == [(flight, "flighty_csv")]
+
+
+def test_two_new_flights_a_day_apart_are_reported_once():
+    """The first import of a backup alongside a source already configured."""
+    a = record(source="flighty_csv", source_id="a")
+    b = replace(record(source="openflights_csv", source_id="b"), flight_date=date(2026, 9, 21))
+
+    plan = reconcile([], [a, b], [], FROZEN_NOW)
+
+    assert len(plan.near_misses) == 1
+
+
+@pytest.mark.parametrize("flight_date", ["2026-09-20", "2026-09-22"])
+def test_a_same_day_match_or_two_days_off_is_not_a_near_miss(flight_date):
+    flight = record(source="openflights_csv", source_id="x")
+
+    assert reconcile([stored(flight_date=flight_date)], [flight], [], FROZEN_NOW).near_misses == []
+
+
+def test_one_source_on_consecutive_days_is_not_a_near_miss():
+    """A source listing two days is describing two flights: a daily shuttle."""
+    flight = record(source="flighty_csv", source_id="x")
+
+    assert reconcile([stored()], [flight], [], FROZEN_NOW).near_misses == []
+
+
+def test_a_cancelled_flight_is_no_near_miss():
+    """A flight called off was never going to be counted, so it cannot be the
+    other half of a double count."""
+    called_off = record(source="tripit_ical", source_id="a", cancelled=True)
+    flight = replace(record(source="flighty_csv", source_id="b"), flight_date=date(2026, 9, 21))
+
+    assert reconcile([], [called_off, flight], [], FROZEN_NOW).near_misses == []
+
+
+def test_a_near_miss_between_schedule_backed_sources_doubts_neither(capsys):
+    flight = record(source="tripit_ical", source_id="x")
+
+    _describe(reconcile([stored()], [flight], [], FROZEN_NOW))
+
+    assert "Check which date is right" in capsys.readouterr().err
+
+
+def test_a_dry_run_lists_a_near_miss(capsys):
+    flight = record(source="openflights_csv", source_id="x")
+
+    _dry_run_report(reconcile([stored()], [flight], [], FROZEN_NOW), "log.csv")
+
+    assert "DAY OFF?  BA16 LHR->JFK on 2026-09-20 [openflights_csv] is one day off" in (
+        capsys.readouterr().out
+    )
+
+
+def test_a_near_miss_warning_doubts_the_hand_typed_side(capsys):
+    flight = record(source="openflights_csv", source_id="x")
+
+    _describe(reconcile([stored()], [flight], [], FROZEN_NOW))
+
+    err = capsys.readouterr().err
+    assert "is one day off BA16 LHR->JFK on 2026-09-21 [flighty_csv]" in err
+    assert "openflights_csv is typed by hand, so check its date first" in err
+    # A real sync writes the row in the same run, and no later sync removes it.
+    assert "delete the wrongly dated row from the log" in err
 
 
 @pytest.mark.parametrize(

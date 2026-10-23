@@ -80,10 +80,31 @@ second row.
 
 Ordering decides ownership, so it is the order they appear in `importers:`. That
 is deterministic and stable, which matters more than which source is "better":
-the row is the same flight either way, and `also_seen_as` reaches the rest.
+the row is the same flight either way, and `also_seen_as` reaches the rest. The
+one ordering that does matter is `openflights_csv` last. Everything in it is
+hand typed, so it should fill blanks on a flight a schedule-backed source has,
+never own it; `OPENFLIGHTS_CSV_PATH` is appended after the others for that
+reason.
 
 **Not the flight number.** `BA16` can be SYD–SIN and SIN–LHR on one day, in two
 different cabins. See [parsing.md](parsing.md).
+
+## A flight one day off another source's
+
+Identity includes the date, so a flight one source dates a day wrong matches
+nothing and is counted twice. A hand-typed post-midnight departure is the usual
+cause. `reconcile` checks each _new_ flight against stored rows and other new
+flights from a different source on the same route a day either side, and warns
+(`DAY OFF?` in a dry run). It changes nothing: a route flown on consecutive days
+is ordinary. Pairs from one source are skipped, since a source listing two days
+is describing two flights. Only new flights are checked, so the warning appears
+on the run that would add the flight and not on every sync after, which is why
+the README says to dry-run a backup first. A real sync writes the row in the
+same run that warns, and correcting the date afterwards cannot take it back:
+the date is in an OpenFlights key, so the corrected flight arrives under a new
+key, and the old row has departed and is never removed. The warning says to
+delete it by hand. When one side comes from an importer marked `user_entered`,
+the warning says to doubt that side.
 
 ## Open: a through flight alongside its legs
 

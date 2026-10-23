@@ -54,6 +54,7 @@ body:
       options:
         - label: tripit_ical
         - label: flighty_csv
+        - label: openflights_csv
 
   - type: textarea
     id: what-happened

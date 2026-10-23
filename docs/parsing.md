@@ -1,8 +1,8 @@
 # Reading a source
 
-Two importers, and most of what follows is about the messier one. The Flighty
-section near the end is short because its format is fixed columns rather than
-free text.
+Three importers, and most of what follows is about the messiest one. The
+Flighty and OpenFlights sections near the end are short because their formats
+are fixed columns rather than free text.
 
 ## TripIt: the regexes look untidy because real feeds are
 
@@ -109,6 +109,33 @@ across exports, which is what makes a re-import idempotent. Multiple export file
 are read newest first, by filename, because the CLI keeps the first record it
 sees for a key — Flighty names them `FlightyExport-YYYY-MM-DD.csv`, and a repo
 checkout gives every file the same mtime.
+
+## Reading an OpenFlights backup
+
+Fixed columns like Flighty's, but every value was typed by a person, and that
+decides most of what the importer does. Verified against a real 253-row backup:
+
+- **`Date` is local departure**, `YYYY-MM-DD HH:MM:SS` or a bare date. A time
+  gets the origin's zone, as for Flighty; a bare date leaves `departure_time`
+  empty and the freeze boundary falls back to the date.
+- **`Airline` is a display name.** It goes through the same resolver as a
+  TripIt codeshare, and 21 of 25 names in that backup resolve from the shipped
+  table. A prefix on the flight number beats the name, because whoever typed
+  `U28001` said which airline the number is: two characters with a letter in
+  them (`U2`, `E4`, never the `01` of a zero-padded `0123A`), or three letters
+  that resolve as ICAO (`BAW`). Leading zeros go after that.
+- **No row gets an arrival.** `Duration` may be OpenFlights' own estimate from
+  the distance or a time the user entered, and nothing in the file marks which.
+  It is used only to check one leg against the next.
+- **The key is `YYYY-MM-DD:FROM-TO`**, numbered `#2` on for the same route
+  twice in one day, in departure order. There is no flight id, and keying on
+  the number or the time would re-key a row each time it was corrected, which
+  for an unparsed row means a second row.
+
+A post-midnight departure entered under the previous day is the trap that
+motivated the checks. The importer warns when a leg departs before the previous
+leg's departure plus `Duration`, and the CLI warns when a new flight is one day
+off another source's (see [resync.md](resync.md)).
 
 ## One flight number, two legs
 

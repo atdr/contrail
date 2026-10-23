@@ -53,16 +53,17 @@ Environment variables beat the file because that is what every deployment target
 injects. GitHub Actions secrets, a cron environment and Lambda variables all
 arrive that way, and none of them wants to write a file first.
 
-| Variable             | Sets                            |
-| -------------------- | ------------------------------- |
-| `TRIPIT_ICAL_URL`    | a `tripit_ical` importer's URL  |
-| `FLIGHTY_CSV_PATH`   | a `flighty_csv` importer's path |
-| `TIM_API_KEY`        | `emissions.api_key`             |
-| `EMISSIONS_PROVIDER` | `emissions.type`                |
-| `CSV_PATH`           | `storage.flights.path`          |
-| `RAW_LOG`            | `storage.raw_log.enabled`       |
-| `RAW_PATH`           | `storage.raw_log.path`          |
-| `PASSPORT_OUTPUT`    | `passport.output_path`          |
+| Variable               | Sets                                             |
+| ---------------------- | ------------------------------------------------ |
+| `TRIPIT_ICAL_URL`      | a `tripit_ical` importer's URL                   |
+| `FLIGHTY_CSV_PATH`     | a `flighty_csv` importer's path                  |
+| `OPENFLIGHTS_CSV_PATH` | an `openflights_csv` importer's path, added last |
+| `TIM_API_KEY`          | `emissions.api_key`                              |
+| `EMISSIONS_PROVIDER`   | `emissions.type`                                 |
+| `CSV_PATH`             | `storage.flights.path`                           |
+| `RAW_LOG`              | `storage.raw_log.enabled`                        |
+| `RAW_PATH`             | `storage.raw_log.path`                           |
+| `PASSPORT_OUTPUT`      | `passport.output_path`                           |
 
 `EMISSIONS_PROVIDER` sets a key now called `type`. The name is kept because
 these variables are the contract with the Actions template and every repository

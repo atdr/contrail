@@ -42,11 +42,18 @@ def test_every_type_resolves_against_a_registry(path):
 
 
 @pytest.mark.parametrize("path", [JSON, YAML], ids=lambda p: p.name)
-def test_an_example_lists_tripit_before_flighty(path):
+def test_an_example_lists_tripit_then_flighty_then_openflights(path):
     """Order is not decoration here: the first importer listed owns a flight
     both report, and the export is the one that fills in the cabin. Swapping
-    them changes which source owns every row a new user ends up with."""
-    assert [entry["type"] for entry in load(path).importers] == ["tripit_ical", "flighty_csv"]
+    them changes which source owns every row a new user ends up with.
+
+    OpenFlights comes last because everything in it is typed by hand: it
+    should fill blanks on a flight a schedule-backed source has, not own it."""
+    assert [entry["type"] for entry in load(path).importers] == [
+        "tripit_ical",
+        "flighty_csv",
+        "openflights_csv",
+    ]
 
 
 @pytest.mark.parametrize("path", [JSON, YAML], ids=lambda p: p.name)

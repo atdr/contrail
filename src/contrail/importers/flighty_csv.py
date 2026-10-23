@@ -29,14 +29,13 @@ export rather than assumed:
 from __future__ import annotations
 
 import csv
-import sys
 from collections.abc import Iterable, Iterator
 from datetime import date, datetime
-from glob import glob
 from pathlib import Path
 
 from contrail.airlines import AirlineResolver
 from contrail.airports import timezone_for
+from contrail.importers import files
 from contrail.models import FlightRecord, UnparsedEvent
 
 # Flighty's own spelling, mapped onto contrail's. PREMIUM_ECONOMY has not been
@@ -148,42 +147,16 @@ def is_cancelled(value: str) -> bool:
 
 
 def export_files(path: str) -> list[Path]:
-    """Every export the configured path names, newest first.
+    """Every Flighty export the configured path names, newest first.
 
-    A file, a directory of them, or a glob. Newest first because the CLI keeps
-    the *first* record it sees for a key, so the most recent export wins wherever
-    two of them disagree about the same flight.
-
-    Ordering is by filename, not modification time: Flighty names its exports
-    ``FlightyExport-YYYY-MM-DD.csv``, so the name sorts correctly, and a repo
-    checkout gives every file the same mtime anyway.
-
-    **Finding nothing is a warning, not an error**, and an empty directory and a
-    missing one behave alike. An export arrives by hand, so "not there yet" is an
-    ordinary state — the contrail-gh template ships an empty ``flighty/`` for
-    exactly that reason. Raising would let one unconfigured source take down a
-    sync that had a perfectly good TripIt feed alongside it. Nothing else breaks:
-    a source that returns nothing already can't cancel its own rows, and a run
-    where *every* source is empty is refused separately.
+    See :func:`contrail.importers.files.export_files` for what a path may be
+    and why finding nothing only warns.
     """
-    target = Path(path).expanduser()
-
-    if target.is_dir():
-        matches = list(target.glob("*.csv"))
-    elif target.exists():
-        matches = [target]
-    else:
-        matches = [Path(p) for p in glob(str(target))]
-
-    if not matches:
-        print(
-            f"No Flighty export found at {path!r} — no cabin classes will be filled in "
-            "from one this run.\n"
-            "  'path' takes an exported CSV, a directory of them, or a glob.",
-            file=sys.stderr,
-        )
-
-    return sorted(matches, key=lambda p: p.name, reverse=True)
+    return files.export_files(
+        path,
+        f"No Flighty export found at {path!r} — no cabin classes will be filled in "
+        "from one this run.",
+    )
 
 
 class FlightyCSVImporter:

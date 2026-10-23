@@ -18,3 +18,8 @@ def sample_feed_bytes(sample_feed_path) -> bytes:
 @pytest.fixture
 def sample_flighty_path() -> Path:
     return FIXTURES / "sample_flighty.csv"
+
+
+@pytest.fixture
+def sample_openflights_path() -> Path:
+    return FIXTURES / "sample_openflights.csv"

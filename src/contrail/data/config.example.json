@@ -9,6 +9,11 @@
       "type": "flighty_csv",
       "path": "flighty/",
       "airline_lookup": true
+    },
+    {
+      "type": "openflights_csv",
+      "path": "openflights/",
+      "airline_lookup": true
     }
   ],
   "emissions": {

@@ -336,6 +336,10 @@ def load_config(
     # repository rather than a URL.
     _env_source(importers, "tripit_ical", "url", env.get("TRIPIT_ICAL_URL"))
     _env_source(importers, "flighty_csv", "path", env.get("FLIGHTY_CSV_PATH"))
+    # Last, after the schedule-backed sources: every value in an OpenFlights
+    # backup is hand typed, so on a flight both report it should only fill in
+    # blanks, and the first source listed is the one that owns the row.
+    _env_source(importers, "openflights_csv", "path", env.get("OPENFLIGHTS_CSV_PATH"))
 
     if env.get("TIM_API_KEY"):
         emissions["api_key"] = env["TIM_API_KEY"]
