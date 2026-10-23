@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/atdr/contrail/compare/v0.7.1...v0.8.0) (2026-10-23)
+
+
+### Features
+
+* **importers:** add openflights_csv importer ([#88](https://github.com/atdr/contrail/issues/88)) ([e5f44b3](https://github.com/atdr/contrail/commit/e5f44b399e514b2ee037b8a44441687b51f400b3))
+
+
+### Documentation
+
+* **contrail-gh:** record the template's reliance on sync --passport ([#85](https://github.com/atdr/contrail/issues/85)) ([474342f](https://github.com/atdr/contrail/commit/474342f9fcb651116b327835d8b2b428529c61ae))
+
 ## [0.7.1](https://github.com/atdr/contrail/compare/v0.7.0...v0.7.1) (2026-10-01)
 
 
