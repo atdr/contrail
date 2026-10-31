@@ -139,7 +139,7 @@ jobs:
       # toolchain to install, nothing fetched from a registry, and the
       # github-actions dependabot ecosystem already configured for this repo
       # keeps the pin current. That is why there is no setup-node step here.
-      - uses: DavidAnson/markdownlint-cli2-action@v24
+      - uses: DavidAnson/markdownlint-cli2-action@v25
       # 3.13 rather than the 3.12 the other jobs use, and not an oversight:
       # .mdformat.toml sets `exclude`, which errors below 3.13. It says why.
       - uses: actions/setup-python@v7
