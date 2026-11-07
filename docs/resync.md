@@ -78,7 +78,10 @@ second row.
   letter-suffixed charter number that two sources both fail on, or that one
   parses and the other cannot, is then one row. The reverse never happens: an
   unparsed row does not absorb a parsed reading, which would never be priced.
-  Within one source, two events on one route and day stay two flights.
+  A key a row already lists in `also_seen_as` stays with that row, and an open
+  row is matched on the route and status the feed gives it this run. An event
+  never joins a flight its own source already owns or is linked to: two of one
+  source's entries on one route and day are two flights.
 - **A cancelled row does not claim its identity.** If one source called a flight
   off and another says it flew, the flight that happened deserves a row rather
   than being filed against one that counts for nothing.

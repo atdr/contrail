@@ -365,6 +365,10 @@ def _event_identity(event: UnparsedEvent) -> tuple[str, str, str] | None:
     )
 
 
+def _source_of(key: str) -> str:
+    return key.split(":", 1)[0]
+
+
 def _place_unparsed(plan: Reconciliation, feed_unparsed: dict, by_key: dict, rows) -> None:
     """Queue each unparsed event as a new row, or link it to the flight it repeats.
 
@@ -379,44 +383,72 @@ def _place_unparsed(plan: Reconciliation, feed_unparsed: dict, by_key: dict, row
     that still holds. Flights and events this run is about to write count too,
     so two sources read together for the first time write one row between them.
 
-    Only across sources. Two of one source's events on one route and day are
-    two flights, a route flown twice, and so is one of its events and one of its
-    own rows under another key. Each row absorbs at most one event per source,
-    for the same reason.
+    A key some row already lists in ``also_seen_as`` is that row's, whatever the
+    event recovered this time. Otherwise matching is by identity, and a row is
+    matched as this run leaves it: an open row the feed has rerouted is found on
+    its new route, and one the feed now calls cancelled claims nothing.
+
+    Only a source not already on the flight. Two of one source's entries on one
+    route and day are two flights, a route flown twice, so an event never joins
+    a row its own source owns or has already been linked to, by an earlier run
+    or this one.
     """
+    aliases = {link: row for row in rows for link in resync.links(row)}
+    updated = {row_key(row): flight for row, flight, _ in plan.updates}
+
+    # The sources each owner already speaks for, keyed by the owner's key.
+    sources: dict[str, set[str]] = {}
+
+    def speak_for(owner_key: str, keys) -> None:
+        sources.setdefault(owner_key, {_source_of(owner_key)}).update(map(_source_of, keys))
+
     stored: dict[tuple, list[dict]] = {}
     for row in rows:
-        if not resync.is_cancelled(row) and (identity := resync.identity(row)):
+        key = row_key(row)
+        speak_for(key, resync.links(row))
+        if flight := updated.get(key):
+            speak_for(key, [flight.key, *flight.also_seen])
+            identity = None if flight.cancelled else flight.identity
+        else:
+            identity = None if resync.is_cancelled(row) else resync.identity(row)
+        if identity:
             stored.setdefault(identity, []).append(row)
+    for row, flight, _ in plan.duplicates:
+        speak_for(row_key(row), [flight.key, *flight.also_seen])
+
     pending: dict[tuple, list[FlightRecord | UnparsedEvent]] = {}
     for flight in plan.new_flights:
+        speak_for(flight.key, flight.also_seen)
         if flight.identity and not flight.cancelled:
             pending.setdefault(flight.identity, []).append(flight)
-    claimed: set[tuple[str, str]] = set()  # (owning key, source of the event it absorbed)
 
-    def free(owner_key: str, owner_source: str, event: UnparsedEvent) -> bool:
-        return owner_source != event.source and (owner_key, event.source) not in claimed
+    def link(row: dict, event: UnparsedEvent) -> None:
+        speak_for(row_key(row), [event.key])
+        plan.unparsed_links.append((row, event, event.key not in resync.links(row)))
 
     for key, event in feed_unparsed.items():
         if key in by_key:
+            continue
+        if key in aliases:
+            link(aliases[key], event)
             continue
         identity = _event_identity(event)
         if identity is None:
             plan.new_unparsed.append(event)
             continue
         if row := next(
-            (r for r in stored.get(identity, []) if free(row_key(r), r.get("source"), event)),
+            (r for r in stored.get(identity, []) if event.source not in sources[row_key(r)]),
             None,
         ):
-            claimed.add((row_key(row), event.source))
-            plan.unparsed_links.append((row, event, key not in resync.links(row)))
+            link(row, event)
         elif owner := next(
-            (o for o in pending.get(identity, []) if free(o.key, o.source, event)), None
+            (o for o in pending.get(identity, []) if event.source not in sources[o.key]), None
         ):
-            claimed.add((owner.key, event.source))
+            speak_for(owner.key, [key])
             owner.also_seen.append(key)
         else:
             plan.new_unparsed.append(event)
+            speak_for(key, [])
             pending.setdefault(identity, []).append(event)
 
 

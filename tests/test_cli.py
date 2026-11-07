@@ -1282,6 +1282,72 @@ def test_an_unparsed_event_links_to_a_flight_the_same_run_adds():
     assert second.also_seen == ["tripit_ical:w"]
 
 
+def test_an_unparsed_event_under_a_linked_key_stays_with_its_row():
+    """Once linked, the key is the row's, even if that source can no longer
+    recover the route it did before."""
+    row = stored(also_seen_as="openflights_csv:x")
+    event = unparsed_event(origin="")
+
+    plan = reconcile([row], [], [event], FROZEN_NOW)
+
+    assert plan.new_unparsed == []
+    assert plan.unparsed_links == [(row, event, False)]
+
+
+def test_an_unparsed_event_skips_a_row_its_source_is_already_linked_to():
+    """OpenFlights already has one flight on this row, so a second OpenFlights
+    entry on the route that day is another flight."""
+    event = unparsed_event(source_id="y")
+
+    plan = reconcile([stored(also_seen_as="openflights_csv:x")], [], [event], FROZEN_NOW)
+
+    assert plan.new_unparsed == [event]
+
+
+def test_an_unparsed_event_skips_a_flight_its_source_reported_this_run():
+    """Two OpenFlights entries, one parsed and folded into Flighty's flight, the
+    other not: the second is a second flight."""
+    flighty = replace(record(source="flighty_csv", source_id="f"), flight_date=date(2026, 9, 21))
+    openflights = replace(flighty, source="openflights_csv", source_id="o")
+    event = unparsed_event(source_id="u")
+
+    plan = reconcile([], [flighty, openflights], [event], FROZEN_NOW)
+
+    assert plan.new_unparsed == [event]
+    assert event.key not in flighty.also_seen
+
+
+def upcoming(**kw):
+    return stored(
+        source="tripit_ical",
+        flight_date="2026-09-21",
+        departure_time="2026-09-21T10:00:00+00:00",
+        **kw,
+    )
+
+
+def test_an_unparsed_event_finds_an_open_row_on_its_new_route():
+    """The feed moving a flight moves the row, so the event that repeats it
+    is matched against where it goes, not where it was."""
+    rerouted = replace(record(source_id="stored", destination="BOS"), flight_date=date(2026, 9, 21))
+    on_old_route = unparsed_event(source_id="old")
+    on_new_route = unparsed_event(source_id="new", destination="BOS")
+
+    plan = reconcile([upcoming()], [rerouted], [on_old_route, on_new_route], FROZEN_NOW)
+
+    assert plan.new_unparsed == [on_old_route]
+    assert [event for _, event, _ in plan.unparsed_links] == [on_new_route]
+
+
+def test_an_open_row_the_feed_cancels_absorbs_no_unparsed_event():
+    called_off = replace(record(source_id="stored", cancelled=True), flight_date=date(2026, 9, 21))
+    event = unparsed_event()
+
+    plan = reconcile([upcoming()], [called_off], [event], FROZEN_NOW)
+
+    assert plan.new_unparsed == [event]
+
+
 def write_csv(path, rows):
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0]), lineterminator="\n")
@@ -1289,7 +1355,9 @@ def write_csv(path, rows):
         writer.writerows(rows)
 
 
-def test_a_backup_that_cannot_parse_a_flighty_flight_adds_no_row(env, monkeypatch, tmp_path):
+def test_a_backup_that_cannot_parse_a_flighty_flight_adds_no_row(
+    env, monkeypatch, tmp_path, capsys
+):
     """End to end, and on the second run as well, which is where a duplicate
     would otherwise appear: the first run with both sources is a fresh file."""
     rows = list(csv.DictReader(FIXTURE_FLIGHTY.open()))
@@ -1316,6 +1384,8 @@ def test_a_backup_that_cannot_parse_a_flighty_flight_adds_no_row(env, monkeypatc
     assert len(first) == 2
 
     monkeypatch.setenv("OPENFLIGHTS_CSV_PATH", str(backup))
+    assert run_sync(["sync", "--dry-run"]) == 0
+    assert capsys.readouterr().out.count("LINKED    [openflights_csv]") == 2
     # A fill from Flighty on the same run, which the link must not undo.
     first[0]["flight_reason"] = ""
     write_csv(env / "flight_emissions.csv", first)
