@@ -120,6 +120,9 @@ class UnparsedEvent:
     source_id: str
     raw_text: str  # the source text, for manual review
     partial: dict = field(default_factory=dict)
+    # Keys of other sources' unparsed readings of this same flight, filled in by
+    # the CLI when two sources read in one run both fail to parse it.
+    also_seen: list[str] = field(default_factory=list)
 
     @property
     def key(self) -> str:

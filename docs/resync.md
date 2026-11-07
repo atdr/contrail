@@ -72,6 +72,13 @@ second row.
 - **Against the file**, a record whose key is unknown but whose identity is
   already stored back-fills that row instead of adding one. It is never sent for
   pricing: the row already has its figure.
+- **An unparsed event links by identity too**, when it recovered a whole
+  route and date. Any row of another source may absorb it, parsed or unparsed,
+  and records its key; so may a flight or event the same run is writing. A
+  letter-suffixed charter number that two sources both fail on, or that one
+  parses and the other cannot, is then one row. The reverse never happens: an
+  unparsed row does not absorb a parsed reading, which would never be priced.
+  Within one source, two events on one route and day stay two flights.
 - **A cancelled row does not claim its identity.** If one source called a flight
   off and another says it flew, the flight that happened deserves a row rather
   than being filed against one that counts for nothing.
