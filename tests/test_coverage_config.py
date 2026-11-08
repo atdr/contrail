@@ -1,10 +1,14 @@
 """The coverage arrangement, enforced rather than written down.
 
-Coverage here reports; it never gates. That is a claim about four files at
-once, and every part of it is the kind a tidy-up can undo without anything
+Coverage here reports; it never gates. That is a claim about several files
+at once, and every part of it is the kind a tidy-up can undo without anything
 going red: `source` narrowed to a path that skips a module, `branch` dropped,
-`informational` removed from `codecov.yml`, or `continue-on-error` taken off
-the upload so a Codecov outage fails a pull request that is fine.
+`informational` removed from `codecov.yml`, or the coverage run switched off
+in `ci.yml`.
+
+The coverage job itself, the blocking `pytest --cov` run and the
+`continue-on-error` upload, lives in atdr/github-boilerplate's python-ci
+workflow, which `ci.yml` calls at a pinned tag. This file checks the call.
 
 The scope settings in particular look like defaults worth deleting and are
 not. `source` naming the package and maintainer scripts is what makes a module
@@ -24,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text())
 CODECOV = yaml.safe_load((ROOT / "codecov.yml").read_text())
 CI = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
-COVERAGE_JOB = CI["jobs"]["coverage"]
+PYTHON_JOB = CI["jobs"]["python"]
 
 
 def test_coverage_measures_the_package_and_maintainer_scripts():
@@ -62,28 +66,12 @@ def test_codecov_can_never_block_a_merge():
         )
 
 
-def test_the_run_is_blocking_and_only_the_upload_is_advisory():
-    """A job made entirely advisory is a check that proves nothing."""
-    steps = COVERAGE_JOB["steps"]
-    uploads = [step for step in steps if step.get("uses", "").startswith("codecov/codecov-action")]
-
-    assert len(uploads) == 1
-    upload = uploads[0]
-    assert upload["continue-on-error"] is True, (
-        "a Codecov outage says nothing about the change under review"
+def test_ci_runs_the_shared_coverage_job_and_hands_it_the_token():
+    """Turning coverage off, or dropping the secret, is quiet: the badge just goes stale."""
+    assert PYTHON_JOB["uses"].startswith("atdr/github-boilerplate/.github/workflows/python-ci.yml@")
+    assert PYTHON_JOB.get("with", {}).get("coverage", True) is not False, (
+        "python-ci runs coverage by default; ci.yml should not switch it off"
     )
-    assert all("continue-on-error" not in step for step in steps if step is not upload), (
-        "only the upload may be advisory; the coverage run itself has to be able to fail"
+    assert PYTHON_JOB.get("secrets", {}).get("CODECOV_TOKEN") == "${{ secrets.CODECOV_TOKEN }}", (
+        "without the token the upload fails quietly, since it is advisory"
     )
-
-
-def test_the_report_the_upload_reads_is_the_one_pytest_writes():
-    """The two halves are written in different steps and neither names the other."""
-    steps = COVERAGE_JOB["steps"]
-    run = next(step["run"] for step in steps if "--cov" in step.get("run", ""))
-    upload = next(step for step in steps if step.get("uses", "").startswith("codecov/"))
-
-    assert "--cov-report=xml" in run, "Codecov reads the XML report, not the terminal one"
-    # pytest-cov writes ./coverage.xml by default, and the upload is pointed at
-    # that path explicitly rather than left to the action's own search.
-    assert upload["with"]["files"].removeprefix("./") == "coverage.xml"

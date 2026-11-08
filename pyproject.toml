@@ -42,10 +42,11 @@ yaml = ["pyyaml>=6.0.3"]
 browser = ["pytest-playwright>=0.9.0"]
 dev = [
     "pytest>=9.1.1",
-    # Coverage, reported to Codecov by the `coverage` job in ci.yml. What gets
-    # measured is configured under `[tool.coverage.run]` at the foot of this
-    # file rather than on the command line, so a local run and a CI run measure
-    # the same thing.
+    # Coverage, reported to Codecov by the `coverage` job that ci.yml runs from
+    # atdr/github-boilerplate's python-ci workflow. What gets measured is
+    # configured under `[tool.coverage.run]` at the foot of this file rather
+    # than on the command line, so a local run and a CI run measure the same
+    # thing.
     "pytest-cov>=7.1.0",
     # Upper bound deliberate: CI gates on `ruff format --check`, and the
     # formatter's output is not stable across minor releases. Without it the
@@ -56,9 +57,11 @@ dev = [
     # tools. Optional to use — CI is still the gate — but declared here so
     # `pip install -e ".[dev]"` leaves nothing to install by hand.
     "pre-commit>=4.6.2",
-    # Formats Markdown; markdownlint-cli2 checks what it cannot express. Both
-    # `docs` in ci.yml and the pre-commit hook run 3.13, because .mdformat.toml
-    # sets `exclude` and that key errors below it — see the comment there.
+    # Formats Markdown; markdownlint-cli2 checks what it cannot express. This
+    # pin is for local runs: CI (the markdown job in checks.yml) and the
+    # pre-commit hook each install their own pinned copy. Both run 3.13,
+    # because .mdformat.toml sets `exclude` and that key errors below it — see
+    # the comment there.
     #
     # Never add an mdformat *codeformatter* plugin (mdformat-black and the
     # like). mdformat enables every installed one by default, which would
