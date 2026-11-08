@@ -4,9 +4,14 @@ on:
   push:
     branches: [main]
 
-permissions:
-  contents: write
-  pull-requests: write
+# Scoped per job: the publish job must not hold a writable contents token.
+permissions: {}
+
+# Queued, never cancelled: a publish stopped halfway can leave a tag with no
+# package behind it.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   release-please:
@@ -15,44 +20,62 @@ jobs:
     # silently never happens. Ten minutes against a job that takes seconds.
     timeout-minutes: 10
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       # Maintains a rolling release PR from the conventional commits on main.
       # Merging it bumps the version in pyproject.toml, updates CHANGELOG.md,
       # tags the release, and publishes it.
       #
       # Note: this opens the release PR with the default GITHUB_TOKEN. Its
-      # pull_request runs (ci.yml, pr-title.yml) are created but held for
+      # pull_request runs (ci.yml, checks.yml, pull-request.yml) are created but held for
       # "Approve and run" before they start, and branch protection requires
       # them, so the release PR cannot merge until someone approves. A
       # pull_request_target workflow would get no run at all and block the
-      # PR for good, which is why pr-title.yml does not use that trigger.
+      # PR for good, which is why pull-request.yml does not use that trigger.
       - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+  # Gated on release-please's own output: a release made with GITHUB_TOKEN
+  # starts no `on: release` workflow. The output is the string 'true' or
+  # empty, so compare it rather than relying on truthiness.
+  #
+  # In this file, not a reusable workflow: PyPI's trusted publisher names the
+  # workflow file that publishes, and that has to be the caller's.
   publish:
     name: publish to PyPI
     needs: release-please
-    if: needs.release-please.outputs.release_created
+    if: needs.release-please.outputs.release_created == 'true'
     # The failure that matters here is a `pip install build` that stalls rather
     # than fails, and this job is the last thing between a tag and a release.
     timeout-minutes: 10
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
+      # A job-level block sets every unlisted scope to none, and checkout
+      # needs this one.
+      contents: read
       # No API token: PyPI trusts this workflow (owner/repo/environment) to
       # mint its own short-lived credential via OIDC.
       id-token: write
     steps:
+      # The tag, not the branch tip: another push to main can land between
+      # the release and this job, and the package must be the tagged code.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
 
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Build
         run: |
