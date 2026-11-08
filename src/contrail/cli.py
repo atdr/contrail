@@ -212,6 +212,9 @@ class Reconciliation:
         self.new_unparsed: list[UnparsedEvent] = []
         self.updates: list[tuple[dict, FlightRecord, list[str]]] = []  # row, flight, changed
         self.duplicates: list[tuple[dict, FlightRecord, list[str]]] = []  # row, flight, filled
+        # A stored row, another source's unparsed reading of the same flight,
+        # and whether linking it changes the row's ``also_seen_as``.
+        self.unparsed_links: list[tuple[dict, UnparsedEvent, bool]] = []
         self.collapsed: list[tuple[FlightRecord, FlightRecord]] = []  # kept, folded in
         self.conflicts: list[tuple[str, list[FlightRecord], tuple]] = []
         # A new flight, and another source's flight on the same route a day
@@ -236,6 +239,7 @@ class Reconciliation:
             # previous run. Counting it would make every sync look like it had
             # something to do.
             or any(fields for _, _, fields in self.duplicates)
+            or any(new for _, _, new in self.unparsed_links)
             or self.cancellations
         )
 
@@ -258,6 +262,7 @@ def reconcile(existing_rows, flights, unparsed, now) -> Reconciliation:
     # has an identity, and would absorb the properly parsed reading of the same
     # flight that another source later supplies. That reading is never priced
     # (duplicates aren't), so the flight would sit at 0 kg until someone noticed.
+    # The other direction is safe, and ``_place_unparsed`` handles it.
     by_identity = {
         identity: row
         for row in existing_rows
@@ -324,14 +329,16 @@ def reconcile(existing_rows, flights, unparsed, now) -> Reconciliation:
             if filled:
                 plan.duplicates.append((merged, flight, filled))
 
-    for key, event in feed_unparsed.items():
-        if key not in by_key:
-            plan.new_unparsed.append(event)
+    _place_unparsed(plan, feed_unparsed, by_key, existing_rows)
 
     # A row another source still reports is not a row that vanished, even if the
     # source that owns it went quiet. Cancelling it would drop a flight from the
     # total that contrail has just been told is happening.
-    still_reported = feed_keys | {row_key(row) for row, _, _ in plan.duplicates}
+    still_reported = (
+        feed_keys
+        | {row_key(row) for row, _, _ in plan.duplicates}
+        | {row_key(row) for row, _, _ in plan.unparsed_links}
+    )
 
     for key, row in by_key.items():
         if key in still_reported or resync.is_cancelled(row):
@@ -343,6 +350,106 @@ def reconcile(existing_rows, flights, unparsed, now) -> Reconciliation:
 
     plan.near_misses = _near_misses(plan.new_flights, feed_flights, by_identity)
     return plan
+
+
+def _event_identity(event: UnparsedEvent) -> tuple[str, str, str] | None:
+    """An unparsed event's identity, from whatever it recovered."""
+    partial = event.partial
+    flight_date = partial.get("flight_date")
+    return resync.identity(
+        {
+            "flight_date": flight_date.isoformat() if flight_date else "",
+            "origin": partial.get("origin") or "",
+            "destination": partial.get("destination") or "",
+        }
+    )
+
+
+def _source_of(key: str) -> str:
+    return key.split(":", 1)[0]
+
+
+def _place_unparsed(plan: Reconciliation, feed_unparsed: dict, by_key: dict, rows) -> None:
+    """Queue each unparsed event as a new row, or link it to the flight it repeats.
+
+    A parsed record that misses by key falls back to its identity; this is the
+    same fallback for an unparsed one. Without it, a second source that also
+    fails on a flight, a letter-suffixed charter number say, writes that flight
+    again, and so does one that fails on a flight the first source parsed.
+
+    Any row may absorb an unparsed event, parsed or not: the event carries no
+    figure, so nothing is lost, and the row keeps whatever it had. The reverse
+    is what ``reconcile`` keeps unparsed rows out of ``by_identity`` for, and
+    that still holds. Flights and events this run is about to write count too,
+    so two sources read together for the first time write one row between them.
+
+    A key some row already lists in ``also_seen_as`` is that row's, whatever the
+    event recovered this time. Otherwise matching is by identity, and a row is
+    matched as this run leaves it: an open row the feed has rerouted is found on
+    its new route, and one the feed now calls cancelled claims nothing.
+
+    Only a source not already on the flight. Two of one source's entries on one
+    route and day are two flights, a route flown twice, so an event never joins
+    a row its own source owns or has already been linked to, by an earlier run
+    or this one.
+    """
+    aliases = {link: row for row in rows for link in resync.links(row)}
+    updated = {row_key(row): flight for row, flight, _ in plan.updates}
+
+    # The sources each owner already speaks for, keyed by the owner's key.
+    sources: dict[str, set[str]] = {}
+
+    def speak_for(owner_key: str, keys) -> None:
+        sources.setdefault(owner_key, {_source_of(owner_key)}).update(map(_source_of, keys))
+
+    stored: dict[tuple, list[dict]] = {}
+    for row in rows:
+        key = row_key(row)
+        speak_for(key, resync.links(row))
+        if flight := updated.get(key):
+            speak_for(key, [flight.key, *flight.also_seen])
+            identity = None if flight.cancelled else flight.identity
+        else:
+            identity = None if resync.is_cancelled(row) else resync.identity(row)
+        if identity:
+            stored.setdefault(identity, []).append(row)
+    for row, flight, _ in plan.duplicates:
+        speak_for(row_key(row), [flight.key, *flight.also_seen])
+
+    pending: dict[tuple, list[FlightRecord | UnparsedEvent]] = {}
+    for flight in plan.new_flights:
+        speak_for(flight.key, flight.also_seen)
+        if flight.identity and not flight.cancelled:
+            pending.setdefault(flight.identity, []).append(flight)
+
+    def link(row: dict, event: UnparsedEvent) -> None:
+        speak_for(row_key(row), [event.key])
+        plan.unparsed_links.append((row, event, event.key not in resync.links(row)))
+
+    for key, event in feed_unparsed.items():
+        if key in by_key:
+            continue
+        if key in aliases:
+            link(aliases[key], event)
+            continue
+        identity = _event_identity(event)
+        if identity is None:
+            plan.new_unparsed.append(event)
+            continue
+        if row := next(
+            (r for r in stored.get(identity, []) if event.source not in sources[row_key(r)]),
+            None,
+        ):
+            link(row, event)
+        elif owner := next(
+            (o for o in pending.get(identity, []) if event.source not in sources[o.key]), None
+        ):
+            speak_for(owner.key, [key])
+            owner.also_seen.append(key)
+        else:
+            plan.new_unparsed.append(event)
+            speak_for(key, [])
+            pending.setdefault(identity, []).append(event)
 
 
 def _near_misses(
@@ -523,7 +630,7 @@ def _unparsed_row(event: UnparsedEvent, now_iso: str) -> dict:
         "sync_timestamp": now_iso,
         "source": event.source,
         "source_id": event.source_id,
-        "also_seen_as": "",
+        "also_seen_as": " ".join(sorted(set(event.also_seen))),
         "flight_date": flight_date.isoformat() if flight_date else "",
         "carrier_code": partial.get("carrier_code") or "",
         "flight_number": partial.get("flight_number") or "",
@@ -603,6 +710,12 @@ def _describe(plan: Reconciliation) -> None:
         print(f"{len(filled)} stored flight(s) gained details from another source:")
         for row, _flight, fields in filled:
             print(f"  {row['carrier_code']}{row['flight_number']}: {', '.join(fields)}")
+    new_links = [link for link in plan.unparsed_links if link[2]]
+    if new_links:
+        print(
+            f"{len(new_links)} event(s) that could not be parsed matched a flight already "
+            "stored; linked, no new row."
+        )
     if plan.new_flights or plan.new_unparsed:
         print(
             f"Found {len(plan.new_flights) + len(plan.new_unparsed)} new flight event(s): "
@@ -640,6 +753,11 @@ def _dry_run_report(plan: Reconciliation, csv_path: str) -> int:
         )
     for event in plan.new_unparsed:
         print(f"  UNPARSED  [{event.source}]  {event.raw_text[:100]}")
+    for row, event, _new in plan.unparsed_links:
+        print(
+            f"  LINKED    [{event.source}]  {event.raw_text[:60]}  "
+            f"(already stored as {row.get('source')})"
+        )
     for row, flight, fields in plan.duplicates:
         print(
             f"  LINKED    {flight.flight_date}  "
@@ -775,6 +893,15 @@ def _sync(args, config: Config) -> int:
     # every run for nothing.
     for row, _flight, fields in plan.duplicates:
         replacements[row_key(row)] = {**row, "sync_timestamp": now_iso} if fields else row
+    # On top of any update or fill this run already made to the row, which
+    # starting again from the stored row would throw away.
+    for row, event, new in plan.unparsed_links:
+        if new:
+            base = replacements.get(row_key(row), row)
+            replacements[row_key(row)] = {
+                **resync.linked(base, [event.key]),
+                "sync_timestamp": now_iso,
+            }
     for row in plan.cancellations:
         replacements[row_key(row)] = resync.cancel({**row, "sync_timestamp": now_iso})
 

@@ -388,7 +388,8 @@ way:
   never removed by a later sync, so the old one would otherwise keep counting.
 - **Flight numbers are normalized.** `BA0123` and `0123` both become `123`; a prefix names the
   airline when the `Airline` name doesn't resolve. A letter-suffixed charter number (`714K`)
-  can't be sent to TIM and lands as `unparsed`.
+  can't be sent to TIM and lands as `unparsed`, unless another source already has the flight on
+  that date and route, in which case it links to that row instead of adding one.
 - **The key is the date and route** (`openflights_csv:2019-05-17:SFO-LHR`), since OpenFlights has
   no flight id. Correcting a row's number, cabin or time keeps its key; correcting its date or
   route does not.
