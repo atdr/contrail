@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/atdr/contrail/compare/v0.8.0...v0.8.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **cli:** link an unparsed event to the flight it repeats ([#92](https://github.com/atdr/contrail/issues/92)) ([4abf3a5](https://github.com/atdr/contrail/commit/4abf3a5e6f04761f8dd8adde994fda187eaedbd6))
+
 ## [0.8.0](https://github.com/atdr/contrail/compare/v0.7.1...v0.8.0) (2026-10-23)
 
 
