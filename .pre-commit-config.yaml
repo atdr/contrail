@@ -19,10 +19,11 @@ repos:
       - id: check-json
       - id: check-added-large-files
 
-  # Markdown. Keep these two in step with the pins in .github/workflows/ci.yml —
-  # a hook that lints to a different version than CI is worse than no hook.
+  # Markdown. CI runs these through atdr/github-boilerplate's markdown
+  # workflow (checks.yml), so keep both in step with the versions it pins: a
+  # hook that lints to a different version than CI is worse than no hook.
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.23.2
+    rev: v0.24.0
     hooks:
       - id: markdownlint-cli2
         # The `globs` in .markdownlint-cli2.yaml already cover every file, and
@@ -35,14 +36,18 @@ repos:
     rev: 1.0.0
     hooks:
       - id: mdformat
-        # Both are extensions, not core CommonMark. Without mdformat-gfm every
+        # All extensions, not core CommonMark. Without mdformat-gfm every
         # padded table in the repo is reflowed into unpadded pipes; without
         # mdformat-frontmatter a YAML block at the top of a file is rewritten
-        # into a horizontal rule and a heading. Keep in step with the floors in
-        # pyproject.toml, which explain them.
+        # into a horizontal rule and a heading; the last two keep footnotes
+        # and GitHub alerts intact. The same set, at the same pins, as
+        # scripts/requirements-markdown.txt in atdr/github-boilerplate, which
+        # is what CI installs.
         additional_dependencies:
           - mdformat-gfm==1.0.0
-          - mdformat-frontmatter==2.1.2
+          - mdformat-frontmatter==2.2.0
+          - mdformat-footnote==0.1.3
+          - mdformat-gfm-alerts==2.1.0
         # .mdformat.toml sets `exclude`, which errors below 3.13. Pinning the
         # hook's own env means that holds whatever the developer's default
         # interpreter is.

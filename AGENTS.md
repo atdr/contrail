@@ -63,14 +63,16 @@ Two keys, and the difference matters:
 
 - **No test may make a real network call.** Mock `requests` in both directions.
 
-- **Coverage reports, it never gates.** The `coverage` job in `ci.yml` re-runs
-  the suite once under `pytest --cov` and uploads `coverage.xml` to Codecov,
-  which supplies the README badge, per-PR comments and history. The pytest
-  matrix is what proves the suite passes. Codecov's own two status checks are
-  set `informational` in `codecov.yml` so they can never block a merge, and the
-  upload step is `continue-on-error` because an outage there says nothing about
-  the change under review. The coverage run itself stays blocking: a step that
-  cannot fail is a check that proves nothing.
+- **Coverage reports, it never gates.** The `coverage` job, which `ci.yml` runs
+  from atdr/github-boilerplate's `python-ci` workflow along with ruff and the
+  pytest matrix, re-runs the suite once under `pytest --cov` and uploads
+  `coverage.xml` to Codecov, which supplies the README badge, per-PR comments
+  and history. The pytest matrix is what proves the suite passes. Codecov's
+  own two status checks are set `informational` in `codecov.yml` so they can
+  never block a merge, and the upload step is `continue-on-error` because an
+  outage there says nothing about the change under review. The coverage run
+  itself stays blocking: a step that cannot fail is a check that proves
+  nothing.
 
   `[tool.coverage.run]` in `pyproject.toml`, not the CI command line, is what
   sets the scope, so a local `--cov` run measures what CI measures. Two
@@ -85,8 +87,8 @@ Two keys, and the difference matters:
 
 - **Every workflow is named after its own file**, and the description goes on
   the job. GitHub labels a check `<workflow name> / <job name>` and never shows
-  the filename, so `pr-title / conventional title` names both the file to open
-  and what it did. A matrix job's `name:` has to interpolate the matrix value
+  the filename, so `ci / playwright` names both the file to open and what it
+  did. A matrix job's `name:` has to interpolate the matrix value
   (`pytest ${{ matrix.python-version }}`) or all four legs produce checks
   called the same thing. `tests/test_workflow_naming.py` enforces this, the
   same guard `atdr/contrail-gh#7` added as a shell step in CI there because
@@ -98,10 +100,20 @@ Two keys, and the difference matters:
 - **Every job that can carry `timeout-minutes` sets one.** GitHub's default is
   six hours, and the failure that matters is a stall rather than an error: a
   `pip` or `npx` fetch that hangs never fails on its own. Ten minutes
-  everywhere except `pr-title.yml`, which gets five. A job whose only key is
+  everywhere except the gate jobs, which get five. A job whose only key is
   `uses:` cannot carry it, which is why the setting lives inside a reusable
   workflow rather than on its callers, and why the guard in
   `tests/test_workflow_naming.py` skips such a job instead of failing it.
+
+- **Branch protection requires the gates, not the jobs.** Each of `ci.yml`,
+  `checks.yml` and `pull-request.yml` ends in a gate job (`ci gate`,
+  `checks gate`, `pull-request gate`) that fails if any job before it failed
+  or was cancelled, and the ruleset requires only those three. Adding a job
+  means adding it to its gate's `needs`, never to the ruleset. `checks.yml`
+  (markdownlint, mdformat and the conventions check) and `pull-request.yml`
+  (conventional commit types for commits and the PR title) come from
+  [atdr/github-boilerplate](https://github.com/atdr/github-boilerplate),
+  pinned by tag, and Dependabot moves the pins together.
 
 - **Markdown is formatted, not hand-aligned.** mdformat owns table padding and
   whitespace; markdownlint-cli2 owns line length and the rest. Run

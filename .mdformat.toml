@@ -12,7 +12,7 @@ number = true
 # The successor to .prettierignore. `exclude` applies to paths passed
 # explicitly, not just to a directory walk, so this one list also covers the
 # files pre-commit hands over — which is why the hook carries no `exclude:` of
-# its own and ci.yml needs no filter.
+# its own and CI's markdown workflow needs no filter.
 #
 # It is also why both call sites pin Python 3.13: this key errors outright
 # below it, and mdformat says so rather than ignoring it. That is a deliberate
