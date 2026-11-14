@@ -1,9 +1,10 @@
 """The coverage arrangement, enforced rather than written down.
 
-Coverage here reports; it never gates. That is a claim about several files
-at once, and every part of it is the kind a tidy-up can undo without anything
-going red: `source` narrowed to a path that skips a module, `branch` dropped,
-`informational` removed from `codecov.yml`, or the coverage run switched off
+Coverage here is measured the same way locally and in CI, and Codecov's
+statuses are able to fail. That is a claim about several files at once, and
+every part of it is the kind a tidy-up can undo without anything going red:
+`source` narrowed to a path that skips a module, `branch` dropped,
+`informational` added back to `codecov.yml`, or the coverage run switched off
 in `ci.yml`.
 
 The coverage job itself, the blocking `pytest --cov` run and the
@@ -55,15 +56,18 @@ def test_the_coverage_tool_is_installed_by_the_dev_extra():
     )
 
 
-def test_codecov_can_never_block_a_merge():
-    """Both of Codecov's status checks, not just the one it comments about."""
+def test_codecov_statuses_can_fail():
+    """Both of Codecov's status checks, matching the boilerplate conventions check."""
     statuses = CODECOV["coverage"]["status"]
 
     for kind in ("project", "patch"):
-        assert statuses[kind]["default"]["informational"] is True, (
-            f"the {kind} status is not informational, so Codecov owns a check on "
-            "every pull request that this repo does not control"
+        assert statuses[kind]["default"].get("informational") is not True, (
+            f"the {kind} status is informational, so it can never fail and says nothing"
         )
+    assert statuses["project"]["default"].get("threshold"), (
+        "the project status needs a threshold, so one untested line at high "
+        "coverage does not turn it red"
+    )
 
 
 def test_ci_runs_the_shared_coverage_job_and_hands_it_the_token():

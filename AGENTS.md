@@ -63,16 +63,18 @@ Two keys, and the difference matters:
 
 - **No test may make a real network call.** Mock `requests` in both directions.
 
-- **Coverage reports, it never gates.** The `coverage` job, which `ci.yml` runs
+- **Codecov's statuses can fail.** The `coverage` job, which `ci.yml` runs
   from atdr/github-boilerplate's `python-ci` workflow along with ruff and the
   pytest matrix, re-runs the suite once under `pytest --cov` and uploads
   `coverage.xml` to Codecov, which supplies the README badge, per-PR comments
   and history. The pytest matrix is what proves the suite passes. Codecov's
-  own two status checks are set `informational` in `codecov.yml` so they can
-  never block a merge, and the upload step is `continue-on-error` because an
-  outage there says nothing about the change under review. The coverage run
-  itself stays blocking: a step that cannot fail is a check that proves
-  nothing.
+  own two status checks must not be `informational` in `codecov.yml`, and the
+  `project` one needs a `threshold`: the boilerplate conventions check (0.4.0)
+  fails otherwise, because a status that cannot fail says nothing. They are
+  not in the branch ruleset, so they do not gate a merge by themselves. The
+  upload step is `continue-on-error` because an outage there says nothing
+  about the change under review. The coverage run itself stays blocking: a
+  step that cannot fail is a check that proves nothing.
 
   `[tool.coverage.run]` in `pyproject.toml`, not the CI command line, is what
   sets the scope, so a local `--cov` run measures what CI measures. Two
