@@ -24,7 +24,7 @@ jobs:
   # Codecov upload is continue-on-error, and codecov.yml keeps its statuses
   # informational.
   python:
-    uses: atdr/github-boilerplate/.github/workflows/python-ci.yml@v0.3.2
+    uses: atdr/github-boilerplate/.github/workflows/python-ci.yml@v0.4.0
     with:
       # Every version requires-python in pyproject.toml admits.
       python-versions: '["3.11", "3.12", "3.13", "3.14"]'
