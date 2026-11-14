@@ -20,9 +20,8 @@ concurrency:
 
 jobs:
   # ruff, the pytest matrix and the coverage report, from atdr/github-boilerplate.
-  # Coverage there reports and never gates the same way it did here: the
-  # Codecov upload is continue-on-error, and codecov.yml keeps its statuses
-  # informational.
+  # The Codecov upload there is continue-on-error, so an outage cannot fail
+  # the build, and codecov.yml keeps its statuses able to fail.
   python:
     uses: atdr/github-boilerplate/.github/workflows/python-ci.yml@v0.4.0
     with:
