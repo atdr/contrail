@@ -3,7 +3,7 @@
 Passport.map = (() => {
   "use strict";
 
-  const { formatMassText } = Passport.format;
+  const { formatMassText, tooltipContent } = Passport.format;
   const { pricedCompleted } = Passport.aggregate;
 
   let routeMap;
@@ -112,7 +112,14 @@ Passport.map = (() => {
           weight,
           lineCap: "round",
         })
-          .bindTooltip(`${label}<br>${formatMassText(route.kg)} CO₂e`)
+          .bindTooltip(
+            () =>
+              tooltipContent({
+                title: label,
+                rows: [{ label: "CO₂e", value: formatMassText(route.kg) }],
+              }),
+            { opacity: 1 },
+          )
           .addTo(routeLayer);
       });
       [route.start, route.end].forEach((airport) => {
@@ -140,8 +147,12 @@ Passport.map = (() => {
           fillOpacity: 1,
         })
           .bindTooltip(
-            `<strong>${airport.iata}</strong><br>${formatMassText(airport.kg)} CO₂e connected`,
-            { direction: "top", offset: [0, -4] },
+            () =>
+              tooltipContent({
+                title: airport.iata,
+                rows: [{ label: "CO₂e connected", value: formatMassText(airport.kg) }],
+              }),
+            { direction: "top", offset: [0, -4], opacity: 1 },
           )
           .addTo(airportLayer);
       });

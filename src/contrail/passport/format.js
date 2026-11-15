@@ -181,6 +181,42 @@ Passport.format = (() => {
     return tags;
   }
 
+  // The content of every tooltip on the page, chart or map, so they read as
+  // one: a title, rows with a colour swatch, an optional total line, and
+  // muted detail rows. A row is { label, value, color?, hatched? }.
+  function tooltipContent({ title, rows = [], total = null, details = [] }) {
+    const element = (className, text = "") => {
+      const node = document.createElement("div");
+      node.className = className;
+      node.textContent = text;
+      return node;
+    };
+    const line = (className, { label, value, color, hatched }) => {
+      const row = element(className);
+      if (color) {
+        const swatch = element(`tooltip-swatch${hatched ? " hatched" : ""}`);
+        swatch.style.setProperty("--swatch", color);
+        row.append(swatch);
+      }
+      row.append(element("tooltip-label", label), element("tooltip-value", value));
+      return row;
+    };
+    const content = element("tooltip-content");
+    if (title) content.append(element("tooltip-title", title));
+    rows.forEach((row) => {
+      content.append(line(row.color ? "tooltip-row" : "tooltip-row plain", row));
+    });
+    if (total) content.append(line("tooltip-total", total));
+    if (details.length) {
+      const block = element("tooltip-details");
+      details.forEach((detail) => {
+        block.append(line("tooltip-row plain", detail));
+      });
+      content.append(block);
+    }
+    return content;
+  }
+
   return {
     formatNumber,
     pct,
@@ -203,5 +239,6 @@ Passport.format = (() => {
     visualCategory,
     categoryIcon,
     flightTags,
+    tooltipContent,
   };
 })();

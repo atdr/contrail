@@ -310,11 +310,84 @@ h3 {
   box-shadow: none;
   text-shadow: none;
 }
+/* Every tooltip on the page, the charts' and the map's, is one element
+   style. Leaflet's own rule sets a white box with a pointer; this one, in a
+   later stylesheet at the same specificity, replaces it. */
+.chart-tooltip,
 .leaflet-tooltip {
-  color: #132019;
-  border: 0;
-  border-radius: 9px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 10px 28px light-dark(rgba(19, 32, 25, 0.16), rgba(0, 0, 0, 0.45));
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.leaflet-tooltip::before {
+  display: none;
+}
+.chart-tooltip {
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 16px));
+  pointer-events: none;
+}
+.chart-tooltip[hidden] {
+  display: none;
+}
+.tooltip-title {
+  margin-bottom: 5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.tooltip-row,
+.tooltip-total {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+/* 1fr rather than minmax(0, 1fr): a tooltip is as wide as its content,
+   and a zero minimum lets the label collapse under the value. */
+.tooltip-row.plain {
+  grid-template-columns: 1fr auto;
+}
+.tooltip-row + .tooltip-row {
+  margin-top: 2px;
+}
+.tooltip-value {
+  text-align: right;
+  white-space: nowrap;
+}
+.tooltip-total {
+  grid-template-columns: 1fr auto;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+  font-weight: 600;
+}
+.tooltip-details {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+.tooltip-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--swatch);
+}
+.tooltip-swatch.hatched {
+  background: repeating-linear-gradient(135deg, var(--swatch) 0 2px, transparent 2px 4px);
+  box-shadow: inset 0 0 0 1px var(--swatch);
 }
 .map-caption {
   position: absolute;

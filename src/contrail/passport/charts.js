@@ -16,6 +16,7 @@ Passport.charts = (() => {
     visualCategory,
     isUnknown,
     unknownLast,
+    tooltipContent,
   } = Passport.format;
   const { sum, withEmissions, rankingMetricValue, rankingCategoryValue } = Passport.aggregate;
 
@@ -30,9 +31,6 @@ Passport.charts = (() => {
   Chart.defaults.font.family = chartFont;
   Chart.defaults.font.size = TICK_SIZE;
   Chart.defaults.font.weight = "normal";
-  Chart.defaults.plugins.tooltip.titleFont = { family: chartFont, weight: "600" };
-  Chart.defaults.plugins.tooltip.bodyFont = { family: chartFont };
-  Chart.defaults.plugins.tooltip.footerFont = { family: chartFont };
 
   const totalColor = () => cssColor("--total-value");
   // A total bar's colour: grey for the Unknown entry, which is no one
@@ -62,6 +60,80 @@ Passport.charts = (() => {
   }
 
   const charts = new Map();
+
+  // One HTML tooltip for every chart, styled by the stylesheet like the
+  // map's, in place of Chart.js's own canvas box: a black 12px panel that
+  // matched nothing else on the page. Each chart says what to show with a
+  // `build(items)` that returns tooltipContent()'s input, or null for none.
+  const tip = document.createElement("div");
+  tip.className = "chart-tooltip";
+  // Hidden from assistive technology: each canvas already carries its
+  // figures in its aria-label, and a live region would read every hover.
+  tip.setAttribute("aria-hidden", "true");
+  tip.hidden = true;
+  document.body.append(tip);
+  let tipChart = null;
+
+  function hideTooltip() {
+    if (tip.hidden) return;
+    tip.hidden = true;
+    const chart = tipChart;
+    tipChart = null;
+    // Clear the chart's own active state too, or hovering the same bar
+    // again would change nothing and never bring the tooltip back.
+    if (chart?.canvas?.isConnected) {
+      chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+      chart.update("none");
+    }
+  }
+
+  // Beside the point Chart.js chose, above it where there is room, and
+  // always inside the viewport, which on a phone is narrower than a
+  // tooltip centred on a bar near the edge.
+  function placeTooltip(chart, tooltip) {
+    const canvas = chart.canvas.getBoundingClientRect();
+    const margin = 8;
+    const x = canvas.left + tooltip.caretX;
+    const y = canvas.top + tooltip.caretY;
+    const { width, height } = tip.getBoundingClientRect();
+    const left = Math.min(Math.max(x - width / 2, margin), window.innerWidth - width - margin);
+    const above = y - height - 12;
+    const top = above >= margin ? above : Math.min(y + 12, window.innerHeight - height - margin);
+    tip.style.left = `${Math.round(left)}px`;
+    tip.style.top = `${Math.round(Math.max(top, margin))}px`;
+  }
+
+  // A tooltip row's swatch: the bar's own colour, or the dataset's `swatch`
+  // where the bar is filled with a pattern, as an upcoming one is.
+  const swatchOf = (item) => item.dataset.swatch ?? item.element.options.backgroundColor;
+  const hatchedOf = (item) => Boolean(item.dataset.hatched);
+
+  function tooltipOptions(build) {
+    return {
+      enabled: false,
+      external({ chart, tooltip }) {
+        const content =
+          tooltip.opacity && tooltip.dataPoints?.length ? build(tooltip.dataPoints) : null;
+        if (!content) {
+          if (tipChart === chart) hideTooltip();
+          return;
+        }
+        tip.replaceChildren(tooltipContent(content));
+        tip.hidden = false;
+        tipChart = chart;
+        placeTooltip(chart, tooltip);
+      },
+    };
+  }
+
+  // A tooltip belongs to where the pointer is: scrolling moves the bar out
+  // from under it, and a tap elsewhere on a touch screen means done.
+  document.addEventListener("scroll", hideTooltip, { capture: true, passive: true });
+  window.addEventListener("resize", hideTooltip);
+  document.addEventListener("pointerdown", (event) => {
+    if (tipChart && event.target !== tipChart.canvas) hideTooltip();
+  });
+  document.addEventListener("pointerleave", hideTooltip);
 
   // Below this width a period chart shortens its axis: month initials, and
   // value labels a size smaller.
@@ -320,15 +392,15 @@ Passport.charts = (() => {
         layout: { padding: { right: metric === "total" ? 58 : 88 } },
         plugins: {
           legend: { display: false },
-          tooltip: {
-            callbacks: {
-              // The full label: the axis may show it cut short.
-              title: (items) =>
-                items.length ? items[0].chart.data.labels[items[0].dataIndex] : "",
-              label: (context) =>
-                `${context.dataset.label}: ${formatRankingValue(context.raw, metric, true)}`,
-            },
-          },
+          tooltip: tooltipOptions((items) => ({
+            // The full label: the axis may show it cut short.
+            title: items[0].chart.data.labels[items[0].dataIndex],
+            rows: items.map((item) => ({
+              label: item.dataset.label,
+              value: formatRankingValue(item.raw, metric),
+              color: swatchOf(item),
+            })),
+          })),
         },
         scales: {
           x: { display: false, stacked: true, beginAtZero: true, max: maximum * 1.24 },
@@ -481,12 +553,16 @@ Passport.charts = (() => {
         indexAxis: "y",
         plugins: {
           legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: (context) =>
-                `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e · ${formatNumber(total ? (context.raw / total) * 100 : 0, 1)}%`,
-            },
-          },
+          tooltip: tooltipOptions(([item]) => ({
+            title: item.dataset.label,
+            rows: [
+              { label: "CO₂e", value: formatMassText(item.raw), color: swatchOf(item) },
+              {
+                label: "Share",
+                value: `${formatNumber(total ? (item.raw / total) * 100 : 0, 1)}%`,
+              },
+            ],
+          })),
         },
         scales: {
           x: { display: false, stacked: true, max: total || 1 },
@@ -589,11 +665,15 @@ Passport.charts = (() => {
         layout: { padding: { top: 28 } },
         plugins: {
           legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e`,
-            },
-          },
+          tooltip: tooltipOptions((items) => ({
+            title: String(items[0].label),
+            rows: items.map((item) => ({
+              label: item.dataset.label,
+              value: formatMassText(item.raw),
+              color: swatchOf(item),
+              hatched: hatchedOf(item),
+            })),
+          })),
         },
         scales: {
           x: {
@@ -673,6 +753,8 @@ Passport.charts = (() => {
           ),
           backgroundColor: upcomingPattern,
           hoverBackgroundColor: upcomingPattern,
+          swatch: color,
+          hatched: true,
           borderColor: color,
           borderWidth: 1,
           borderSkipped: false,
@@ -697,11 +779,15 @@ Passport.charts = (() => {
         layout: { padding: { top: 28 } },
         plugins: {
           legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e`,
-            },
-          },
+          tooltip: tooltipOptions((items) => ({
+            title: String(items[0].label),
+            rows: items.map((item) => ({
+              label: item.dataset.label,
+              value: formatMassText(item.raw),
+              color: swatchOf(item),
+              hatched: hatchedOf(item),
+            })),
+          })),
         },
         scales: {
           x: {
