@@ -43,8 +43,8 @@ Passport.aggregate = (() => {
   }
 
   // Every priced, completed flight counted once under each distinct label
-  // `labelsFor` gives it, with a metric bucket for the whole entry and one per
-  // cabin and per reason. Heaviest first, with Unknown last.
+  // `labelsFor` gives it, with its flight count, a metric bucket for the
+  // whole entry and one per cabin and per reason. Heaviest first, with Unknown last.
   function aggregateBy(rows, labelsFor) {
     const values = new Map();
     pricedCompleted(rows).forEach((flight) => {
@@ -52,11 +52,13 @@ Passport.aggregate = (() => {
         const entry = values.get(label) || {
           label,
           total: 0,
+          flights: 0,
           metrics: emptyMetricBucket(),
           cabin: new Map(),
           reason: new Map(),
         };
         addToMetricBucket(entry.metrics, flight);
+        entry.flights += 1;
         entry.total = entry.metrics.totalKg;
         ["cabin", "reason"].forEach((kind) => {
           const category = visualCategory(flight, kind);

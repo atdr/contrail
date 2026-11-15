@@ -9,6 +9,7 @@ Passport.charts = (() => {
     formatMassText,
     formatMassAxisTick,
     formatRankingValue,
+    massUnit,
     MONTHS,
     cssColor,
     categoryColor,
@@ -107,6 +108,27 @@ Passport.charts = (() => {
   // where the bar is filled with a pattern, as an upcoming one is.
   const swatchOf = (item) => item.dataset.swatch ?? item.element.options.backgroundColor;
   const hatchedOf = (item) => Boolean(item.dataset.hatched);
+
+  // A stacked bar's tooltip: its non-zero parts, top of the stack first so
+  // the list reads in the order the bar does, all in the unit the total
+  // needs, and the total beneath when there is more than one part.
+  function stackTooltip(items) {
+    const title = String(items[0].label);
+    const shown = items.filter((item) => item.raw > 0).reverse();
+    if (!shown.length) return { title, rows: [{ label: "No CO₂e", value: "" }] };
+    const total = shown.reduce((value, item) => value + item.raw, 0);
+    const unit = massUnit([total]);
+    return {
+      title,
+      rows: shown.map((item) => ({
+        label: item.dataset.label,
+        value: formatMassText(item.raw, unit),
+        color: swatchOf(item),
+        hatched: hatchedOf(item),
+      })),
+      total: shown.length > 1 ? { label: "Total", value: formatMassText(total, unit) } : null,
+    };
+  }
 
   function tooltipOptions(build) {
     return {
@@ -334,7 +356,65 @@ Passport.charts = (() => {
       .map((entry) => entry[0]);
   }
 
-  function ranking(id, entries, breakdown, metric) {
+  const MEASURE_NAMES = { total: "Total", distance: "Per km", duration: "Per hour" };
+
+  // A ranking entry's tooltip: the full label, its value or its breakdown,
+  // then how many flights it holds, its share of the period's CO2e, and the
+  // measures the ranking is not sorted by, where the data allows them.
+  function rankingTooltip(entry, breakdown, metric, periodKg, color) {
+    const value = rankingMetricValue(entry, metric);
+    const unit = metric === "total" ? massUnit([value]) : undefined;
+    const parts =
+      breakdown === "total"
+        ? []
+        : [...entry[breakdown].keys()]
+            .map((category) => [category, rankingCategoryValue(entry, breakdown, category, metric)])
+            .filter(([, part]) => part > 0)
+            .sort((a, b) => unknownLast(a[0], b[0]) || b[1] - a[1]);
+    const rows = parts.length
+      ? parts.map(([category, part]) => ({
+          label: category,
+          value: formatRankingValue(part, metric, false, unit),
+          color: categoryColor(breakdown, category),
+        }))
+      : [
+          {
+            label: MEASURE_NAMES[metric],
+            value: formatRankingValue(value, metric, false, unit),
+            color,
+          },
+        ];
+    const others = ["total", "distance", "duration"]
+      .filter((measure) => measure !== metric)
+      .map((measure) => [measure, rankingMetricValue(entry, measure)])
+      .filter(([, other]) => other !== null && other > 0)
+      .map(([measure, other]) => ({
+        label: measure === "total" ? "CO₂e" : MEASURE_NAMES[measure],
+        value: formatRankingValue(other, measure),
+      }));
+    return {
+      title: entry.label,
+      rows,
+      total:
+        parts.length > 1
+          ? { label: MEASURE_NAMES[metric], value: formatRankingValue(value, metric, false, unit) }
+          : null,
+      details: [
+        { label: entry.flights === 1 ? "Flight" : "Flights", value: formatNumber(entry.flights) },
+        ...(periodKg
+          ? [
+              {
+                label: "Share of CO₂e",
+                value: `${formatNumber((entry.metrics.totalKg / periodKg) * 100, 1)}%`,
+              },
+            ]
+          : []),
+        ...others,
+      ],
+    };
+  }
+
+  function ranking(id, entries, breakdown, metric, periodKg = 0) {
     const theme = chartTheme();
     const totals = entries.map((entry) => rankingMetricValue(entry, metric));
     const maximum = Math.max(1, ...totals);
@@ -389,18 +469,16 @@ Passport.charts = (() => {
         responsive: true,
         maintainAspectRatio: false,
         indexAxis: "y",
+        interaction: { mode: "index", axis: "y", intersect: false },
         layout: { padding: { right: metric === "total" ? 58 : 88 } },
         plugins: {
           legend: { display: false },
-          tooltip: tooltipOptions((items) => ({
-            // The full label: the axis may show it cut short.
-            title: items[0].chart.data.labels[items[0].dataIndex],
-            rows: items.map((item) => ({
-              label: item.dataset.label,
-              value: formatRankingValue(item.raw, metric),
-              color: swatchOf(item),
-            })),
-          })),
+          // The whole row answers, not only the bar: a short bar is a
+          // small target.
+          tooltip: tooltipOptions((items) => {
+            const entry = entries[items[0].dataIndex];
+            return rankingTooltip(entry, breakdown, metric, periodKg, entryColor(entry.label));
+          }),
         },
         scales: {
           x: { display: false, stacked: true, beginAtZero: true, max: maximum * 1.24 },
@@ -662,18 +740,11 @@ Passport.charts = (() => {
         animation: false,
         responsive: true,
         maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
         layout: { padding: { top: 28 } },
         plugins: {
           legend: { display: false },
-          tooltip: tooltipOptions((items) => ({
-            title: String(items[0].label),
-            rows: items.map((item) => ({
-              label: item.dataset.label,
-              value: formatMassText(item.raw),
-              color: swatchOf(item),
-              hatched: hatchedOf(item),
-            })),
-          })),
+          tooltip: tooltipOptions(stackTooltip),
         },
         scales: {
           x: {
@@ -779,15 +850,7 @@ Passport.charts = (() => {
         layout: { padding: { top: 28 } },
         plugins: {
           legend: { display: false },
-          tooltip: tooltipOptions((items) => ({
-            title: String(items[0].label),
-            rows: items.map((item) => ({
-              label: item.dataset.label,
-              value: formatMassText(item.raw),
-              color: swatchOf(item),
-              hatched: hatchedOf(item),
-            })),
-          })),
+          tooltip: tooltipOptions(stackTooltip),
         },
         scales: {
           x: {

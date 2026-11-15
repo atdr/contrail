@@ -184,6 +184,86 @@ def test_a_key_appears_only_when_a_chart_is_broken_down(open_passport):
         expect(page.locator(key)).to_be_hidden()
 
 
+def hover(page: Page, canvas: str, index: int) -> None:
+    """Move the mouse onto the middle of bar `index` of the chart `canvas`."""
+    x, y = page.evaluate(
+        """([id, index]) => {
+          const chart = Chart.getChart(id);
+          const box = chart.canvas.getBoundingClientRect();
+          const bar = chart.getDatasetMeta(0).data[index];
+          const across = chart.options.indexAxis === 'y';
+          return [box.left + (across ? chart.chartArea.left + 4 : bar.x),
+                  box.top + (across ? bar.y : (chart.chartArea.top + chart.chartArea.bottom) / 2)];
+        }""",
+        [canvas, index],
+    )
+    page.mouse.move(x, y)
+
+
+def tooltip_lines(page: Page) -> list[str]:
+    tip = page.locator(".chart-tooltip")
+    expect(tip).to_be_visible()
+    return [
+        " ".join(row.split())
+        for row in tip.locator(".tooltip-title, .tooltip-row, .tooltip-total").all_inner_texts()
+    ]
+
+
+def test_chart_tooltips_are_one_html_element_without_zero_rows(open_passport, page):
+    """Chart.js drew its own black box, unlike the map's, and in Cabin mode
+    the trend listed every category twice, half of them "upcoming: 0 kg",
+    each in its own unit. One HTML tooltip now serves every chart, shows
+    only what is there in one unit, and totals a stack."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    assert page.evaluate(
+        "Object.values(Chart.instances).every(c => c.options.plugins.tooltip.enabled === false)"
+    )
+    page.locator("#trend-breakdown-tabs [data-value=cabin]").click()
+    page.locator("#trend-chart").scroll_into_view_if_needed()
+    hover(page, "trend-chart", 1)  # 2026: 310 kg flown, 900 kg booked, all economy
+    assert tooltip_lines(page) == [
+        "2026",
+        "Economy · upcoming 0.9 t",
+        "Economy · completed 0.3 t",
+        "Total 1.2 t",
+    ]
+    assert page.locator(".chart-tooltip").count() == 1
+
+    # It stays on screen, and goes when the page scrolls.
+    box = page.locator(".chart-tooltip").bounding_box()
+    assert box["x"] >= 0 and box["x"] + box["width"] <= VIEWPORTS["desktop"]["width"]
+    page.mouse.wheel(0, 200)
+    expect(page.locator(".chart-tooltip")).to_be_hidden()
+
+
+def test_a_ranking_tooltip_gives_the_entry_in_full(open_passport, page):
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    page.locator("#driver-tabs [data-value=cabin]").click()
+    page.locator("#routes").scroll_into_view_if_needed()
+    hover(page, "routes", 0)  # JFK-LHR: 1.5 t business, 250 kg economy
+    assert tooltip_lines(page)[:6] == [
+        "JFK ↔ LHR",
+        "Business 1.5 t",
+        "Economy 0.3 t",
+        "Total 1.8 t",
+        "Flights 2",
+        "Share of CO₂e 96.7%",
+    ]
+    details = page.locator(".chart-tooltip .tooltip-details").inner_text()
+    assert "g/km" in details and "kg/hr" in details
+
+    # The chart tooltip and the map's are one style.
+    style = """el => {
+      const s = getComputedStyle(el);
+      return [s.backgroundColor, s.borderRadius, s.fontSize];
+    }"""
+    chart_style = page.locator(".chart-tooltip").evaluate(style)
+    page.locator(".leaflet-airports-pane path").last.hover(force=True)
+    assert page.locator(".leaflet-tooltip").evaluate(style) == chart_style
+
+
 def test_the_ranking_dialog_opens_and_closes(open_passport):
     destinations = ["JFK", "CDG", "SIN", "AMS", "DXB", "HND", "SYD", "LAX"]
     rows = [

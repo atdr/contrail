@@ -20,12 +20,16 @@ Passport.format = (() => {
     unit === "t" ? `${formatNumber(kg / 1000, 1)} t` : `${formatNumber(kg, 1)} kg`;
   const formatMassAxisTick = (kg, maximum) => formatMassText(kg, maximum >= 1000 ? "t" : "kg");
 
-  function formatRankingValue(value, metric, includeCarbon = false) {
+  // One unit for a set of masses shown together, from the largest, so a
+  // tooltip never reads "900 kg" over "1.2 t".
+  const massUnit = (values) => (Math.max(0, ...values) >= 1000 ? "t" : "kg");
+
+  function formatRankingValue(value, metric, includeCarbon = false, unit = undefined) {
     if (metric === "distance")
       return `${formatNumber(value, 1)} g${includeCarbon ? " CO₂e / passenger-km" : "/km"}`;
     if (metric === "duration")
       return `${formatNumber(value, 1)} kg${includeCarbon ? " CO₂e / block hour" : "/hr"}`;
-    return `${formatMassText(value)}${includeCarbon ? " CO₂e" : ""}`;
+    return `${formatMassText(value, unit)}${includeCarbon ? " CO₂e" : ""}`;
   }
 
   const MONTHS = [
@@ -224,6 +228,7 @@ Passport.format = (() => {
     formatMassText,
     formatMassAxisTick,
     formatRankingValue,
+    massUnit,
     MONTHS,
     WEEKDAYS,
     monthOf,

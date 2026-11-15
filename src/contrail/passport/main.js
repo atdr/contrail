@@ -125,9 +125,11 @@
   }
 
   // Draw a ranking's top six and keep the whole list for its dialog.
-  function showRanking(key, title, entries, breakdown, metric) {
+  // `periodKg` is the period's completed CO2e, what each entry's share in
+  // its tooltip is of.
+  function showRanking(key, title, entries, breakdown, metric, periodKg) {
     rankingData.set(key, { title, entries, breakdown, metric });
-    charts.ranking(key, entries.slice(0, 6), breakdown, metric);
+    charts.ranking(key, entries.slice(0, 6), breakdown, metric, periodKg);
     document.querySelector(`[data-ranking="${key}"]`).hidden = entries.length <= 6;
   }
 
@@ -158,6 +160,7 @@
       airportEntries,
       state.patternBreakdown,
       "total",
+      sum(pricedCompleted(rows), "kg"),
     );
     showRanking(
       "countries",
@@ -165,6 +168,7 @@
       countryEntries,
       state.patternBreakdown,
       "total",
+      sum(pricedCompleted(rows), "kg"),
     );
   }
 
@@ -233,7 +237,14 @@
       ],
     ].forEach(([key, title, labeler]) => {
       const ranked = rankForMetric(rankAll(rows, labeler), state.driverMetric);
-      showRanking(key, title, ranked, state.driverBreakdown, state.driverMetric);
+      showRanking(
+        key,
+        title,
+        ranked,
+        state.driverBreakdown,
+        state.driverMetric,
+        sum(pricedCompleted(rows), "kg"),
+      );
     });
   }
 
