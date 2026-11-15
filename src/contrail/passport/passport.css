@@ -944,9 +944,17 @@ footer {
 
 /* The widest controls, "Total CO2e / Avg / km / Avg / hr" and the headline
    measure, fit a 320px phone only with tighter buttons. */
+/* The widest control (Total CO₂e, Avg / km, Avg / hr) needs room for wider
+   fallback fonts too: on Linux Chromium it overflowed by a few pixels at
+   320px with padding alone, so the type steps down as well. */
 @media (max-width: 360px) {
+  .metric-tabs,
+  .pattern-tabs {
+    gap: 2px;
+  }
   .metric-tabs button,
   .pattern-tabs button {
-    padding-inline: 8px;
+    padding-inline: 7px;
+    font-size: 0.875rem;
   }
 }
