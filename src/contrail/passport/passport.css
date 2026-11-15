@@ -246,15 +246,13 @@ h3 {
   color: var(--muted);
 }
 
+/* Six stats as an even grid, 3 by 2 and 2 by 3 on a phone. A wrapping row
+   left the sixth alone on a line of its own. */
 .summary-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px 18px;
   margin-top: 28px;
-}
-.summary-grid > * {
-  flex: 1 1 auto;
-  min-width: 72px;
 }
 .summary-item {
   padding-top: 12px;
@@ -384,7 +382,7 @@ h3 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(230px, 0.3fr);
   gap: 30px;
-  align-items: end;
+  align-items: start;
 }
 .trend-chart,
 .pattern-chart {
@@ -885,9 +883,6 @@ footer {
   .quality-groups {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .summary-grid > * {
-    flex-basis: calc(33.333% - 18px);
-  }
 }
 
 @media (max-width: 620px) {
@@ -899,8 +894,8 @@ footer {
   .header-inner {
     padding-top: 24px;
   }
-  .summary-grid > * {
-    flex-basis: calc(50% - 18px);
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .drivers {
     grid-template-columns: minmax(0, 1fr);

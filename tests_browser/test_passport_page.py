@@ -582,6 +582,33 @@ def test_a_mouse_keeps_the_compact_controls(open_passport, page):
     assert max(heights.values()) < 44, heights
 
 
+@pytest.mark.parametrize(
+    ("viewport", "columns"),
+    [(VIEWPORTS["desktop"], 3), ({"width": 768, "height": 1024}, 3), (VIEWPORTS["mobile"], 2)],
+    ids=["desktop", "tablet", "mobile"],
+)
+def test_the_summary_is_an_even_grid(open_passport, page, viewport, columns):
+    """The six stats wrapped five and one, leaving Countries alone on a row."""
+    page.set_viewport_size(viewport)
+    page = open_passport()
+    boxes = page.locator(".summary-item").evaluate_all(
+        "els => els.map(el => [Math.round(el.getBoundingClientRect().left),"
+        " Math.round(el.getBoundingClientRect().top)])"
+    )
+    assert len({left for left, _ in boxes}) == columns
+    assert len({top for _, top in boxes}) == 6 // columns
+
+
+def test_the_trend_note_sits_level_with_the_chart(open_passport, page):
+    """The note was pinned to the bottom of its column, with empty space
+    above it beside the chart."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    note = page.locator(".trend-note").bounding_box()
+    chart = page.locator(".trend-chart").bounding_box()
+    assert abs(note["y"] - chart["y"]) < 1
+
+
 # -- regressions from shipped fixes -------------------------------------------
 
 
