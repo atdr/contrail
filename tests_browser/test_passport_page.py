@@ -93,16 +93,16 @@ def test_choosing_a_year_rescopes_the_totals_and_charts(open_passport):
 def test_the_headline_measure_switches(open_passport):
     page = open_passport()
 
-    page.locator("#metric-tabs [data-metric=distance]").click()
-    pressed(page, "#metric-tabs [data-metric=distance]")
+    page.locator("#metric-tabs [data-value=distance]").click()
+    pressed(page, "#metric-tabs [data-value=distance]")
     assert re.fullmatch(r"[\d.,]+ g CO₂e / passenger-km", text(page, "#hero-value"))
     expect(page.locator("#hero-context")).to_contain_text("great-circle distance")
 
-    page.locator("#metric-tabs [data-metric=duration]").click()
+    page.locator("#metric-tabs [data-value=duration]").click()
     assert re.fullmatch(r"[\d.,]+ kg CO₂e / block hour", text(page, "#hero-value"))
     expect(page.locator("#hero-context")).to_contain_text("gate-to-gate")
 
-    page.locator("#metric-tabs [data-metric=total]").click()
+    page.locator("#metric-tabs [data-value=total]").click()
     assert text(page, "#hero-value") == "1.8 t CO₂e"
 
 
@@ -110,13 +110,13 @@ def test_the_trend_breaks_down_by_cabin_and_reason(open_passport):
     page = open_passport()
     assert datasets(page, "trend-chart") == {"Completed": [1500, 310], "Upcoming": [0, 900]}
 
-    page.locator("[data-trend-breakdown=cabin]").click()
-    pressed(page, "[data-trend-breakdown=cabin]")
+    page.locator("#trend-breakdown-tabs [data-value=cabin]").click()
+    pressed(page, "#trend-breakdown-tabs [data-value=cabin]")
     by_cabin = datasets(page, "trend-chart")
     assert by_cabin["Business · completed"] == [1500, 0]
     assert by_cabin["Economy · upcoming"] == [0, 900]
 
-    page.locator("[data-trend-breakdown=reason]").click()
+    page.locator("#trend-breakdown-tabs [data-value=reason]").click()
     by_reason = datasets(page, "trend-chart")
     assert by_reason["Leisure · completed"] == [0, 60]
     assert by_reason["Unknown · upcoming"] == [0, 900]
@@ -125,15 +125,15 @@ def test_the_trend_breaks_down_by_cabin_and_reason(open_passport):
 def test_patterns_and_rankings_break_down_by_cabin_and_reason(open_passport):
     page = open_passport()
 
-    page.locator("[data-pattern-breakdown=reason]").click()
+    page.locator("#pattern-breakdown-tabs [data-value=reason]").click()
     assert set(datasets(page, "pattern-chart")) == {"Business", "Unknown", "Leisure"}
     assert total(page, "pattern-chart") == 1810
 
-    page.locator("#pattern-tabs [data-pattern=weekday]").click()
-    pressed(page, "#pattern-tabs [data-pattern=weekday]")
+    page.locator("#pattern-tabs [data-value=weekday]").click()
+    pressed(page, "#pattern-tabs [data-value=weekday]")
     assert total(page, "pattern-chart") == 1810
 
-    page.locator("#driver-tabs [data-breakdown=cabin]").click()
+    page.locator("#driver-tabs [data-value=cabin]").click()
     assert datasets(page, "routes") == {"Business": [1500, 0], "Economy": [250, 60]}
 
     expect(page.locator("#cabins-legend")).to_contain_text("Business")
@@ -195,7 +195,7 @@ def test_a_period_without_durations_says_so(open_passport):
     page = open_passport(
         [row(flight_date="2026-06-01", origin="LHR", destination="CDG", emissions_kg_actual="60")]
     )
-    page.locator("#metric-tabs [data-metric=duration]").click()
+    page.locator("#metric-tabs [data-value=duration]").click()
     assert text(page, "#hero-value") == "Needs arrival times"
     assert text(page, "#duration-total") == "Needs arrival times"
 
@@ -215,8 +215,8 @@ def test_core_interactions_fit_the_viewport(open_passport, page, viewport):
     page = open_passport()
 
     page.get_by_role("button", name="2026", exact=True).click()
-    page.locator("#metric-tabs [data-metric=distance]").click()
-    page.locator("[data-trend-breakdown=cabin]").click()
+    page.locator("#metric-tabs [data-value=distance]").click()
+    page.locator("#trend-breakdown-tabs [data-value=cabin]").click()
     assert text(page, "#flight-count") == "3"
 
     overflow = page.evaluate(

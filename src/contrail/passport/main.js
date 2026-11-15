@@ -1,5 +1,5 @@
-// State, controls and bootstrapping: reads the embedded data, wires each
-// control to the sections it changes, and draws the page.
+// State, controls and the render loop. Every control writes through
+// setState(), and setState() redraws whatever reads the keys that changed.
 (() => {
   "use strict";
 
@@ -35,7 +35,8 @@
   const data = JSON.parse($("passport-data").textContent);
   const world = JSON.parse($("world-data").textContent);
 
-  // `year` is null for all time.
+  // Each key is a segmented control: a button with data-control="<key>" and
+  // data-value="<value>" sets it. `year` is null for all time.
   const state = {
     year: null,
     metric: "total",
@@ -45,6 +46,8 @@
     driverBreakdown: "total",
     driverMetric: "total",
   };
+  const parseValue = { year: (value) => (value === "all" ? null : Number(value)) };
+  const controlValue = (value) => (value === null ? "all" : String(value));
 
   // The data behind each ranking's "See all" dialog, as last drawn.
   const rankingData = new Map();
@@ -253,38 +256,52 @@
       `Impact figures are per passenger. Distance intensity uses ${data.meta.distanceMethod}. Time intensity uses ${data.meta.durationMethod}. ${assumed ? `${assumed} flight${assumed === 1 ? "" : "s"} without cabin data ${assumed === 1 ? "is" : "are"} shown as Economy in charts.` : "Every flight has cabin data."} Missing values are never extrapolated.`;
   }
 
-  function update() {
-    const rows = scoped(data.flights, state.year);
-    renderHero(rows);
-    map.render(rows);
-    renderTrend();
-    renderPatterns(rows);
-    renderExtremes(rows);
-    renderRankings(rows);
-    renderQuality(rows);
+  // Each section, in page order, with the state keys it reads. A section is
+  // redrawn when one of its keys changes; the first render draws them all.
+  const SECTIONS = [
+    { draw: renderHero, reads: ["year", "metric"] },
+    { draw: map.render, reads: ["year"] },
+    { draw: renderTrend, reads: ["year", "trendBreakdown"] },
+    { draw: renderPatterns, reads: ["year", "pattern", "patternBreakdown"] },
+    { draw: renderExtremes, reads: ["year"] },
+    { draw: renderRankings, reads: ["year", "driverBreakdown", "driverMetric"] },
+    { draw: renderQuality, reads: ["year"] },
+  ];
+
+  function syncControls() {
+    document.querySelectorAll("button[data-control]").forEach((button) => {
+      const { control, value } = button.dataset;
+      button.setAttribute("aria-pressed", String(value === controlValue(state[control])));
+    });
   }
 
-  function makeButton(label, year) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = label;
-    button.setAttribute("aria-pressed", String(state.year === year));
-    button.addEventListener("click", () => {
-      state.year = year;
-      document.querySelectorAll("#periods button").forEach((peer) => {
-        peer.setAttribute("aria-pressed", String(peer === button));
-      });
-      update();
+  function render(changed = null) {
+    syncControls();
+    const rows = scoped(data.flights, state.year);
+    SECTIONS.forEach(({ draw, reads }) => {
+      if (!changed || reads.some((key) => changed.has(key))) draw(rows);
     });
-    return button;
+  }
+
+  function setState(patch) {
+    const changed = new Set(Object.keys(patch).filter((key) => state[key] !== patch[key]));
+    Object.assign(state, patch);
+    if (changed.size) render(changed);
   }
 
   function buildPeriods() {
     const nav = $("periods");
-    nav.append(makeButton("All time", null));
-    data.years.forEach((year) => {
-      nav.append(makeButton(String(year), year));
-    });
+    [["All time", null], ...data.years.map((year) => [String(year), year])].forEach(
+      ([label, year]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.dataset.control = "year";
+        button.dataset.value = controlValue(year);
+        button.setAttribute("aria-pressed", String(state.year === year));
+        nav.append(button);
+      },
+    );
     const updateControls = () => {
       $("period-newer").disabled = nav.scrollLeft <= 1;
       $("period-older").disabled = nav.scrollLeft + nav.clientWidth >= nav.scrollWidth - 1;
@@ -320,64 +337,12 @@
     );
   }
 
-  document.querySelectorAll("#metric-tabs button").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.metric = button.dataset.metric;
-      document.querySelectorAll("#metric-tabs button").forEach((peer) => {
-        peer.setAttribute("aria-pressed", String(peer === button));
-      });
-      renderHero(scoped(data.flights, state.year));
-    });
-  });
-
-  document.querySelectorAll("#pattern-tabs button").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.pattern = button.dataset.pattern;
-      document.querySelectorAll("#pattern-tabs button").forEach((peer) => {
-        peer.setAttribute("aria-pressed", String(peer === button));
-      });
-      renderPatterns(scoped(data.flights, state.year));
-    });
-  });
-
-  document.querySelectorAll("#trend-breakdown-tabs button").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.trendBreakdown = button.dataset.trendBreakdown;
-      document.querySelectorAll("#trend-breakdown-tabs button").forEach((peer) => {
-        peer.setAttribute("aria-pressed", String(peer === button));
-      });
-      renderTrend();
-    });
-  });
-
-  document.querySelectorAll("#pattern-breakdown-tabs button").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.patternBreakdown = button.dataset.patternBreakdown;
-      document.querySelectorAll("#pattern-breakdown-tabs button").forEach((peer) => {
-        peer.setAttribute("aria-pressed", String(peer === button));
-      });
-      renderPatterns(scoped(data.flights, state.year));
-    });
-  });
-
-  document.querySelectorAll("#driver-tabs button").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.driverBreakdown = button.dataset.breakdown;
-      document.querySelectorAll("#driver-tabs button").forEach((peer) => {
-        peer.setAttribute("aria-pressed", String(peer === button));
-      });
-      renderRankings(scoped(data.flights, state.year));
-    });
-  });
-
-  document.querySelectorAll("#driver-metric-tabs button").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.driverMetric = button.dataset.driverMetric;
-      document.querySelectorAll("#driver-metric-tabs button").forEach((peer) => {
-        peer.setAttribute("aria-pressed", String(peer === button));
-      });
-      renderRankings(scoped(data.flights, state.year));
-    });
+  // One listener for every segmented control, the year buttons included.
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-control]");
+    if (!button) return;
+    const { control, value } = button.dataset;
+    setState({ [control]: (parseValue[control] || String)(value) });
   });
 
   document.querySelectorAll("[data-ranking]").forEach((button) => {
@@ -392,5 +357,5 @@
   map.setup(world);
   $("generated").textContent =
     `Generated ${new Date(data.meta.generatedAt).toLocaleString()} with contrail ${data.meta.contrailVersion}. Keep this file private.`;
-  update();
+  render();
 })();
