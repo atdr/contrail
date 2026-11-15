@@ -30,12 +30,23 @@ Passport.charts = (() => {
   const breakdownColor = (breakdown, category) =>
     breakdown === "total" ? totalColor() : categoryColor(breakdown, category);
 
+  // Chart colours are the stylesheet's, read at each draw. A custom property
+  // set with light-dark() computes to that function rather than a colour, so
+  // each is resolved through a hidden element's `color`, which applies the
+  // active scheme.
+  const probe = document.createElement("span");
+  probe.hidden = true;
+  document.body.append(probe);
+  function themeColor(name) {
+    probe.style.color = `var(${name})`;
+    return getComputedStyle(probe).color;
+  }
+
   function chartTheme() {
-    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     return {
-      text: getComputedStyle(document.body).color,
-      muted: dark ? "#a5b2aa" : "#647068",
-      grid: dark ? "rgba(165,178,170,0.18)" : "rgba(100,112,104,0.16)",
+      text: themeColor("--text"),
+      muted: themeColor("--muted"),
+      grid: themeColor("--chart-grid"),
     };
   }
 

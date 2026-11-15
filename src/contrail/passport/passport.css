@@ -6,6 +6,7 @@
   --text: light-dark(#132019, #f1f6f2);
   --muted: light-dark(#647068, #a5b2aa);
   --line: light-dark(#dce5df, #34443a);
+  --chart-grid: light-dark(rgba(100, 112, 104, 0.16), rgba(165, 178, 170, 0.18));
   --forest: light-dark(#123c2c, #1a4d39);
   --teal: light-dark(#087567, #36c8ae);
   --teal-soft: light-dark(#83d9ca, #167d6e);

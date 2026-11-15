@@ -181,6 +181,26 @@ def test_a_short_ranking_has_no_see_all(open_passport):
     expect(page.locator("[data-ranking=routes]")).to_be_hidden()
 
 
+def test_charts_follow_a_scheme_change_while_open(open_passport, page):
+    """Chart colours were fixed hex picked once, so switching the OS between
+    light and dark left the charts in the old scheme's ink."""
+    page.emulate_media(color_scheme="light")
+    page = open_passport()
+    tick = "id => Chart.getChart(id).options.scales.x.ticks.color"
+    assert page.evaluate(tick, "trend-chart") == "rgb(100, 112, 104)"
+    light_grid = page.evaluate("Chart.getChart('trend-chart').options.scales.y.grid.color")
+
+    page.emulate_media(color_scheme="dark")
+    page.wait_for_function(
+        "Chart.getChart('trend-chart').options.scales.x.ticks.color === 'rgb(165, 178, 170)'"
+    )
+    assert page.evaluate(tick, "pattern-chart") == "rgb(165, 178, 170)"
+    assert page.evaluate("Chart.getChart('routes').options.scales.y.ticks.color") == (
+        "rgb(241, 246, 242)"
+    )
+    assert page.evaluate("Chart.getChart('trend-chart').options.scales.y.grid.color") != light_grid
+
+
 # -- incomplete data ----------------------------------------------------------
 
 

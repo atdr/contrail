@@ -356,6 +356,10 @@
     if (event.target === $("ranking-dialog")) $("ranking-dialog").close();
   });
 
+  // Charts read their colours when drawn, so a scheme change while the page
+  // is open redraws every section rather than leaving last scheme's ink.
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render());
+
   buildPeriods();
   map.setup(world);
   $("generated").textContent =
