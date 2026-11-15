@@ -379,8 +379,13 @@ Passport.charts = (() => {
     };
     // Each " · " part of a label wraps as a whole, so a flight breaks between
     // its route and its date rather than inside the date.
-    const rankingLabel = (label) => {
+    const rankingLabel = (label, flag) => {
       const element = span("ranking-label");
+      if (flag) {
+        const mark = span("ranking-flag", flag);
+        mark.setAttribute("aria-hidden", "true");
+        element.append(mark, " ");
+      }
       const parts = label.split(" · ");
       parts.forEach((part, index) => {
         if (index) element.append(" ");
@@ -415,7 +420,7 @@ Passport.charts = (() => {
         bar.append(fill);
         row.append(
           span("ranking-rank", String(index + 1)),
-          rankingLabel(entry.label),
+          rankingLabel(entry.label, entry.flag),
           span("ranking-value", formatRankingValue(total, metric)),
           bar,
         );

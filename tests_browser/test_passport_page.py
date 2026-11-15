@@ -338,6 +338,31 @@ def test_unknown_reason_is_the_last_category(open_passport):
     assert list(datasets(page, "pattern-chart"))[-1] == "Unknown"
 
 
+def test_country_charts_name_countries_without_flags(open_passport):
+    """Windows draws a flag emoji as two letters, so the canvas showed
+    "GB United Kingdom". The chart names the country; the See all list,
+    where the name is also shown, keeps the flag."""
+    rows = [
+        row(
+            flight_date=f"2026-0{index + 1}-01",
+            origin="LHR",
+            destination=destination,
+            flight_number=str(index),
+            emissions_kg_actual=str(100 * (index + 1)),
+        )
+        for index, destination in enumerate(["JFK", "CDG", "AMS", "FRA", "MAD", "FCO", "DXB"])
+    ]
+    page = open_passport(rows)
+    labels = page.evaluate("Chart.getChart('countries').data.labels")
+    assert labels[:3] == ["United Kingdom", "United Arab Emirates", "Italy"]
+    assert all(label.isascii() for label in labels), labels
+
+    page.locator("[data-ranking=countries]").click()
+    first = page.locator("#ranking-dialog-list .ranking-label").first
+    expect(first).to_have_text("🇬🇧 United Kingdom")
+    assert first.locator(".ranking-flag").get_attribute("aria-hidden") == "true"
+
+
 def test_a_short_ranking_has_no_see_all(open_passport):
     page = open_passport()
     expect(page.locator("[data-ranking=routes]")).to_be_hidden()

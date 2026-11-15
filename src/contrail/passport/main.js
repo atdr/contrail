@@ -143,7 +143,11 @@
       flight.end?.country,
     ]).map((entry) => ({
       ...entry,
-      label: `${countryFlag(entry.label)} ${countryDisplay ? countryDisplay.of(entry.label) || entry.label : entry.label}`,
+      // The chart draws the name alone: Windows has no flag emoji and shows
+      // two letters instead. The flag rides along for the HTML list, which
+      // also shows the name, so a missing glyph costs nothing there.
+      label: countryDisplay ? countryDisplay.of(entry.label) || entry.label : entry.label,
+      flag: countryFlag(entry.label),
     }));
     showRanking(
       "airports",
