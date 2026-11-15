@@ -928,3 +928,12 @@ footer {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* The widest controls, "Total CO2e / Avg / km / Avg / hr" and the headline
+   measure, fit a 320px phone only with tighter buttons. */
+@media (max-width: 360px) {
+  .metric-tabs button,
+  .pattern-tabs button {
+    padding-inline: 8px;
+  }
+}

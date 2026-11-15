@@ -374,11 +374,15 @@ def test_segmented_controls_stay_one_row(open_passport, page, viewport):
     controls = page.locator(".metric-tabs, .pattern-tabs")
     for index in range(controls.count()):
         control = controls.nth(index)
+        name = control.get_attribute("id")
         box = control.bounding_box()
         button = control.locator("button").first.bounding_box()
         section = control.evaluate("el => el.closest('section').getBoundingClientRect().right")
-        assert box["height"] < button["height"] * 1.5, control.get_attribute("id")
-        assert box["x"] + box["width"] <= section, control.get_attribute("id")
+        assert box["height"] < button["height"] * 1.5, name
+        assert box["x"] + box["width"] <= section, name
+        # It may scroll inside itself rather than wrap, but every control
+        # Passport ships fits down to 320px without that.
+        assert control.evaluate("el => el.scrollWidth <= el.clientWidth"), name
     expect(page.get_by_role("group", name="Headline measure")).to_be_visible()
     expect(page.get_by_role("group", name="Carbon impact grouping")).to_be_visible()
 
