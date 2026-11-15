@@ -404,6 +404,41 @@ def test_every_chart_ticks_at_one_size_in_a_system_font(open_passport):
     assert "Inter" not in font and font.startswith("ui-sans-serif")
 
 
+def test_flight_tags_have_a_dark_scheme_of_their_own(open_passport, page):
+    """In dark mode the tags kept their light pastel fills and white ring,
+    bright stickers on a dark card. Each now has a dark variant."""
+    tags = ".flight-tag"
+    styles = """els => els.map(el => {
+      const style = getComputedStyle(el);
+      return [el.className, style.backgroundColor, style.color, style.boxShadow];
+    })"""
+
+    def luminance(colour: str) -> float:
+        channels = [float(part) for part in re.findall(r"[\d.]+", colour)[:3]]
+        return sum(
+            weight * value for weight, value in zip((0.2126, 0.7152, 0.0722), channels, strict=True)
+        )
+
+    page.emulate_media(color_scheme="light")
+    page = open_passport()
+    light = page.locator(tags).evaluate_all(styles)
+    page.emulate_media(color_scheme="dark")
+    dark = page.locator(tags).evaluate_all(styles)
+
+    assert {name for name, *_ in light} >= {
+        "flight-tag cabin-business",
+        "flight-tag cabin-economy",
+        "flight-tag reason-business",
+    }
+    for (name, light_fill, light_ink, light_ring), (_, fill, ink, ring) in zip(
+        light, dark, strict=True
+    ):
+        assert fill != light_fill and ink != light_ink and ring != light_ring, name
+        if "tag-unknown" not in name:
+            # Light ink on a dark fill, the reverse of the light scheme.
+            assert luminance(fill) < 90 < luminance(ink), (name, fill, ink)
+
+
 # -- incomplete data ----------------------------------------------------------
 
 
