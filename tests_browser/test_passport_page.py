@@ -242,6 +242,29 @@ def test_the_heaviest_airport_is_drawn_on_top(open_passport):
     expect(page.locator(".leaflet-tooltip")).to_contain_text("LHR")
 
 
+def test_the_latest_year_tile_skips_a_year_of_bookings_only(open_passport):
+    """With no year chosen, a newest year that holds only upcoming flights
+    made the tile read zero. It reads the newest year anything was flown in,
+    and a chosen year still reads that year."""
+    rows = [
+        row(flight_date="2025-05-10", origin="LHR", destination="JFK", emissions_kg_actual="1500"),
+        row(
+            flight_date=f"{NOW.year + 1}-02-01",
+            origin="LHR",
+            destination="SIN",
+            emissions_kg_actual="400",
+        ),
+    ]
+    page = open_passport(rows)
+    assert text(page, "#trend-note-label") == "Latest year"
+    assert text(page, "#trend-note-value") == "1.5 t CO₂e"
+
+    page.get_by_role("button", name=str(NOW.year + 1), exact=True).click()
+    assert text(page, "#trend-note-label") == str(NOW.year + 1)
+    assert text(page, "#trend-note-value") == "0 kg CO₂e"
+    expect(page.locator("#trend-note-copy")).to_contain_text("400 kg")
+
+
 def test_a_departure_moves_the_flight_from_planned_to_completed(open_passport):
     """#72: a sync either side of a departure rewrites the file. The page
     rendered after it must show the flight as flown, not only differ."""

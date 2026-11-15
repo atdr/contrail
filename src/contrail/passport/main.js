@@ -98,8 +98,11 @@
     const categories = breakdownCategories(withEmissions(data.flights), state.trendBreakdown);
     charts.trend(series, categories, state.trendBreakdown);
 
-    const year = state.year || data.years[0];
-    const current = series.find((item) => item.year === year);
+    // With no year chosen, the tile reads the newest year anything was flown
+    // in: a year holding only bookings would read zero.
+    const current = state.year
+      ? series.find((item) => item.year === state.year)
+      : series.findLast((item) => withEmissions(completed(item.rows)).length) || series.at(-1);
     const trendUnit = current && Math.max(current.completed, current.planned) >= 1000 ? "t" : "kg";
     $("trend-note-label").textContent = state.year
       ? String(state.year)
