@@ -22,7 +22,12 @@ Passport.charts = (() => {
   const chartFont = getComputedStyle(document.documentElement)
     .getPropertyValue("--font-sans")
     .trim();
+  // One text scale for every chart: 12px ticks at regular weight. Value
+  // labels drawn by the plugins below are the only medium-weight chart text.
+  const TICK_SIZE = 12;
   Chart.defaults.font.family = chartFont;
+  Chart.defaults.font.size = TICK_SIZE;
+  Chart.defaults.font.weight = "normal";
   Chart.defaults.plugins.tooltip.titleFont = { family: chartFont, weight: "600" };
   Chart.defaults.plugins.tooltip.bodyFont = { family: chartFont };
   Chart.defaults.plugins.tooltip.footerFont = { family: chartFont };
@@ -52,8 +57,6 @@ Passport.charts = (() => {
   }
 
   const charts = new Map();
-
-  const TICK_SIZE = 12;
 
   // Below this width a period chart shortens its axis: month initials, and
   // value labels a size smaller.
@@ -662,7 +665,7 @@ Passport.charts = (() => {
             stacked: true,
             grid: { display: false },
             border: { color: theme.grid },
-            ticks: periodTicks(theme.muted, { font: { size: 11 } }),
+            ticks: periodTicks(theme.muted),
           },
           y: {
             stacked: true,

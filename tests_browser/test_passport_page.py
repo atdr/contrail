@@ -290,6 +290,22 @@ def test_charts_follow_a_scheme_change_while_open(open_passport, page):
     assert page.evaluate("Chart.getChart('trend-chart').options.scales.y.grid.color") != light_grid
 
 
+def test_every_chart_ticks_at_one_size_in_a_system_font(open_passport):
+    """The trend's year axis was 11px against 12px elsewhere, and the stack
+    began with Inter, which is not bundled, so charts measured their labels
+    in whichever font a machine happened to have."""
+    page = open_passport()
+    sizes = page.evaluate(
+        """() => Object.values(Chart.instances).flatMap(chart =>
+             Object.values(chart.scales)
+               .filter(scale => scale.options.display !== false)
+               .map(scale => [chart.canvas.id, scale.id, scale._resolveTickFontOptions(0).size]))"""
+    )
+    assert sizes and {size for _, _, size in sizes} == {12}, sizes
+    font = page.evaluate("getComputedStyle(document.documentElement).fontFamily")
+    assert "Inter" not in font and font.startswith("ui-sans-serif")
+
+
 # -- incomplete data ----------------------------------------------------------
 
 
