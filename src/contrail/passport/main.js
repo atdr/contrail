@@ -333,11 +333,9 @@
           : "total CO₂e";
     const breakdownLabel = breakdown === "total" ? "" : ` by ${breakdown}`;
     $("ranking-dialog-title").textContent = `${ranking.title} · ${metricLabel}${breakdownLabel}`;
-    $("ranking-dialog-chart").style.height = `${Math.max(360, ranking.entries.length * 34)}px`;
+    charts.rankingList("ranking-dialog-list", ranking.entries, breakdown, metric);
     $("ranking-dialog").showModal();
-    requestAnimationFrame(() =>
-      charts.ranking("ranking-dialog-canvas", ranking.entries, breakdown, metric),
-    );
+    $("ranking-dialog-list").parentElement.scrollTop = 0;
   }
 
   // One listener for every segmented control, the year buttons included.

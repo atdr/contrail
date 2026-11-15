@@ -112,8 +112,6 @@ Passport.charts = (() => {
   // later calls swap its data and options and redraw it in place. Plugins are
   // fixed when the chart is made, so a plugin that needs this draw's figures
   // reads them from `chart.data.valueLabels`, which travels with the data.
-  // Resizing first measures the container now, as a new chart would: the
-  // dialog's canvas changes height between openings while it is hidden.
   function draw(id, configuration) {
     const existing = charts.get(id);
     if (!existing) {
@@ -122,7 +120,6 @@ Passport.charts = (() => {
     }
     existing.data = configuration.data;
     existing.options = configuration.options;
-    existing.resize();
     existing.update("none");
   }
 
@@ -240,10 +237,9 @@ Passport.charts = (() => {
     };
   }
 
-  function ranking(id, entries, breakdown, metric) {
-    const theme = chartTheme();
-    const totals = entries.map((entry) => rankingMetricValue(entry, metric));
-    const maximum = Math.max(1, ...totals);
+  // A ranking's breakdown categories, heaviest across its entries first;
+  // none for the total.
+  function rankingCategories(entries, breakdown, metric) {
     const categoryTotals = new Map();
     if (breakdown !== "total") {
       entries.forEach((entry) => {
@@ -253,9 +249,14 @@ Passport.charts = (() => {
         });
       });
     }
-    const categories = [...categoryTotals.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map((entry) => entry[0]);
+    return [...categoryTotals.entries()].sort((a, b) => b[1] - a[1]).map((entry) => entry[0]);
+  }
+
+  function ranking(id, entries, breakdown, metric) {
+    const theme = chartTheme();
+    const totals = entries.map((entry) => rankingMetricValue(entry, metric));
+    const maximum = Math.max(1, ...totals);
+    const categories = rankingCategories(entries, breakdown, metric);
     const datasets =
       breakdown === "total"
         ? [
@@ -349,6 +350,81 @@ Passport.charts = (() => {
         },
       },
     });
+  }
+
+  // A whole ranking as an HTML list in the element `id`: rank, label, value,
+  // and a bar sized in CSS, split by category when a breakdown is chosen.
+  // HTML rather than a canvas because a canvas tall enough for every flight
+  // in a long log passes iOS Safari's canvas size limit and draws blank.
+  function rankingList(id, entries, breakdown, metric) {
+    const list = $(id);
+    const totals = entries.map((entry) => rankingMetricValue(entry, metric));
+    const maximum = Math.max(0, ...totals);
+    const categories = rankingCategories(entries, breakdown, metric);
+    const span = (className, text = "") => {
+      const element = document.createElement("span");
+      element.className = className;
+      element.textContent = text;
+      return element;
+    };
+    // Each " · " part of a label wraps as a whole, so a flight breaks between
+    // its route and its date rather than inside the date.
+    const rankingLabel = (label) => {
+      const element = span("ranking-label");
+      const parts = label.split(" · ");
+      parts.forEach((part, index) => {
+        if (index) element.append(" ");
+        element.append(span("", index < parts.length - 1 ? `${part} ·` : part));
+      });
+      return element;
+    };
+    list.replaceChildren(
+      ...entries.map((entry, index) => {
+        const total = totals[index];
+        const row = document.createElement("li");
+        row.className = "ranking-row";
+        const bar = span("ranking-bar");
+        bar.setAttribute("aria-hidden", "true");
+        const fill = span("ranking-fill");
+        fill.style.width = `${maximum ? (total / maximum) * 100 : 0}%`;
+        const parts =
+          breakdown === "total"
+            ? [["Total", total, totalColor()]]
+            : categories.map((category) => [
+                category,
+                rankingCategoryValue(entry, breakdown, category, metric),
+                categoryColor(breakdown, category),
+              ]);
+        const present = parts.filter(([, value]) => value > 0);
+        present.forEach(([category, value, color]) => {
+          const segment = span("ranking-segment");
+          segment.style.width = `${total ? (value / total) * 100 : 0}%`;
+          segment.style.background = color;
+          segment.title = `${category}: ${formatRankingValue(value, metric, true)}`;
+          fill.append(segment);
+        });
+        bar.append(fill);
+        row.append(
+          span("ranking-rank", String(index + 1)),
+          rankingLabel(entry.label),
+          span("ranking-value", formatRankingValue(total, metric)),
+          bar,
+        );
+        if (breakdown !== "total") {
+          row.append(
+            span(
+              "visually-hidden",
+              present
+                .map(
+                  ([category, value]) => `${category} ${formatRankingValue(value, metric, true)}`,
+                )
+                .join(", "),
+            ),
+          );
+        }
+        return row;
+      }),
+    );
   }
 
   function composition(id, entries, kind) {
@@ -598,5 +674,5 @@ Passport.charts = (() => {
     });
   }
 
-  return { ranking, composition, pattern, trend };
+  return { ranking, rankingList, composition, pattern, trend };
 })();

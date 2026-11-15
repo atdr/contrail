@@ -760,9 +760,59 @@ h3 {
   padding: 16px 20px 24px;
   overflow-y: auto;
 }
-.dialog-chart {
-  position: relative;
-  min-height: 360px;
+.ranking-list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ranking-row {
+  display: grid;
+  grid-template-columns: 2.2em minmax(0, 1fr) auto;
+  column-gap: 12px;
+  row-gap: 6px;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+.ranking-rank {
+  color: var(--muted);
+  text-align: right;
+}
+.ranking-label {
+  overflow-wrap: anywhere;
+}
+.ranking-label > span {
+  display: inline-block;
+  max-width: 100%;
+}
+.ranking-value {
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ranking-bar {
+  grid-column: 2 / -1;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+}
+.ranking-fill {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+}
+.ranking-segment {
+  flex: 0 0 auto;
+  height: 100%;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 footer {

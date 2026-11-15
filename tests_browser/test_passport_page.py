@@ -165,8 +165,12 @@ def test_the_ranking_dialog_opens_and_closes(open_passport):
     see_all.click()
     expect(dialog).to_be_visible()
     expect(page.locator("#ranking-dialog-title")).to_have_text("All routes · total CO₂e")
-    labels = page.evaluate("Chart.getChart('ranking-dialog-canvas').data.labels")
-    assert len(labels) == len(destinations)
+    rows_shown = page.locator("#ranking-dialog-list > li")
+    expect(rows_shown).to_have_count(len(destinations))
+    expect(rows_shown.first.locator(".ranking-rank")).to_have_text("1")
+    expect(rows_shown.first.locator(".ranking-label")).to_have_text("LAX ↔ LHR")
+    expect(rows_shown.first.locator(".ranking-value")).to_have_text("800 kg")
+    assert dialog.locator("canvas").count() == 0
     page.locator("#ranking-dialog-close").click()
     expect(dialog).to_be_hidden()
 
@@ -174,6 +178,39 @@ def test_the_ranking_dialog_opens_and_closes(open_passport):
     expect(dialog).to_be_visible()
     page.keyboard.press("Escape")
     expect(dialog).to_be_hidden()
+
+    see_all.click()
+    page.mouse.click(5, 5)  # the backdrop
+    expect(dialog).to_be_hidden()
+
+
+def test_the_ranking_dialog_lists_every_flight_with_its_breakdown(open_passport):
+    """The dialog drew one canvas 34px per entry. A long log passed iOS
+    Safari's canvas size limit and showed nothing, so it is an HTML list: a
+    row per entry, with a bar segment per category when broken down."""
+    rows = [
+        row(
+            flight_date=f"2025-{1 + index % 12:02d}-{1 + index // 12:02d}",
+            origin="LHR",
+            destination="JFK",
+            flight_number=str(index),
+            cabin_class_known="business" if index % 3 == 0 else "economy",
+            emissions_kg_actual=str(100 + index),
+        )
+        for index in range(240)
+    ]
+    page = open_passport(rows)
+    page.locator("#driver-tabs [data-value=cabin]").click()
+    page.locator("[data-ranking=flights]").click()
+
+    expect(page.locator("#ranking-dialog-title")).to_have_text(
+        "All flights by impact · total CO₂e by cabin"
+    )
+    rows_shown = page.locator("#ranking-dialog-list > li")
+    expect(rows_shown).to_have_count(240)
+    expect(rows_shown.first.locator(".ranking-label")).to_have_text("BA239 · LHR–JFK · 2025-12-20")
+    expect(rows_shown.first.locator(".ranking-segment")).to_have_count(1)
+    assert rows_shown.locator(".ranking-segment").count() == 240
 
 
 def test_ranking_labels_fit_one_shared_gutter(open_passport, page):
