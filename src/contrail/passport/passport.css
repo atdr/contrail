@@ -986,3 +986,23 @@ footer {
     font-size: 0.875rem;
   }
 }
+
+/* A finger needs about 44px. Only where the pointer is one: a mouse is
+   precise, and desktop keeps its compact controls. Leaflet sizes its touch
+   zoom buttons with a (0, 2, 1) selector, matched here so this one, coming
+   later, wins without !important. */
+@media (pointer: coarse) {
+  .see-all,
+  .metric-tabs button,
+  .pattern-tabs button {
+    min-height: 44px;
+  }
+  .see-all {
+    padding-inline: 14px;
+  }
+  .leaflet-touch .leaflet-control-zoom a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+  }
+}

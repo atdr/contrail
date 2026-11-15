@@ -539,6 +539,49 @@ def test_segmented_controls_stay_one_row(open_passport, page, viewport):
     expect(page.get_by_role("group", name="Carbon impact grouping")).to_be_visible()
 
 
+TAP_TARGETS = ".see-all, .metric-tabs button, .pattern-tabs button, .leaflet-control-zoom a"
+
+
+def tap_target_sizes(page: Page) -> list[tuple[str, float, float]]:
+    # See all buttons hide on a short ranking; measure them shown.
+    page.evaluate("document.querySelectorAll('.see-all').forEach(b => { b.hidden = false; })")
+    return page.locator(TAP_TARGETS).evaluate_all(
+        """els => els.map(el => {
+          const box = el.getBoundingClientRect();
+          return [el.className || el.textContent.trim(), box.width, box.height];
+        })"""
+    )
+
+
+def test_touch_screens_get_44px_tap_targets(browser, tmp_path):
+    """See all was 63x28, segmented buttons 36px tall and the map's zoom
+    buttons 30x30: under a fingertip on a phone. Where the pointer is coarse
+    each is at least 44px tall, and the zoom buttons 44px square."""
+    output = render(fixture_rows(), tmp_path / "passport.html", NOW)
+    context = browser.new_context(
+        viewport=VIEWPORTS["mobile"], has_touch=True, is_mobile=True, locale="en-GB"
+    )
+    try:
+        page = context.new_page()
+        page.goto(output.as_uri())
+        page.locator("#hero-value").filter(has_text="CO").wait_for()
+        sizes = tap_target_sizes(page)
+        # Six See all, the headline measure, five segmented controls, zoom.
+        assert len(sizes) == 6 + 3 + 14 + 2, sizes
+        assert [size for size in sizes if size[2] < 44] == []
+        zoom = [size for size in sizes if "leaflet-control-zoom" in size[0]]
+        assert len(zoom) == 2 and all(width >= 44 for _, width, _ in zoom)
+    finally:
+        context.close()
+
+
+def test_a_mouse_keeps_the_compact_controls(open_passport, page):
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    heights = {name: height for name, _, height in tap_target_sizes(page)}
+    assert max(heights.values()) < 44, heights
+
+
 # -- regressions from shipped fixes -------------------------------------------
 
 
