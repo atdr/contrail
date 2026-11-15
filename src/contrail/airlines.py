@@ -1,4 +1,5 @@
-"""Resolving an airline to its IATA code, from a name or from an ICAO code.
+"""Resolving an airline to its IATA code, from a name or from an ICAO code,
+and naming the airline behind an IATA code for display.
 
 Two importers need this and neither has the code TIM wants:
 
@@ -55,6 +56,7 @@ USER_AGENT = f"contrail/{__version__} (https://github.com/atdr/contrail)"
 
 _BY_ICAO: dict[str, str] | None = None
 _BY_NAME: dict[str, str] | None = None
+_NAME_BY_IATA: dict[str, str | None] | None = None
 
 
 def _normalize(name: str) -> str:
@@ -82,6 +84,46 @@ def _load_table() -> tuple[dict[str, str], dict[str, str]]:
                         by_name.setdefault(_normalize(name), iata)
         _BY_ICAO, _BY_NAME = by_icao, by_name
     return _BY_ICAO, _BY_NAME
+
+
+def _one_name(names: set[str]) -> str | None:
+    """The name a set of table names agrees on, or None where they do not.
+
+    IATA reuses a two-letter code once its holder stops flying, so the table
+    can hold several airlines under one code: ``AN`` is both Ansett Australia
+    and Andorra Airlines. Nothing in a stored row says which is meant, so a
+    code whose names disagree gets no name. Names that only extend the
+    shortest one by whole words (``British Airways`` and ``British Airways
+    Limited``, ``Lufthansa`` and ``Lufthansa Cargo``) are one brand rather than
+    a disagreement, and the shortest is the name shown.
+    """
+    if not names:
+        return None
+    shortest = min(names, key=len)
+    if all(name == shortest or name.startswith(f"{shortest} ") for name in names):
+        return shortest
+    return None
+
+
+def airline_name(iata: str | None) -> str | None:
+    """The bundled table's name for an IATA airline code, or None.
+
+    None both for a code the table lacks and for one it holds under more than
+    one airline (see ``_one_name``): a reader is better served by the bare code
+    than by a confident wrong name. Offline, like the rest of the table.
+    """
+    global _NAME_BY_IATA
+    if _NAME_BY_IATA is None:
+        names: dict[str, set[str]] = {}
+        data = files("contrail.data").joinpath("airline_codes.csv")
+        with data.open(newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                if row["name"]:
+                    names.setdefault(row["iata"], set()).add(row["name"])
+        _NAME_BY_IATA = {code: _one_name(found) for code, found in names.items()}
+    if not iata:
+        return None
+    return _NAME_BY_IATA.get(iata.strip().upper())
 
 
 def _iata_from_claims(entity: dict) -> str | None:

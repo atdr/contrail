@@ -10,6 +10,7 @@ from importlib.resources import files
 from pathlib import Path
 
 from contrail import __version__, resync
+from contrail.airlines import airline_name
 from contrail.airports import details_for
 from contrail.config import DEFAULT_PASSPORT_OUTPUT as DEFAULT_OUTPUT_PATH
 from contrail.storage.local_csv import is_cancelled
@@ -110,6 +111,11 @@ def _flight(row: dict, now: datetime) -> dict | None:
     departed = resync.has_departed(row, now)
     cabin = (row.get("cabin_class_known") or "").strip().replace("_", " ")
     route = " ↔ ".join(sorted((origin, destination))) if origin and destination else "Unknown"
+    carrier = (
+        (row.get("operating_carrier_code") or "").strip().upper()
+        or (row.get("carrier_code") or "").strip().upper()
+        or "Unknown"
+    )
 
     return {
         "date": day.isoformat() if day else None,
@@ -117,11 +123,10 @@ def _flight(row: dict, now: datetime) -> dict | None:
         "origin": origin or None,
         "destination": destination or None,
         "route": route,
-        "carrier": (
-            (row.get("operating_carrier_code") or "").strip().upper()
-            or (row.get("carrier_code") or "").strip().upper()
-            or "Unknown"
-        ),
+        "carrier": carrier,
+        # None where the bundled table lacks the code or holds it under more
+        # than one airline: the page then shows the code alone.
+        "carrierName": airline_name(carrier) if carrier != "Unknown" else None,
         "flight": "".join(
             (
                 (row.get("carrier_code") or "").strip().upper(),

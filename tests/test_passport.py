@@ -137,6 +137,17 @@ def test_a_route_reads_the_same_flown_either_way():
     assert only([row()])["route"] == only([row(origin="LHR", destination="JFK")])["route"]
 
 
+def test_the_operating_airline_is_named_where_the_table_can_say_who():
+    """The page labels an airline "British Airways (BA)", or the code alone
+    where the bundled table holds the code under more than one airline."""
+    flight = only([row(operating_carrier_code="AA")])
+    assert (flight["carrier"], flight["carrierName"]) == ("AA", "American Airlines")
+    assert only([row()])["carrierName"] == "British Airways"
+    assert only([row(carrier_code="AN")])["carrierName"] is None
+    unknown = only([row(carrier_code="")])
+    assert (unknown["carrier"], unknown["carrierName"]) == ("Unknown", None)
+
+
 def test_an_unpriced_flight_has_no_figure_rather_than_a_zero():
     assert only([row(emissions_source="no_data", emissions_kg_actual="")])["kg"] is None
 

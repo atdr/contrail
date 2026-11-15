@@ -206,7 +206,11 @@
     );
     [
       ["routes", "All routes", (row) => row.route],
-      ["carriers", "All operating airlines", (row) => row.carrier],
+      [
+        "carriers",
+        "All operating airlines",
+        (row) => (row.carrierName ? `${row.carrierName} (${row.carrier})` : row.carrier),
+      ],
       ["aircraft", "All aircraft", (row) => row.aircraft],
       [
         "flights",
