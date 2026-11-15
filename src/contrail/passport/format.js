@@ -47,6 +47,17 @@ Passport.format = (() => {
   // getUTCDay() counts from Sunday; the charts start the week on Monday.
   const weekdayOf = (isoDate) => WEEKDAYS[(new Date(`${isoDate}T00:00:00Z`).getUTCDay() + 6) % 7];
 
+  // A flight's ISO date in the reader's locale, as the footer's timestamp
+  // is. Read and written as UTC: the date is a calendar day, not an instant,
+  // so no time zone may move it to the day before.
+  const formatDate = (isoDate) =>
+    new Date(`${isoDate}T00:00:00Z`).toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+
   function countryFlag(code) {
     return /^[A-Z]{2}$/.test(code)
       ? String.fromCodePoint(...[...code].map((letter) => 127397 + letter.charCodeAt()))
@@ -181,6 +192,7 @@ Passport.format = (() => {
     WEEKDAYS,
     monthOf,
     weekdayOf,
+    formatDate,
     countryFlag,
     UNKNOWN,
     isUnknown,

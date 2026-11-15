@@ -15,6 +15,8 @@ import pytest
 from conftest import NOW, fixture_rows, row
 from playwright.sync_api import Page, expect
 
+from contrail.passport import render
+
 VIEWPORTS = {
     "desktop": {"width": 1280, "height": 800},
     "mobile": {"width": 390, "height": 844},
@@ -208,12 +210,36 @@ def test_the_ranking_dialog_lists_every_flight_with_its_breakdown(open_passport)
     )
     rows_shown = page.locator("#ranking-dialog-list > li")
     expect(rows_shown).to_have_count(240)
-    expect(rows_shown.first.locator(".ranking-label")).to_have_text("BA239 · LHR–JFK · 2025-12-20")
+    expect(rows_shown.first.locator(".ranking-label")).to_have_text("BA239 · LHR–JFK · 20 Dec 2025")
     expect(rows_shown.first.locator(".ranking-segment")).to_have_count(1)
     assert rows_shown.locator(".ranking-segment").count() == 240
     # The figures are visible text, since a touch screen never shows a title.
     expect(rows_shown.first.locator(".ranking-breakdown")).to_have_text("Economy 339 kg")
     expect(page.locator("#ranking-dialog-list")).to_have_attribute("role", "list")
+
+
+def test_flight_dates_read_in_the_locale(open_passport):
+    """Cards and flight labels showed ISO dates while the footer used the
+    reader's locale. They all use the locale now."""
+    page = open_passport()
+    expect(page.locator("#heaviest-total p")).to_have_text("1.5 t CO₂e · BA1 · 10 May 2025")
+    assert page.evaluate("Chart.getChart('flights').data.labels[0]") == (
+        "BA1 · LHR–JFK · 10 May 2025"
+    )
+
+
+@pytest.mark.parametrize("timezone", ["America/Los_Angeles", "Pacific/Kiritimati"])
+def test_a_flight_date_never_moves_a_day(browser, tmp_path, timezone):
+    """A calendar day read as local midnight shows as the day before west of
+    UTC. It is read and written as UTC, so it reads the same everywhere."""
+    output = render(fixture_rows(), tmp_path / "passport.html", NOW)
+    context = browser.new_context(locale="en-GB", timezone_id=timezone)
+    try:
+        page = context.new_page()
+        page.goto(output.as_uri())
+        expect(page.locator("#heaviest-total p")).to_contain_text("10 May 2025")
+    finally:
+        context.close()
 
 
 def test_ranking_labels_fit_one_shared_gutter(open_passport, page):

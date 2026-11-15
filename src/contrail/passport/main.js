@@ -8,6 +8,7 @@
     pct,
     formatKg,
     formatMassText,
+    formatDate,
     countryFlag,
     routeName,
     flightTags,
@@ -176,7 +177,7 @@
     const route = document.createElement("strong");
     route.textContent = routeName(flight);
     const detail = document.createElement("p");
-    detail.textContent = `${formatter(value)} · ${flight.flight || "Flight unknown"} · ${flight.date || "Date unknown"}`;
+    detail.textContent = `${formatter(value)} · ${flight.flight || "Flight unknown"} · ${flight.date ? formatDate(flight.date) : "Date unknown"}`;
     target.append(route, detail, flightTags(flight));
   }
 
@@ -216,7 +217,7 @@
         "flights",
         "All flights by impact",
         (row) =>
-          `${row.flight || "Unknown"} · ${row.origin || "?"}–${row.destination || "?"} · ${row.date || "date unknown"}`,
+          `${row.flight || "Unknown"} · ${row.origin || "?"}–${row.destination || "?"} · ${row.date ? formatDate(row.date) : "date unknown"}`,
       ],
     ].forEach(([key, title, labeler]) => {
       const ranked = rankForMetric(rankAll(rows, labeler), state.driverMetric);
