@@ -393,12 +393,48 @@ h3 {
   position: relative;
   height: 270px;
 }
+/* A column, so the key below the chart takes its height from the chart's
+   share rather than overflowing a cell the rankings beside it set. */
 .pattern-chart {
-  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 .pattern-chart .chart-stage {
+  flex: 1 1 auto;
   min-height: 420px;
-  height: 100%;
+  height: auto;
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 14px 0 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  list-style: none;
+}
+.chart-legend[hidden] {
+  display: none;
+}
+.chart-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.legend-swatch {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+.legend-swatch.upcoming {
+  background: repeating-linear-gradient(135deg, var(--muted) 0 2px, transparent 2px 5px);
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+.driver-legend {
+  margin: 0 0 18px;
 }
 .trend-note {
   padding: 18px;
@@ -922,10 +958,8 @@ footer {
   .chart-stage {
     height: 235px;
   }
-  .pattern-chart {
-    height: auto;
-  }
   .pattern-chart .chart-stage {
+    flex: none;
     min-height: 0;
     height: 245px;
   }

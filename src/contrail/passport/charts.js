@@ -518,6 +518,37 @@ Passport.charts = (() => {
     });
   }
 
+  // The key to a chart broken down by cabin or reason, in the element `id`:
+  // a swatch, badge and name per category, in the order the chart stacks
+  // them, and the upcoming hatch where the chart draws one. Hidden for the
+  // total, which is one colour and needs no key.
+  function legend(id, breakdown, categories, { upcoming = false } = {}) {
+    const list = $(id);
+    list.hidden = breakdown === "total" || !categories.length;
+    if (list.hidden) {
+      list.replaceChildren();
+      return;
+    }
+    const item = (swatch, ...content) => {
+      const element = document.createElement("li");
+      swatch.className = `legend-swatch${swatch.className ? ` ${swatch.className}` : ""}`;
+      swatch.setAttribute("aria-hidden", "true");
+      element.append(swatch, ...content);
+      return element;
+    };
+    const items = categories.map((category) => {
+      const swatch = document.createElement("span");
+      swatch.style.background = categoryColor(breakdown, category);
+      return item(swatch, categoryIcon(breakdown, category), category);
+    });
+    if (upcoming) {
+      const hatch = document.createElement("span");
+      hatch.className = "upcoming";
+      items.push(item(hatch, "Upcoming"));
+    }
+    list.replaceChildren(...items);
+  }
+
   // `buckets` is what Passport.aggregate.patternBuckets returns.
   function pattern(buckets, breakdown) {
     const { labels, categories, values, totals } = buckets;
@@ -691,5 +722,5 @@ Passport.charts = (() => {
     });
   }
 
-  return { ranking, rankingList, composition, pattern, trend };
+  return { ranking, rankingList, composition, legend, pattern, trend };
 })();

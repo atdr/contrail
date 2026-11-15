@@ -149,6 +149,41 @@ def test_patterns_and_rankings_break_down_by_cabin_and_reason(open_passport):
     expect(page.locator("#cabins-legend")).to_contain_text("82.9%")
 
 
+def test_a_key_appears_only_when_a_chart_is_broken_down(open_passport):
+    """Broken down, the stacks were colours with no key on the page; the
+    only names were in a tooltip. Each breakdown now has an HTML key in the
+    chart's stacking order, and Total, one colour, has none."""
+    page = open_passport()
+    keys = {
+        "#trend-legend": "#trend-breakdown-tabs",
+        "#pattern-legend": "#pattern-breakdown-tabs",
+        "#driver-legend": "#driver-tabs",
+    }
+    for key in keys:
+        expect(page.locator(key)).to_be_hidden()
+
+    for key, tabs in keys.items():
+        page.locator(f"{tabs} [data-value=cabin]").click()
+        expect(page.locator(key)).to_be_visible()
+    trend = page.locator("#trend-legend li").all_inner_texts()
+    assert [entry.split()[-1] for entry in trend] == ["Business", "Economy", "Upcoming"]
+    assert page.locator("#trend-legend li .category-icon").count() == 2
+    assert [entry.split()[-1] for entry in page.locator("#driver-legend li").all_inner_texts()] == [
+        "Business",
+        "Economy",
+    ]
+
+    page.locator("#pattern-breakdown-tabs [data-value=reason]").click()
+    pattern = [entry.split()[-1] for entry in page.locator("#pattern-legend li").all_inner_texts()]
+    assert pattern == list(datasets(page, "pattern-chart"))
+    swatch = page.locator("#pattern-legend .legend-swatch").first
+    assert swatch.evaluate("el => getComputedStyle(el).backgroundColor") == "rgb(220, 128, 68)"
+
+    for key, tabs in keys.items():
+        page.locator(f"{tabs} [data-value=total]").click()
+        expect(page.locator(key)).to_be_hidden()
+
+
 def test_the_ranking_dialog_opens_and_closes(open_passport):
     destinations = ["JFK", "CDG", "SIN", "AMS", "DXB", "HND", "SYD", "LAX"]
     rows = [

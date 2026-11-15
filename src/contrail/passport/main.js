@@ -18,6 +18,7 @@
     sum,
     withEmissions,
     completed,
+    pricedCompleted,
     scoped,
     metricRows,
     aggregateBy,
@@ -98,6 +99,9 @@
     const series = yearSeries(data.flights, data.years);
     const categories = breakdownCategories(withEmissions(data.flights), state.trendBreakdown);
     charts.trend(series, categories, state.trendBreakdown);
+    charts.legend("trend-legend", state.trendBreakdown, categories, {
+      upcoming: series.some((item) => item.planned),
+    });
 
     // With no year chosen, the tile reads the newest year anything was flown
     // in: a year holding only bookings would read zero.
@@ -128,10 +132,9 @@
   }
 
   function renderPatterns(rows) {
-    charts.pattern(
-      patternBuckets(rows, state.pattern, state.patternBreakdown),
-      state.patternBreakdown,
-    );
+    const buckets = patternBuckets(rows, state.pattern, state.patternBreakdown);
+    charts.pattern(buckets, state.patternBreakdown);
+    charts.legend("pattern-legend", state.patternBreakdown, buckets.categories);
 
     const countryDisplay =
       typeof Intl.DisplayNames === "function"
@@ -208,6 +211,11 @@
       "reasons",
       groupAll(rows, (row) => row.reason),
       "reason",
+    );
+    charts.legend(
+      "driver-legend",
+      state.driverBreakdown,
+      breakdownCategories(pricedCompleted(rows), state.driverBreakdown),
     );
     [
       ["routes", "All routes", (row) => row.route],
