@@ -232,6 +232,24 @@ def test_core_interactions_fit_the_viewport(open_passport, page, viewport):
     assert overflow <= 0, f"page scrolls sideways by {overflow}px"
 
 
+@pytest.mark.parametrize("viewport", VIEWPORTS.values(), ids=VIEWPORTS.keys())
+def test_segmented_controls_stay_one_row(open_passport, page, viewport):
+    """Below 620px a wrapped pill turned into a lopsided blob. Each control
+    is one row no wider than its section, and is a labelled group."""
+    page.set_viewport_size(viewport)
+    page = open_passport()
+    controls = page.locator(".metric-tabs, .pattern-tabs")
+    for index in range(controls.count()):
+        control = controls.nth(index)
+        box = control.bounding_box()
+        button = control.locator("button").first.bounding_box()
+        section = control.evaluate("el => el.closest('section').getBoundingClientRect().right")
+        assert box["height"] < button["height"] * 1.5, control.get_attribute("id")
+        assert box["x"] + box["width"] <= section, control.get_attribute("id")
+    expect(page.get_by_role("group", name="Headline measure")).to_be_visible()
+    expect(page.get_by_role("group", name="Carbon impact grouping")).to_be_visible()
+
+
 # -- regressions from shipped fixes -------------------------------------------
 
 

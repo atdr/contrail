@@ -194,13 +194,13 @@ h3 {
   width: max-content;
   max-width: 100%;
   gap: 4px;
-  flex-wrap: wrap;
   margin: 24px 0 18px;
   padding: 4px;
   border-radius: 999px;
   background: var(--surface-soft);
 }
 .metric-tabs button {
+  flex: 0 0 auto;
   min-height: 36px;
   padding: 7px 13px;
   border: 0;
@@ -351,10 +351,11 @@ h3 {
   gap: 18px;
   flex-wrap: wrap;
 }
+/* A segmented control is one row: a pill that wraps is no longer a pill.
+   Below 620px one that cannot fit scrolls inside itself instead. */
 .pattern-tabs {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
   padding: 4px;
   border-radius: 999px;
   background: var(--surface-soft);
@@ -509,6 +510,7 @@ h3 {
 }
 
 .pattern-tabs button {
+  flex: 0 0 auto;
   min-height: 36px;
   padding: 7px 13px;
   border: 0;
@@ -516,6 +518,7 @@ h3 {
   color: var(--muted);
   background: transparent;
   cursor: pointer;
+  white-space: nowrap;
 }
 .pattern-tabs button[aria-pressed="true"] {
   color: var(--control-active-text);
@@ -841,9 +844,29 @@ footer {
     min-height: 0;
     height: 245px;
   }
+  /* The heading above its controls, not squeezed into a column beside them. */
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .chart-controls {
+    max-width: 100%;
+  }
   .chart-controls,
   .driver-controls {
     justify-content: flex-start;
+    gap: 10px;
+  }
+  .metric-tabs button,
+  .pattern-tabs button {
+    padding-inline: 11px;
+  }
+  .metric-tabs,
+  .pattern-tabs {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
   .chart-controls .pattern-tabs + .pattern-tabs::before,
   .driver-controls .pattern-tabs + .pattern-tabs::before {
