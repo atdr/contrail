@@ -769,20 +769,25 @@ footer {
   text-align: center;
 }
 
+/* A single column is minmax(0, 1fr), never 1fr: a bare 1fr track is at least
+   its content's min-content width, and a canvas reports its own width as
+   that, 300px before Chart.js first sizes it. The track then holds the
+   canvas at 300px and Chart.js sizes the chart to match, wider than a
+   320px phone. */
 @media (max-width: 900px) {
   .overview,
   .trend-layout,
   .patterns-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .drivers {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .compositions {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .quality-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .quality-groups {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -805,10 +810,10 @@ footer {
     flex-basis: calc(50% - 18px);
   }
   .drivers {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .extremes {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   section {
     border-radius: 18px;
@@ -845,9 +850,9 @@ footer {
     display: none;
   }
   .quality-groups {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .quality-parts {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }

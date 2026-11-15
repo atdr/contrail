@@ -18,6 +18,7 @@ from playwright.sync_api import Page, expect
 VIEWPORTS = {
     "desktop": {"width": 1280, "height": 800},
     "mobile": {"width": 390, "height": 844},
+    "narrow": {"width": 320, "height": 640},
 }
 
 
@@ -37,6 +38,12 @@ def datasets(page: Page, canvas: str) -> dict[str, list[float]]:
 
 def total(page: Page, canvas: str) -> float:
     return sum(sum(values) for values in datasets(page, canvas).values())
+
+
+def sideways_scroll(page: Page) -> int:
+    return page.evaluate(
+        "document.documentElement.scrollWidth - document.documentElement.clientWidth"
+    )
 
 
 def pressed(page: Page, selector: str):
@@ -213,15 +220,15 @@ def test_an_empty_log_renders_without_error(open_passport):
 def test_core_interactions_fit_the_viewport(open_passport, page, viewport):
     page.set_viewport_size(viewport)
     page = open_passport()
+    overflow = sideways_scroll(page)
+    assert overflow <= 0, f"page scrolls sideways by {overflow}px on load"
 
     page.get_by_role("button", name="2026", exact=True).click()
     page.locator("#metric-tabs [data-value=distance]").click()
     page.locator("#trend-breakdown-tabs [data-value=cabin]").click()
     assert text(page, "#flight-count") == "3"
 
-    overflow = page.evaluate(
-        "document.documentElement.scrollWidth - document.documentElement.clientWidth"
-    )
+    overflow = sideways_scroll(page)
     assert overflow <= 0, f"page scrolls sideways by {overflow}px"
 
 
