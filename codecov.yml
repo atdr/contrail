@@ -1,15 +1,15 @@
-# Codecov reports; it does not gate. Without `informational`, Codecov adds two
-# status checks of its own to every pull request, and a check this repo neither
-# defines nor controls is exactly the kind that can sit green while never having
-# run. ci.yml is the source of truth for whether a change may merge.
+# Codecov's two statuses are allowed to fail. A status that is informational
+# can never go red, so it says nothing about the change under review; this repo
+# follows atdr/github-boilerplate's template/python/codecov.yml on that point.
+# The threshold keeps one untested line at high coverage from turning the
+# project status red.
 coverage:
   status:
     project:
       default:
-        informational: true
+        threshold: 0.1%
     patch:
-      default:
-        informational: true
+      default: {}
 
 # The report measures the shipped package, so there is nothing else to ignore
 # here; `[tool.coverage.run] source` in pyproject.toml is what sets the scope,
