@@ -52,6 +52,42 @@ Passport.charts = (() => {
 
   const charts = new Map();
 
+  const TICK_SIZE = 12;
+
+  // Every ranking chart's label gutter, the same share of its width within
+  // fixed bounds, so rankings of one width start their bars at one x rather
+  // than each sizing a gutter to its own longest label.
+  const rankingGutter = (chart) => Math.round(Math.min(220, Math.max(96, chart.width * 0.44)));
+
+  const fits = (ctx, text, width) => ctx.measureText(text).width <= width;
+  const firstParts = (label, count) => label.split(" · ").slice(0, count).join(" · ");
+
+  // Labels are cut to `width` px in ctx's current font. Whole " · " parts go
+  // from the end first, the same number from every label so a ranking reads
+  // as one list: a flight keeps its number and route before its date. Then a
+  // label still too long loses characters and ends in an ellipsis.
+  function sharedParts(ctx, labels, width) {
+    const most = Math.max(1, ...labels.map((label) => label.split(" · ").length));
+    for (let count = most; count > 1; count -= 1) {
+      if (labels.every((label) => fits(ctx, firstParts(label, count), width))) return count;
+    }
+    return 1;
+  }
+
+  function fitLabel(ctx, label, width, parts) {
+    const kept = firstParts(label, parts);
+    if (fits(ctx, kept, width)) return kept;
+    const characters = Array.from(kept);
+    let low = 0;
+    let high = characters.length;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (fits(ctx, `${characters.slice(0, middle).join("").trimEnd()}…`, width)) low = middle;
+      else high = middle - 1;
+    }
+    return `${characters.slice(0, low).join("").trimEnd()}…`;
+  }
+
   // Draw `configuration` on the canvas `id`. The first call makes the chart;
   // later calls swap its data and options and redraw it in place. Plugins are
   // fixed when the chart is made, so a plugin that needs this draw's figures
@@ -231,11 +267,16 @@ Passport.charts = (() => {
         responsive: true,
         maintainAspectRatio: false,
         indexAxis: "y",
-        layout: { padding: { right: metric === "total" ? 58 : 88 } },
+        // Left padding: Chrome draws a flag emoji a few pixels left of where
+        // measureText says it starts, so a label filling the gutter lost it.
+        layout: { padding: { left: 6, right: metric === "total" ? 58 : 88 } },
         plugins: {
           legend: { display: false },
           tooltip: {
             callbacks: {
+              // The full label: the axis may show it cut short.
+              title: (items) =>
+                items.length ? items[0].chart.data.labels[items[0].dataIndex] : "",
               label: (context) =>
                 `${context.dataset.label}: ${formatRankingValue(context.raw, metric, true)}`,
             },
@@ -247,7 +288,24 @@ Passport.charts = (() => {
             stacked: true,
             grid: { display: false },
             border: { display: false },
-            ticks: { autoSkip: false, color: theme.text, font: { size: 12 } },
+            afterFit: (scale) => {
+              scale.width = rankingGutter(scale.chart);
+            },
+            ticks: {
+              autoSkip: false,
+              color: theme.text,
+              font: { size: TICK_SIZE },
+              callback(value) {
+                const { ctx } = this.chart;
+                const width = rankingGutter(this.chart) - this.options.ticks.padding - 2;
+                ctx.save();
+                ctx.font = `${TICK_SIZE}px ${chartFont}`;
+                const parts = sharedParts(ctx, this.chart.data.labels, width);
+                const label = fitLabel(ctx, this.getLabelForValue(value), width, parts);
+                ctx.restore();
+                return label;
+              },
+            },
           },
         },
       },

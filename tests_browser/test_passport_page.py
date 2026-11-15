@@ -176,6 +176,52 @@ def test_the_ranking_dialog_opens_and_closes(open_passport):
     expect(dialog).to_be_hidden()
 
 
+def test_ranking_labels_fit_one_shared_gutter(open_passport, page):
+    """At 390px the ranking axes cut long labels off on the left, and each
+    chart sized its own gutter, so neighbouring bars started at different x.
+    Every ranking now shares one gutter and cuts a label to fit it, keeping
+    the full label for the tooltip."""
+    page.set_viewport_size(VIEWPORTS["mobile"])
+    long_name = "Boeing 787-10 Dreamliner with a very long name"
+    rows = [
+        row(
+            flight_date="2026-03-04",
+            origin="DXB",
+            destination="GRU",
+            carrier_code="EK",
+            flight_number="2107",
+            aircraft_type=long_name,
+            emissions_kg_actual="2500",
+        ),
+        *fixture_rows(),
+    ]
+    page = open_passport(rows)
+    rankings = ["routes", "carriers", "aircraft", "flights"]
+    gutters = {
+        page.evaluate("id => Chart.getChart(id).scales.y.width", canvas) for canvas in rankings
+    }
+    assert len(gutters) == 1, gutters
+
+    for canvas in [*rankings, "airports", "countries"]:
+        overflow = page.evaluate(
+            """id => {
+              const chart = Chart.getChart(id);
+              const scale = chart.scales.y;
+              chart.ctx.font = `12px ${Chart.defaults.font.family}`;
+              return scale.ticks
+                .filter(tick => chart.ctx.measureText(tick.label).width > scale.width)
+                .map(tick => tick.label);
+            }""",
+            canvas,
+        )
+        assert overflow == [], canvas
+
+    aircraft = page.evaluate("Chart.getChart('aircraft').scales.y.ticks.map(tick => tick.label)")
+    assert aircraft[0].endswith("…") and long_name.startswith(aircraft[0][:-1])
+    assert page.evaluate("Chart.getChart('aircraft').data.labels[0]") == long_name
+    assert page.evaluate("Chart.getChart('flights').scales.y.ticks[0].label").startswith("EK2107")
+
+
 def test_a_short_ranking_has_no_see_all(open_passport):
     page = open_passport()
     expect(page.locator("[data-ranking=routes]")).to_be_hidden()
