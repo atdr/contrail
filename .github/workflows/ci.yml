@@ -23,7 +23,7 @@ jobs:
   # The Codecov upload there is continue-on-error, so an outage cannot fail
   # the build, and codecov.yml keeps its statuses able to fail.
   python:
-    uses: atdr/github-boilerplate/.github/workflows/python-ci.yml@v0.4.0
+    uses: atdr/github-boilerplate/.github/workflows/python-ci.yml@v1.1.0
     with:
       # Every version requires-python in pyproject.toml admits.
       python-versions: '["3.11", "3.12", "3.13", "3.14"]'
