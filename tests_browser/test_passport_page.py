@@ -442,23 +442,29 @@ def test_every_chart_ticks_at_one_size_in_a_system_font(open_passport):
 def test_flight_tags_have_a_dark_scheme_of_their_own(open_passport, page):
     """In dark mode the tags kept their light pastel fills and white ring,
     bright stickers on a dark card. Each now has a dark variant."""
-    tags = ".flight-tag"
-    styles = """els => els.map(el => {
-      const style = getComputedStyle(el);
-      return [el.className, style.backgroundColor, style.color, style.boxShadow];
-    })"""
-
-    def luminance(colour: str) -> float:
-        channels = [float(part) for part in re.findall(r"[\d.]+", colour)[:3]]
-        return sum(
-            weight * value for weight, value in zip((0.2126, 0.7152, 0.0722), channels, strict=True)
-        )
+    # Each colour's relative luminance, 0 to 255, read back from a canvas so
+    # rgb() and the color(srgb ...) that color-mix() computes to compare alike.
+    styles = """els => {
+      const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+      const luminance = colour => {
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillStyle = colour;
+        ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      return els.map(el => {
+        const style = getComputedStyle(el);
+        return [el.className, luminance(style.backgroundColor), luminance(style.color),
+                style.boxShadow];
+      });
+    }"""
 
     page.emulate_media(color_scheme="light")
     page = open_passport()
-    light = page.locator(tags).evaluate_all(styles)
+    light = page.locator(".flight-tag").evaluate_all(styles)
     page.emulate_media(color_scheme="dark")
-    dark = page.locator(tags).evaluate_all(styles)
+    dark = page.locator(".flight-tag").evaluate_all(styles)
 
     assert {name for name, *_ in light} >= {
         "flight-tag cabin-business",
@@ -468,10 +474,10 @@ def test_flight_tags_have_a_dark_scheme_of_their_own(open_passport, page):
     for (name, light_fill, light_ink, light_ring), (_, fill, ink, ring) in zip(
         light, dark, strict=True
     ):
-        assert fill != light_fill and ink != light_ink and ring != light_ring, name
-        if "tag-unknown" not in name:
-            # Light ink on a dark fill, the reverse of the light scheme.
-            assert luminance(fill) < 90 < luminance(ink), (name, fill, ink)
+        assert ring != light_ring, name
+        # Dark ink on a light fill becomes light ink on a dark one.
+        assert light_fill > 180 > light_ink, (name, light_fill, light_ink)
+        assert fill < 90 < ink, (name, fill, ink)
 
 
 # -- incomplete data ----------------------------------------------------------
