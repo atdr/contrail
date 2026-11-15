@@ -4,7 +4,8 @@
 Passport.aggregate = (() => {
   "use strict";
 
-  const { visualCategory, monthOf, weekdayOf, MONTHS, WEEKDAYS } = Passport.format;
+  const { visualCategory, monthOf, weekdayOf, MONTHS, WEEKDAYS, UNKNOWN, unknownLast } =
+    Passport.format;
 
   const sum = (rows, field) => rows.reduce((total, row) => total + (row[field] || 0), 0);
   const withEmissions = (rows) => rows.filter((flight) => flight.kg !== null);
@@ -43,7 +44,7 @@ Passport.aggregate = (() => {
 
   // Every priced, completed flight counted once under each distinct label
   // `labelsFor` gives it, with a metric bucket for the whole entry and one per
-  // cabin and per reason. Heaviest first.
+  // cabin and per reason. Heaviest first, with Unknown last.
   function aggregateBy(rows, labelsFor) {
     const values = new Map();
     pricedCompleted(rows).forEach((flight) => {
@@ -66,11 +67,11 @@ Passport.aggregate = (() => {
         values.set(label, entry);
       });
     });
-    return [...values.values()].sort((a, b) => b.total - a.total);
+    return [...values.values()].sort((a, b) => unknownLast(a.label, b.label) || b.total - a.total);
   }
 
   // One label per flight, "Unknown" where it has none.
-  const rankAll = (rows, labeler) => aggregateBy(rows, (row) => [labeler(row) || "Unknown"]);
+  const rankAll = (rows, labeler) => aggregateBy(rows, (row) => [labeler(row) || UNKNOWN]);
 
   // [label, kg] pairs, heaviest first.
   const groupAll = (rows, labeler) =>
@@ -83,7 +84,9 @@ Passport.aggregate = (() => {
       const category = visualCategory(row, breakdown);
       totals.set(category, (totals.get(category) || 0) + row.kg);
     });
-    return [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([label]) => label);
+    return [...totals.entries()]
+      .sort((a, b) => unknownLast(a[0], b[0]) || b[1] - a[1])
+      .map(([label]) => label);
   }
 
   function rankingMetricValue(entry, metric) {
@@ -107,7 +110,7 @@ Passport.aggregate = (() => {
     return entries
       .map((entry) => ({ entry, value: rankingMetricValue(entry, metric) }))
       .filter((item) => item.value !== null)
-      .sort((a, b) => b.value - a.value)
+      .sort((a, b) => unknownLast(a.entry.label, b.entry.label) || b.value - a.value)
       .map((item) => item.entry);
   }
 

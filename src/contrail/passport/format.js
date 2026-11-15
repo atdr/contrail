@@ -53,6 +53,13 @@ Passport.format = (() => {
       : "🌐";
   }
 
+  // A ranking's catch-all entry: what flights with no route, airline,
+  // aircraft or reason are counted under. It always ranks after every known
+  // entry, whatever its size, so a large unknown never reads as the leader.
+  const UNKNOWN = "Unknown";
+  const isUnknown = (label) => label === UNKNOWN;
+  const unknownLast = (a, b) => Number(isUnknown(a)) - Number(isUnknown(b));
+
   const routeName = (flight) => `${flight.origin || "?"} → ${flight.destination || "?"}`;
 
   const cssColor = (name) =>
@@ -175,6 +182,9 @@ Passport.format = (() => {
     monthOf,
     weekdayOf,
     countryFlag,
+    UNKNOWN,
+    isUnknown,
+    unknownLast,
     routeName,
     cssColor,
     categoryColor,

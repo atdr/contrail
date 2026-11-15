@@ -14,6 +14,8 @@ Passport.charts = (() => {
     categoryColor,
     categoryIcon,
     visualCategory,
+    isUnknown,
+    unknownLast,
   } = Passport.format;
   const { sum, withEmissions, rankingMetricValue, rankingCategoryValue } = Passport.aggregate;
 
@@ -33,6 +35,9 @@ Passport.charts = (() => {
   Chart.defaults.plugins.tooltip.footerFont = { family: chartFont };
 
   const totalColor = () => cssColor("--total-value");
+  // A total bar's colour: grey for the Unknown entry, which is no one
+  // route, airline or aircraft and should not read as one.
+  const entryColor = (label) => cssColor(isUnknown(label) ? "--category-unknown" : "--total-value");
   const breakdownColor = (breakdown, category) =>
     breakdown === "total" ? totalColor() : categoryColor(breakdown, category);
 
@@ -252,7 +257,9 @@ Passport.charts = (() => {
         });
       });
     }
-    return [...categoryTotals.entries()].sort((a, b) => b[1] - a[1]).map((entry) => entry[0]);
+    return [...categoryTotals.entries()]
+      .sort((a, b) => unknownLast(a[0], b[0]) || b[1] - a[1])
+      .map((entry) => entry[0]);
   }
 
   function ranking(id, entries, breakdown, metric) {
@@ -266,8 +273,8 @@ Passport.charts = (() => {
             {
               label: "Total",
               data: totals,
-              backgroundColor: totalColor(),
-              hoverBackgroundColor: totalColor(),
+              backgroundColor: entries.map((entry) => entryColor(entry.label)),
+              hoverBackgroundColor: entries.map((entry) => entryColor(entry.label)),
               borderSkipped: false,
               borderRadius: { topLeft: 0, bottomLeft: 0, topRight: 7, bottomRight: 7 },
               barPercentage: 0.72,
@@ -392,14 +399,14 @@ Passport.charts = (() => {
         fill.style.width = `${maximum ? (total / maximum) * 100 : 0}%`;
         const parts =
           breakdown === "total"
-            ? [["Total", total, totalColor()]]
+            ? [["Total", total, entryColor(entry.label)]]
             : categories.map((category) => [
                 category,
                 rankingCategoryValue(entry, breakdown, category, metric),
                 categoryColor(breakdown, category),
               ]);
         const present = parts.filter(([, value]) => value > 0);
-        present.forEach(([category, value, color]) => {
+        present.forEach(([, value, color]) => {
           const segment = span("ranking-segment");
           segment.style.width = `${total ? (value / total) * 100 : 0}%`;
           segment.style.background = color;

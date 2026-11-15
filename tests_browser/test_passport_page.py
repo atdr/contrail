@@ -265,6 +265,53 @@ def test_ranking_labels_fit_one_shared_gutter(open_passport, page):
     assert page.evaluate("Chart.getChart('flights').scales.y.ticks[0].label").startswith("EK2107")
 
 
+def test_unknown_ranks_last_and_grey_whatever_its_size(open_passport):
+    """A heavy "Unknown" aircraft topped the ranking in the same teal as a
+    real aircraft. It is no one aircraft, so it sorts after every known
+    entry, in the chart and in See all, and its bar is grey."""
+    known = [f"Airbus A3{20 + index}" for index in range(7)]
+    rows = [
+        row(
+            flight_date=f"2026-0{index + 1}-01",
+            origin="LHR",
+            destination="JFK",
+            flight_number=str(index),
+            aircraft_type=name,
+            emissions_kg_actual=str(100 + index),
+        )
+        for index, name in enumerate([*known, ""])
+    ]
+    rows[-1]["emissions_kg_actual"] = "5000"
+    page = open_passport(rows)
+
+    labels = page.evaluate("Chart.getChart('aircraft').data.labels")
+    assert labels[0] == "Airbus A326"
+    assert "Unknown" not in labels  # the top six are all known
+    colours = page.evaluate("Chart.getChart('aircraft').data.datasets[0].backgroundColor")
+    assert len(set(colours)) == 1
+
+    page.locator("[data-ranking=aircraft]").click()
+    shown = page.locator("#ranking-dialog-list .ranking-label").all_inner_texts()
+    assert shown[-1] == "Unknown" and len(shown) == 8
+    fills = page.locator("#ranking-dialog-list .ranking-segment").evaluate_all(
+        "segments => segments.map(segment => getComputedStyle(segment).backgroundColor)"
+    )
+    assert fills[-1] == "rgb(118, 130, 123)" and fills[0] != fills[-1]
+
+    page = open_passport(rows[-2:], name="two.html")
+    assert page.evaluate("Chart.getChart('aircraft').data.labels") == ["Airbus A326", "Unknown"]
+    colours = page.evaluate("Chart.getChart('aircraft').data.datasets[0].backgroundColor")
+    assert colours[1] == "#76827b" and colours[0] != colours[1]
+
+
+def test_unknown_reason_is_the_last_category(open_passport):
+    page = open_passport()
+    reasons = page.locator("#reasons-legend .composition-label").all_inner_texts()
+    assert reasons[-1].endswith("Unknown"), reasons
+    page.locator("#pattern-breakdown-tabs [data-value=reason]").click()
+    assert list(datasets(page, "pattern-chart"))[-1] == "Unknown"
+
+
 def test_a_short_ranking_has_no_see_all(open_passport):
     page = open_passport()
     expect(page.locator("[data-ranking=routes]")).to_be_hidden()
