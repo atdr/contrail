@@ -400,7 +400,6 @@ Passport.charts = (() => {
           const segment = span("ranking-segment");
           segment.style.width = `${total ? (value / total) * 100 : 0}%`;
           segment.style.background = color;
-          segment.title = `${category}: ${formatRankingValue(value, metric, true)}`;
           fill.append(segment);
         });
         bar.append(fill);
@@ -410,17 +409,20 @@ Passport.charts = (() => {
           span("ranking-value", formatRankingValue(total, metric)),
           bar,
         );
+        // A breakdown is spelled out under the bar, not left to colour or a
+        // hover title: touch screens never show a title, and screen readers
+        // need the figures as text.
         if (breakdown !== "total") {
-          row.append(
-            span(
-              "visually-hidden",
-              present
-                .map(
-                  ([category, value]) => `${category} ${formatRankingValue(value, metric, true)}`,
-                )
-                .join(", "),
-            ),
-          );
+          const details = span("ranking-breakdown");
+          present.forEach(([category, value, color]) => {
+            const item = span("ranking-breakdown-item");
+            const swatch = span("ranking-swatch");
+            swatch.style.background = color;
+            swatch.setAttribute("aria-hidden", "true");
+            item.append(swatch, `${category} ${formatRankingValue(value, metric)}`);
+            details.append(item);
+          });
+          row.append(details);
         }
         return row;
       }),

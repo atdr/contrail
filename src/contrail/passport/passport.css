@@ -760,6 +760,8 @@ h3 {
   padding: 16px 20px 24px;
   overflow-y: auto;
 }
+/* list-style: none drops an <ol>'s list semantics in Safari, so the element
+   also carries role="list" in template.html. */
 .ranking-list {
   display: grid;
   gap: 14px;
@@ -806,13 +808,24 @@ h3 {
   flex: 0 0 auto;
   height: 100%;
 }
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
+.ranking-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 2 / -1;
+  gap: 4px 14px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.ranking-breakdown-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
+}
+.ranking-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
 }
 
 footer {

@@ -211,6 +211,9 @@ def test_the_ranking_dialog_lists_every_flight_with_its_breakdown(open_passport)
     expect(rows_shown.first.locator(".ranking-label")).to_have_text("BA239 · LHR–JFK · 2025-12-20")
     expect(rows_shown.first.locator(".ranking-segment")).to_have_count(1)
     assert rows_shown.locator(".ranking-segment").count() == 240
+    # The figures are visible text, since a touch screen never shows a title.
+    expect(rows_shown.first.locator(".ranking-breakdown")).to_have_text("Economy 339 kg")
+    expect(page.locator("#ranking-dialog-list")).to_have_attribute("role", "list")
 
 
 def test_ranking_labels_fit_one_shared_gutter(open_passport, page):
