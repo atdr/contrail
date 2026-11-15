@@ -307,9 +307,7 @@ Passport.charts = (() => {
         responsive: true,
         maintainAspectRatio: false,
         indexAxis: "y",
-        // Left padding: Chrome draws a flag emoji a few pixels left of where
-        // measureText says it starts, so a label filling the gutter lost it.
-        layout: { padding: { left: 6, right: metric === "total" ? 58 : 88 } },
+        layout: { padding: { right: metric === "total" ? 58 : 88 } },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -326,7 +324,9 @@ Passport.charts = (() => {
           x: { display: false, stacked: true, beginAtZero: true, max: maximum * 1.24 },
           y: {
             stacked: true,
-            grid: { display: false },
+            // No tick marks: they take 8px of the gutter even with the grid
+            // hidden, which is room the labels were measured to have.
+            grid: { display: false, drawTicks: false },
             border: { display: false },
             afterFit: (scale) => {
               scale.width = rankingGutter(scale.chart);

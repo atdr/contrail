@@ -245,9 +245,12 @@ def test_ranking_labels_fit_one_shared_gutter(open_passport, page):
               const chart = Chart.getChart(id);
               const scale = chart.scales.y;
               chart.ctx.font = `12px ${Chart.defaults.font.family}`;
-              return scale.ticks
-                .filter(tick => chart.ctx.measureText(tick.label).width > scale.width)
-                .map(tick => tick.label);
+              // Labels are right-aligned at their translation; each must
+              // start inside the canvas and the scale.
+              return scale.getLabelItems()
+                .filter(item => item.options.translation[0]
+                  - chart.ctx.measureText(item.label).width < scale.left)
+                .map(item => item.label);
             }""",
             canvas,
         )
