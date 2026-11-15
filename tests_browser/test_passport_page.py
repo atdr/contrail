@@ -299,6 +299,33 @@ def test_core_interactions_fit_the_viewport(open_passport, page, viewport):
 
 
 @pytest.mark.parametrize("viewport", VIEWPORTS.values(), ids=VIEWPORTS.keys())
+def test_period_charts_fit_their_card(open_passport, page, viewport):
+    """The trend and pattern charts had a minimum width, so on a phone they
+    scrolled inside the card from the oldest year. They fit the card now,
+    with level ticks, and months as initials when the chart is narrow."""
+    page.set_viewport_size(viewport)
+    page = open_passport()
+    for canvas in ["trend-chart", "pattern-chart"]:
+        chart = page.evaluate(
+            """id => {
+              const chart = Chart.getChart(id);
+              const card = chart.canvas.closest('section');
+              const style = getComputedStyle(card);
+              const inner = card.clientWidth - parseFloat(style.paddingLeft)
+                - parseFloat(style.paddingRight);
+              return { width: chart.width, inner, rotation: chart.scales.x.labelRotation,
+                       ticks: chart.scales.x.ticks.map(tick => tick.label) };
+            }""",
+            canvas,
+        )
+        assert chart["width"] <= chart["inner"] + 0.5, canvas
+        assert chart["rotation"] == 0, canvas
+    months = page.evaluate("Chart.getChart('pattern-chart').scales.x.ticks.map(t => t.label)")
+    narrow = page.evaluate("Chart.getChart('pattern-chart').width") < 420
+    assert months[:3] == (["J", "F", "M"] if narrow else ["Jan", "Feb", "Mar"])
+
+
+@pytest.mark.parametrize("viewport", VIEWPORTS.values(), ids=VIEWPORTS.keys())
 def test_segmented_controls_stay_one_row(open_passport, page, viewport):
     """Below 620px a wrapped pill turned into a lopsided blob. Each control
     is one row no wider than its section, and is a labelled group."""

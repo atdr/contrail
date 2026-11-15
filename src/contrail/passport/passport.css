@@ -384,18 +384,16 @@ h3 {
 .trend-chart,
 .pattern-chart {
   width: 100%;
-  overflow-x: auto;
+  min-width: 0;
 }
 .chart-stage {
   position: relative;
-  min-width: 720px;
   height: 270px;
 }
 .pattern-chart {
   height: 100%;
 }
 .pattern-chart .chart-stage {
-  min-width: 680px;
   min-height: 420px;
   height: 100%;
 }

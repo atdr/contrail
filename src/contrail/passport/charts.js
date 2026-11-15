@@ -9,6 +9,7 @@ Passport.charts = (() => {
     formatMassText,
     formatMassAxisTick,
     formatRankingValue,
+    MONTHS,
     cssColor,
     categoryColor,
     categoryIcon,
@@ -53,6 +54,25 @@ Passport.charts = (() => {
   const charts = new Map();
 
   const TICK_SIZE = 12;
+
+  // Below this width a period chart shortens its axis: month initials, and
+  // value labels a size smaller.
+  const narrow = (chart) => chart.width < 420;
+
+  // A period chart's x ticks: never rotated, thinned to what fits, and a
+  // month as its initial on a narrow chart.
+  const periodTicks = (color, extra = {}) => ({
+    autoSkip: true,
+    autoSkipPadding: 6,
+    maxRotation: 0,
+    minRotation: 0,
+    color,
+    ...extra,
+    callback(value) {
+      const label = String(this.getLabelForValue(value));
+      return narrow(this.chart) && MONTHS.includes(label) ? label[0] : label;
+    },
+  });
 
   // Every ranking chart's label gutter, the same share of its width within
   // fixed bounds, so rankings of one width start their bars at one x rather
@@ -134,30 +154,49 @@ Passport.charts = (() => {
   };
 
   // A mass above each vertical stack: `totals` and `unit` from
-  // chart.data.valueLabels.
+  // chart.data.valueLabels. Drawn newest first, each kept inside the canvas
+  // at either edge. When bars are narrow a label is wider than its bar, so
+  // one that would overlap a neighbouring bar or a label already drawn is
+  // left out rather than drawn as a smear.
   const periodValueLabels = {
     id: "passport-period-value-labels",
     afterDatasetsDraw(chart) {
       const { totals, unit } = chart.data.valueLabels;
-      const { ctx } = chart;
-      ctx.save();
-      ctx.fillStyle = chartTheme().text;
-      ctx.font = `500 12px ${chartFont}`;
-      totals.forEach((total, index) => {
-        const bars = chart.data.datasets
+      const { ctx, width } = chart;
+      const size = narrow(chart) ? 11 : 12;
+      const stacks = totals.map((_, index) =>
+        chart.data.datasets
           .map((dataset, datasetIndex) =>
             dataset.data[index] ? chart.getDatasetMeta(datasetIndex).data[index] : null,
           )
-          .filter(Boolean);
-        const anchor = bars.reduce(
-          (highest, bar) => (!highest || bar.y < highest.y ? bar : highest),
-          null,
+          .filter(Boolean)
+          .reduce((highest, bar) => (!highest || bar.y < highest.y ? bar : highest), null),
+      );
+      ctx.save();
+      ctx.fillStyle = chartTheme().text;
+      ctx.font = `500 ${size}px ${chartFont}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      let limit = Number.POSITIVE_INFINITY;
+      for (let index = totals.length - 1; index >= 0; index -= 1) {
+        const anchor = stacks[index];
+        if (!anchor) continue;
+        const text = formatMassText(totals[index], unit);
+        const half = ctx.measureText(text).width / 2;
+        const x = Math.min(Math.max(anchor.x, half), width - half);
+        const bottom = anchor.y - 7;
+        const blocked = stacks.some(
+          (bar, other) =>
+            bar &&
+            other !== index &&
+            bar.x + bar.width / 2 > x - half &&
+            bar.x - bar.width / 2 < x + half &&
+            bar.y < bottom,
         );
-        if (!anchor) return;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "bottom";
-        ctx.fillText(formatMassText(total, unit), anchor.x, anchor.y - 7);
-      });
+        if (blocked || x + half > limit - 4) continue;
+        ctx.fillText(text, x, bottom);
+        limit = x - half;
+      }
       ctx.restore();
     },
   };
@@ -437,7 +476,7 @@ Passport.charts = (() => {
             stacked: true,
             grid: { display: false },
             border: { color: theme.grid },
-            ticks: { autoSkip: false, color: theme.muted },
+            ticks: periodTicks(theme.muted),
           },
           y: {
             stacked: true,
@@ -545,7 +584,7 @@ Passport.charts = (() => {
             stacked: true,
             grid: { display: false },
             border: { color: theme.grid },
-            ticks: { autoSkip: false, color: theme.muted, font: { size: 11 } },
+            ticks: periodTicks(theme.muted, { font: { size: 11 } }),
           },
           y: {
             stacked: true,
