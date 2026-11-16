@@ -1055,6 +1055,57 @@ def test_a_chosen_year_says_how_it_compares_with_the_one_before(open_passport):
     assert " vs " not in text(page, "#hero-context")  # 2024 has no flights
 
 
+def test_the_view_survives_a_reload_through_the_hash(open_passport):
+    page = open_passport()
+    page.get_by_role("button", name="2026", exact=True).click()
+    page.locator("#metric-tabs [data-value=distance]").click()
+    page.locator("#trend-breakdown-tabs [data-value=cabin]").click()
+    page.locator("#pattern-tabs [data-value=weekday]").click()
+    click_bar(page, "routes", 0)
+    panel_says(page, "JFK ↔ LHR", "1 flight")
+    shared = page.evaluate("location.href")
+    assert "year=2026" in shared and "panel=route" in shared
+
+    page.reload(wait_until="networkidle")
+    panel_says(page, "JFK ↔ LHR", "1 flight")
+    pressed(page, "#periods button:text-is('2026')")
+    pressed(page, "#metric-tabs [data-value=distance]")
+    pressed(page, "#trend-breakdown-tabs [data-value=cabin]")
+    pressed(page, "#pattern-tabs [data-value=weekday]")
+
+    close_panel(page)
+    # The dialog hides at once but fires "close" a task later, and only then
+    # is the hash rewritten. Read it from the page: page.url lags too.
+    page.wait_for_function("!location.href.includes('panel=')")
+    page.get_by_role("button", name="All time").click()
+    page.locator("#metric-tabs [data-value=total]").click()
+    page.locator("#trend-breakdown-tabs [data-value=total]").click()
+    page.locator("#pattern-tabs [data-value=month]").click()
+    assert "#" not in page.evaluate("location.href")  # the default view needs no hash
+
+
+def test_a_malformed_hash_is_ignored(open_passport, problems):
+    page = open_passport()
+    base = page.url.split("#")[0]
+    page.goto(
+        f"{base}#year=abc&metric=%3Cb%3E&panel=route%3A%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E"
+        "&pattern=weekday",
+        wait_until="networkidle",
+    )
+    page.reload(wait_until="networkidle")
+    pressed(page, "#pattern-tabs [data-value=weekday]")  # the good part still applies
+    pressed(page, "#periods button:text-is('All time')")
+    pressed(page, "#metric-tabs [data-value=total]")
+    # A route no flight has opens an empty list, its name shown as text.
+    expect(page.locator("#flight-panel-title")).to_have_text("<img src=x onerror=alert(1)>")
+    assert page.locator("#flight-panel img").count() == 0
+
+    page.goto(f"{base}#panel=flight%3A999&panel=nonsense", wait_until="networkidle")
+    page.reload(wait_until="networkidle")
+    expect(page.locator("#flight-panel")).to_be_hidden()
+    assert problems == []
+
+
 def test_the_panel_fits_a_320px_phone(open_passport, page):
     page.set_viewport_size(VIEWPORTS["narrow"])
     page = open_passport()

@@ -64,6 +64,22 @@
   const parseValue = { year: (value) => (value === "all" ? null : Number(value)) };
   const controlValue = (value) => (value === null ? "all" : String(value));
 
+  // What each state key may hold, for reading the URL hash: a hash is typed
+  // or pasted by hand, so anything else in it is ignored.
+  const MEASURES = ["total", "distance", "duration"];
+  const BREAKDOWNS = ["total", "cabin", "reason"];
+  const ALLOWED = {
+    year: (value) => data.years.includes(Number(value)),
+    metric: (value) => MEASURES.includes(value),
+    pattern: (value) => ["month", "weekday"].includes(value),
+    trendBreakdown: (value) => BREAKDOWNS.includes(value),
+    patternBreakdown: (value) => BREAKDOWNS.includes(value),
+    driverBreakdown: (value) => BREAKDOWNS.includes(value),
+    driverMetric: (value) => MEASURES.includes(value),
+    networkMetric: (value) => MEASURES.includes(value),
+    panel: (value) => panel.describe(value) !== null,
+  };
+
   // The data behind each ranking's "See all" dialog, as last drawn.
   const rankingData = new Map();
 
@@ -368,6 +384,38 @@
     setState({ panel: key });
   }
 
+  // The view in the URL hash, so a reload or a shared link keeps it. Only
+  // what differs from the default is written; replaceState, so the back
+  // button leaves the page rather than stepping through every click.
+  function writeHash() {
+    const params = new URLSearchParams();
+    Object.keys(DEFAULTS).forEach((key) => {
+      if (state[key] !== DEFAULTS[key]) params.set(key, String(state[key]));
+    });
+    const hash = params.toString();
+    try {
+      history.replaceState(null, "", hash ? `#${hash}` : `${location.pathname}${location.search}`);
+    } catch {
+      // A sandboxed frame may refuse; the view simply is not kept.
+    }
+  }
+
+  function readHash() {
+    const patch = {};
+    let params;
+    try {
+      params = new URLSearchParams(location.hash.slice(1));
+    } catch {
+      return patch;
+    }
+    Object.keys(DEFAULTS).forEach((key) => {
+      const value = params.get(key);
+      if (value === null || !ALLOWED[key](value)) return;
+      patch[key] = key === "year" ? Number(value) : value;
+    });
+    return patch;
+  }
+
   function syncControls() {
     document.querySelectorAll("button[data-control]").forEach((button) => {
       const { control, value } = button.dataset;
@@ -386,7 +434,9 @@
   function setState(patch) {
     const changed = new Set(Object.keys(patch).filter((key) => state[key] !== patch[key]));
     Object.assign(state, patch);
-    if (changed.size) render(changed);
+    if (!changed.size) return;
+    render(changed);
+    writeHash();
   }
 
   function buildPeriods() {
@@ -467,6 +517,10 @@
   // is open redraws every section rather than leaving last scheme's ink.
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render());
 
+  // A hash edited by hand, or a link followed within the page, applies too.
+  window.addEventListener("hashchange", () => setState({ ...DEFAULTS, ...readHash() }));
+
+  Object.assign(state, readHash());
   buildPeriods();
   charts.onSelect(openPanel);
   map.setup(world, openPanel);
