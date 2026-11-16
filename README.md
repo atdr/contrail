@@ -119,17 +119,24 @@ HTML contains your itinerary, so keep it as private as the log itself. If you
 commit it, commit it only to a private repo, the way the
 [contrail-gh](https://github.com/atdr/contrail-gh) template does.
 
-Passport compares all time with individual years, and shows total CO2e, CO2e
-per kilometre and CO2e per scheduled block hour alongside the flights and
-routes that drove them. The annual trajectory and the month or weekday carbon
-patterns can each be split by cabin or reason. Airport and country connection
-counts appear in the overview, their CO2e contributions are ranked in the
-patterns section, and the lightest and heaviest individual flights are compared
-by total, per-kilometre and per-hour impact. Contributor rankings can use those
-same three measures and can be broken down by cabin or reason. Operating
-airlines are named from the bundled airline table, or shown by their code alone
-where that code has belonged to more than one airline. The offline route map can
-be panned and zoomed.
+Passport compares all time with individual years, and shows total CO2e, CO2e per
+kilometre and CO2e per scheduled block hour alongside the flights and routes
+that drove them. The annual trajectory and the month or weekday carbon patterns
+can each be split by cabin or reason. Airport and country connection counts
+appear in the overview, their CO2e contributions are ranked in the patterns
+section by total, per-kilometre or per-hour impact, and the lightest and
+heaviest individual flights are compared by total, per-kilometre and per-hour
+impact. Contributor rankings can use those same three measures and can be broken
+down by cabin or reason. Operating airlines are named from the bundled airline
+table, or shown by their code alone where that code has belonged to more than
+one airline. The offline route map can be panned and zoomed.
+
+Every bar, key entry, card, count and map route or airport opens a panel listing
+the flights behind it, which can be sorted and searched, and each flight expands
+to show its scheduled times, TIM's figure for every cabin, the contrail impact
+and the model version. The chosen year, measures, breakdowns and open panel are
+kept in the page's address, so a reload or a bookmarked link opens the same
+view.
 
 Distance is calculated consistently for every flight as the Haversine
 great-circle distance between the bundled airport coordinates. It is labelled
