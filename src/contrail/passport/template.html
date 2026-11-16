@@ -700,13 +700,13 @@
         </div>
         <p class="panel-status" id="flight-panel-status" aria-live="polite"></p>
         <div class="panel-scroll">
-          <table class="flight-table">
+          <table class="flight-table" role="table">
             <caption class="visually-hidden">
               Matching flights. Choose a column heading to sort, or a route
               to show that flight's details.
             </caption>
-            <thead id="flight-panel-head"></thead>
-            <tbody id="flight-panel-rows"></tbody>
+            <thead id="flight-panel-head" role="rowgroup"></thead>
+            <tbody id="flight-panel-rows" role="rowgroup"></tbody>
           </table>
           <p class="panel-empty" id="flight-panel-empty" hidden></p>
         </div>

@@ -262,10 +262,17 @@ Passport.panel = (() => {
     return node;
   };
 
+  // Roles stated outright: the stylesheet lays the table out as grid rows,
+  // and a table element that is not displayed as one loses its semantics.
+  const role = (node, name) => {
+    node.setAttribute("role", name);
+    return node;
+  };
+
   function buildHead() {
-    const row = document.createElement("tr");
+    const row = role(element("tr", "flight-head-row"), "row");
     COLUMNS.forEach((column) => {
-      const cell = element("th", column.numeric ? "numeric" : "");
+      const cell = role(element("th", column.numeric ? "numeric" : ""), "columnheader");
       cell.scope = "col";
       cell.dataset.sort = column.key;
       const button = element("button", "sort-button", column.label);
@@ -380,11 +387,14 @@ Passport.panel = (() => {
   // A flight's row, and its detail row beneath when it is open.
   function flightRows(flight) {
     const id = String(flight.id);
-    const row = element("tr", "flight-row");
+    const row = role(element("tr", "flight-row"), "row");
     row.dataset.flight = id;
     const open = view.expanded.has(id);
     COLUMNS.forEach((column) => {
-      const cell = element("td", `cell-${column.key}${column.numeric ? " numeric" : ""}`);
+      const cell = role(
+        element("td", `cell-${column.key}${column.numeric ? " numeric" : ""}`),
+        "cell",
+      );
       cell.dataset.label = column.label;
       if (column.key === "route") {
         const toggle = element("button", "flight-toggle", column.text(flight));
@@ -399,9 +409,9 @@ Passport.panel = (() => {
     });
     if (!open) return [row];
     row.classList.add("expanded");
-    const more = element("tr", "flight-detail");
+    const more = role(element("tr", "flight-detail"), "row");
     more.id = `flight-detail-${id}`;
-    const cell = element("td");
+    const cell = role(element("td"), "cell");
     cell.colSpan = COLUMNS.length;
     cell.append(detail(flight));
     more.append(cell);

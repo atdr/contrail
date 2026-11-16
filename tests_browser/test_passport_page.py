@@ -939,10 +939,10 @@ def test_the_flight_list_sorts_and_searches(open_passport):
     header.locator("button").click()
     expect(header).to_have_attribute("aria-sort", "descending")
     expect(date_header).not_to_have_attribute("aria-sort", re.compile("."))
-    assert kg.all_inner_texts()[0] == "800.0"
+    expect(kg.first).to_have_text("800.0")
     header.locator("button").click()
     expect(header).to_have_attribute("aria-sort", "ascending")
-    assert kg.all_inner_texts()[0] == "100.0"
+    expect(kg.first).to_have_text("100.0")
 
     page.locator("#flight-panel-search").fill("qf")  # the operating airline's code
     expect(page.locator("#flight-panel-rows tr")).to_have_count(1)

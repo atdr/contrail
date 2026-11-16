@@ -1175,19 +1175,37 @@ h3 {
   margin: 18px 8px;
   color: var(--muted);
 }
+/* The table lays out as grid rows rather than as a table: a table sizes
+   every column from every cell, so a thousand rows were laid out in full
+   before the panel could open, while a grid row can skip layout until it
+   is scrolled to (content-visibility below). panel.js gives each element
+   its table role, which the change of display would otherwise drop. */
 .flight-table {
+  display: block;
   width: 100%;
-  border-collapse: collapse;
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
 }
-.flight-table th {
+.flight-table thead {
+  display: block;
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 0;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
+}
+.flight-table tbody {
+  display: block;
+}
+.flight-head-row,
+.flight-row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.6fr) minmax(0, 1.6fr)
+    minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 1.3fr) minmax(0, 1.1fr);
+}
+.flight-table th {
+  padding: 0;
   font-weight: 500;
   text-align: left;
 }
@@ -1216,10 +1234,13 @@ th[aria-sort="descending"] .sort-button::after {
 }
 .flight-table td {
   padding: 9px 8px;
-  border-bottom: 1px solid var(--line);
-  vertical-align: top;
 }
+/* Rows off screen skip layout until scrolled to, which is what keeps a
+   list of a thousand flights quick to open. */
 .flight-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 38px;
+  border-bottom: 1px solid var(--line);
   cursor: pointer;
 }
 .flight-row:hover,
@@ -1228,6 +1249,7 @@ th[aria-sort="descending"] .sort-button::after {
 }
 .flight-toggle {
   padding: 0;
+  white-space: nowrap;
   border: 0;
   color: inherit;
   background: none;
@@ -1243,7 +1265,12 @@ th[aria-sort="descending"] .sort-button::after {
 .flight-toggle[aria-expanded="true"]::before {
   content: "▾ ";
 }
+.flight-detail {
+  display: block;
+  border-bottom: 1px solid var(--line);
+}
 .flight-detail td {
+  display: block;
   padding: 4px 8px 18px;
   background: var(--surface-soft);
 }
@@ -1416,21 +1443,15 @@ footer {
   .flight-table thead {
     display: none;
   }
-  .flight-table,
-  .flight-table tbody {
-    display: block;
-  }
   .flight-row {
-    display: grid;
+    contain-intrinsic-size: auto 92px;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px 10px;
     padding: 12px 8px;
-    border-bottom: 1px solid var(--line);
   }
   .flight-row td {
     min-width: 0;
     padding: 0;
-    border: 0;
     overflow-wrap: anywhere;
   }
   .flight-row .cell-route {
@@ -1477,11 +1498,7 @@ footer {
   .flight-row .cell-cabin {
     grid-column: 3;
   }
-  .flight-detail {
-    display: block;
-  }
   .flight-detail td {
-    display: block;
     padding: 6px 8px 16px;
   }
   .flight-facts {
