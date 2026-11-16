@@ -6,6 +6,8 @@ import requests
 from contrail.airlines import (
     AirlineResolver,
     _iata_from_claims,
+    _one_name,
+    airline_name,
     wikidata_iata_code,
     wikidata_iata_for_icao,
 )
@@ -349,3 +351,33 @@ def test_learning_ignores_blank_pairs(name, code):
 
     # Nothing was learned, so an airline the bundled table misses stays unknown.
     assert resolver.resolve("Albatross Airways") is None
+
+
+# -- naming an IATA code for display ------------------------------------------
+
+
+def test_an_iata_code_held_by_one_airline_is_named():
+    assert airline_name("AA") == "American Airlines"
+    assert airline_name(" aa ") == "American Airlines"
+
+
+def test_names_that_only_extend_one_brand_name_it():
+    """BA is both British Airways and British Airways Limited in the table:
+    one airline, so it is named rather than left as a bare code."""
+    assert airline_name("BA") == "British Airways"
+    assert _one_name({"Lufthansa", "Lufthansa Cargo"}) == "Lufthansa"
+
+
+def test_a_reused_iata_code_gets_no_name():
+    """IATA reissues a code once its holder stops flying: AN was Ansett
+    Australia and is Andorra Airlines. A row cannot say which, so neither."""
+    assert airline_name("AN") is None
+    assert _one_name({"Crossair", "Swiss International Air Lines"}) is None
+    # A shared first word is not one brand.
+    assert _one_name({"Air France", "Air Canada"}) is None
+
+
+@pytest.mark.parametrize("code", ["", None, "ZZ9"])
+def test_an_unknown_or_blank_iata_code_gets_no_name(code):
+    assert airline_name(code) is None
+    assert _one_name(set()) is None

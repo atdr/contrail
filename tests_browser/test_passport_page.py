@@ -15,6 +15,8 @@ import pytest
 from conftest import NOW, fixture_rows, row
 from playwright.sync_api import Page, expect
 
+from contrail.passport import render
+
 VIEWPORTS = {
     "desktop": {"width": 1280, "height": 800},
     "mobile": {"width": 390, "height": 844},
@@ -147,6 +149,154 @@ def test_patterns_and_rankings_break_down_by_cabin_and_reason(open_passport):
     expect(page.locator("#cabins-legend")).to_contain_text("82.9%")
 
 
+def test_a_key_appears_only_when_a_chart_is_broken_down(open_passport):
+    """Broken down, the stacks were colours with no key on the page; the
+    only names were in a tooltip. Each breakdown now has an HTML key in the
+    chart's stacking order, and Total, one colour, has none."""
+    page = open_passport()
+    keys = {
+        "#trend-legend": "#trend-breakdown-tabs",
+        "#pattern-legend": "#pattern-breakdown-tabs",
+        "#driver-legend": "#driver-tabs",
+    }
+    for key in keys:
+        expect(page.locator(key)).to_be_hidden()
+
+    for key, tabs in keys.items():
+        page.locator(f"{tabs} [data-value=cabin]").click()
+        expect(page.locator(key)).to_be_visible()
+    trend = page.locator("#trend-legend li").all_inner_texts()
+    assert [entry.split()[-1] for entry in trend] == ["Business", "Economy", "Upcoming"]
+    assert page.locator("#trend-legend li .category-icon").count() == 2
+    assert [entry.split()[-1] for entry in page.locator("#driver-legend li").all_inner_texts()] == [
+        "Business",
+        "Economy",
+    ]
+
+    page.locator("#pattern-breakdown-tabs [data-value=reason]").click()
+    pattern = [entry.split()[-1] for entry in page.locator("#pattern-legend li").all_inner_texts()]
+    assert pattern == list(datasets(page, "pattern-chart"))
+    swatch = page.locator("#pattern-legend .legend-swatch").first
+    assert swatch.evaluate("el => getComputedStyle(el).backgroundColor") == "rgb(220, 128, 68)"
+
+    for key, tabs in keys.items():
+        page.locator(f"{tabs} [data-value=total]").click()
+        expect(page.locator(key)).to_be_hidden()
+
+
+def hover(page: Page, canvas: str, index: int) -> None:
+    """Move the mouse onto the middle of bar `index` of the chart `canvas`."""
+    x, y = page.evaluate(
+        """([id, index]) => {
+          const chart = Chart.getChart(id);
+          const box = chart.canvas.getBoundingClientRect();
+          const bar = chart.getDatasetMeta(0).data[index];
+          const across = chart.options.indexAxis === 'y';
+          return [box.left + (across ? chart.chartArea.left + 4 : bar.x),
+                  box.top + (across ? bar.y : (chart.chartArea.top + chart.chartArea.bottom) / 2)];
+        }""",
+        [canvas, index],
+    )
+    page.mouse.move(x, y)
+
+
+def tooltip_lines(page: Page) -> list[str]:
+    tip = page.locator(".chart-tooltip")
+    expect(tip).to_be_visible()
+    return [
+        " ".join(row.split())
+        for row in tip.locator(".tooltip-title, .tooltip-row, .tooltip-total").all_inner_texts()
+    ]
+
+
+def test_chart_tooltips_are_one_html_element_without_zero_rows(open_passport, page):
+    """Chart.js drew its own black box, unlike the map's, and in Cabin mode
+    the trend listed every category twice, half of them "upcoming: 0 kg",
+    each in its own unit. One HTML tooltip now serves every chart, shows
+    only what is there in one unit, and totals a stack."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    assert page.evaluate(
+        "Object.values(Chart.instances).every(c => c.options.plugins.tooltip.enabled === false)"
+    )
+    page.locator("#trend-breakdown-tabs [data-value=cabin]").click()
+    page.locator("#trend-chart").scroll_into_view_if_needed()
+    hover(page, "trend-chart", 1)  # 2026: 310 kg flown, 900 kg booked, all economy
+    assert tooltip_lines(page) == [
+        "2026",
+        "Economy · upcoming 0.9 t",
+        "Economy · completed 0.3 t",
+        "Total 1.2 t",
+    ]
+    assert page.locator(".chart-tooltip").count() == 1
+
+    # It stays on screen, and goes when the page scrolls.
+    box = page.locator(".chart-tooltip").bounding_box()
+    assert box["x"] >= 0 and box["x"] + box["width"] <= VIEWPORTS["desktop"]["width"]
+    page.mouse.wheel(0, 200)
+    expect(page.locator(".chart-tooltip")).to_be_hidden()
+
+
+def test_a_ranking_tooltip_gives_the_entry_in_full(open_passport, page):
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    page.locator("#driver-tabs [data-value=cabin]").click()
+    page.locator("#routes").scroll_into_view_if_needed()
+    hover(page, "routes", 0)  # JFK-LHR: 1.5 t business, 250 kg economy
+    assert tooltip_lines(page)[:6] == [
+        "JFK ↔ LHR",
+        "Business 1.5 t",
+        "Economy 0.3 t",
+        "Total 1.8 t",
+        "Flights 2",
+        "Share of CO₂e 96.7%",
+    ]
+    details = page.locator(".chart-tooltip .tooltip-details").inner_text()
+    assert "g/km" in details and "kg/hr" in details
+    # The tooltip is hidden from assistive technology, so the same details
+    # are in the canvas's accessible name.
+    label = page.locator("#routes").get_attribute("aria-label")
+    assert "Flights 2, Share of CO₂e 96.7%" in label
+
+    # The chart tooltip and the map's are one style.
+    style = """el => {
+      const s = getComputedStyle(el);
+      return [s.backgroundColor, s.borderRadius, s.fontSize];
+    }"""
+    chart_style = page.locator(".chart-tooltip").evaluate(style)
+    page.locator(".leaflet-airports-pane path").last.hover(force=True)
+    assert page.locator(".leaflet-tooltip").evaluate(style) == chart_style
+
+
+def test_a_tooltip_stays_above_the_bottom_of_the_viewport(open_passport, page):
+    """With a chart only partly on screen, index interaction could pick a
+    point whose caret sat below the viewport, and the tooltip followed it
+    off the bottom edge."""
+    page.set_viewport_size({"width": 1280, "height": 500})
+    page = open_passport()
+    page.evaluate(
+        """() => {
+          const box = document.getElementById('pattern-chart').getBoundingClientRect();
+          window.scrollBy(0, box.top - window.innerHeight + 60);
+        }"""
+    )
+    # A scroll hides the tooltip, and its event lands a frame later.
+    page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+    page.evaluate(
+        """() => {
+          const chart = Chart.getChart('pattern-chart');
+          const index = chart.data.datasets[0].data.findIndex((value) => value > 0);
+          chart.tooltip.setActiveElements([{ datasetIndex: 0, index }],
+            { x: chart.getDatasetMeta(0).data[index].x, y: chart.chartArea.bottom });
+          chart.update('none');
+        }"""
+    )
+    tip = page.locator(".chart-tooltip")
+    expect(tip).to_be_visible()
+    box = tip.bounding_box()
+    assert box["y"] + box["height"] <= 500 - 8
+
+
 def test_the_ranking_dialog_opens_and_closes(open_passport):
     destinations = ["JFK", "CDG", "SIN", "AMS", "DXB", "HND", "SYD", "LAX"]
     rows = [
@@ -170,6 +320,8 @@ def test_the_ranking_dialog_opens_and_closes(open_passport):
     expect(rows_shown.first.locator(".ranking-rank")).to_have_text("1")
     expect(rows_shown.first.locator(".ranking-label")).to_have_text("LAX ↔ LHR")
     expect(rows_shown.first.locator(".ranking-value")).to_have_text("800 kg")
+    # What a hover gives on the chart, a row gives as text.
+    expect(rows_shown.first.locator(".ranking-details")).to_contain_text("Flight 1, Share of CO₂e")
     assert dialog.locator("canvas").count() == 0
     page.locator("#ranking-dialog-close").click()
     expect(dialog).to_be_hidden()
@@ -208,12 +360,36 @@ def test_the_ranking_dialog_lists_every_flight_with_its_breakdown(open_passport)
     )
     rows_shown = page.locator("#ranking-dialog-list > li")
     expect(rows_shown).to_have_count(240)
-    expect(rows_shown.first.locator(".ranking-label")).to_have_text("BA239 · LHR–JFK · 2025-12-20")
+    expect(rows_shown.first.locator(".ranking-label")).to_have_text("BA239 · LHR–JFK · 20 Dec 2025")
     expect(rows_shown.first.locator(".ranking-segment")).to_have_count(1)
     assert rows_shown.locator(".ranking-segment").count() == 240
     # The figures are visible text, since a touch screen never shows a title.
     expect(rows_shown.first.locator(".ranking-breakdown")).to_have_text("Economy 339 kg")
     expect(page.locator("#ranking-dialog-list")).to_have_attribute("role", "list")
+
+
+def test_flight_dates_read_in_the_locale(open_passport):
+    """Cards and flight labels showed ISO dates while the footer used the
+    reader's locale. They all use the locale now."""
+    page = open_passport()
+    expect(page.locator("#heaviest-total p")).to_have_text("1.5 t CO₂e · BA1 · 10 May 2025")
+    assert page.evaluate("Chart.getChart('flights').data.labels[0]") == (
+        "BA1 · LHR–JFK · 10 May 2025"
+    )
+
+
+@pytest.mark.parametrize("timezone", ["America/Los_Angeles", "Pacific/Kiritimati"])
+def test_a_flight_date_never_moves_a_day(browser, tmp_path, timezone):
+    """A calendar day read as local midnight shows as the day before west of
+    UTC. It is read and written as UTC, so it reads the same everywhere."""
+    output = render(fixture_rows(), tmp_path / "passport.html", NOW)
+    context = browser.new_context(locale="en-GB", timezone_id=timezone)
+    try:
+        page = context.new_page()
+        page.goto(output.as_uri())
+        expect(page.locator("#heaviest-total p")).to_contain_text("10 May 2025")
+    finally:
+        context.close()
 
 
 def test_ranking_labels_fit_one_shared_gutter(open_passport, page):
@@ -265,6 +441,78 @@ def test_ranking_labels_fit_one_shared_gutter(open_passport, page):
     assert page.evaluate("Chart.getChart('flights').scales.y.ticks[0].label").startswith("EK2107")
 
 
+def test_unknown_ranks_last_and_grey_whatever_its_size(open_passport):
+    """A heavy "Unknown" aircraft topped the ranking in the same teal as a
+    real aircraft. It is no one aircraft, so it sorts after every known
+    entry, in the chart and in See all, and its bar is grey."""
+    known = [f"Airbus A3{20 + index}" for index in range(7)]
+    rows = [
+        row(
+            flight_date=f"2026-0{index + 1}-01",
+            origin="LHR",
+            destination="JFK",
+            flight_number=str(index),
+            aircraft_type=name,
+            emissions_kg_actual=str(100 + index),
+        )
+        for index, name in enumerate([*known, ""])
+    ]
+    rows[-1]["emissions_kg_actual"] = "5000"
+    page = open_passport(rows)
+
+    labels = page.evaluate("Chart.getChart('aircraft').data.labels")
+    assert labels[0] == "Airbus A326"
+    assert "Unknown" not in labels  # the top six are all known
+    colours = page.evaluate("Chart.getChart('aircraft').data.datasets[0].backgroundColor")
+    assert len(set(colours)) == 1
+
+    page.locator("[data-ranking=aircraft]").click()
+    shown = page.locator("#ranking-dialog-list .ranking-label").all_inner_texts()
+    assert shown[-1] == "Unknown" and len(shown) == 8
+    fills = page.locator("#ranking-dialog-list .ranking-segment").evaluate_all(
+        "segments => segments.map(segment => getComputedStyle(segment).backgroundColor)"
+    )
+    assert fills[-1] == "rgb(118, 130, 123)" and fills[0] != fills[-1]
+
+    page = open_passport(rows[-2:], name="two.html")
+    assert page.evaluate("Chart.getChart('aircraft').data.labels") == ["Airbus A326", "Unknown"]
+    colours = page.evaluate("Chart.getChart('aircraft').data.datasets[0].backgroundColor")
+    assert colours[1] == "#76827b" and colours[0] != colours[1]
+
+
+def test_unknown_reason_is_the_last_category(open_passport):
+    page = open_passport()
+    reasons = page.locator("#reasons-legend .composition-label").all_inner_texts()
+    assert reasons[-1].endswith("Unknown"), reasons
+    page.locator("#pattern-breakdown-tabs [data-value=reason]").click()
+    assert list(datasets(page, "pattern-chart"))[-1] == "Unknown"
+
+
+def test_country_charts_name_countries_without_flags(open_passport):
+    """Windows draws a flag emoji as two letters, so the canvas showed
+    "GB United Kingdom". The chart names the country; the See all list,
+    where the name is also shown, keeps the flag."""
+    rows = [
+        row(
+            flight_date=f"2026-0{index + 1}-01",
+            origin="LHR",
+            destination=destination,
+            flight_number=str(index),
+            emissions_kg_actual=str(100 * (index + 1)),
+        )
+        for index, destination in enumerate(["JFK", "CDG", "AMS", "FRA", "MAD", "FCO", "DXB"])
+    ]
+    page = open_passport(rows)
+    labels = page.evaluate("Chart.getChart('countries').data.labels")
+    assert labels[:3] == ["United Kingdom", "United Arab Emirates", "Italy"]
+    assert all(label.isascii() for label in labels), labels
+
+    page.locator("[data-ranking=countries]").click()
+    first = page.locator("#ranking-dialog-list .ranking-label").first
+    expect(first).to_have_text("🇬🇧 United Kingdom")
+    assert first.locator(".ranking-flag").get_attribute("aria-hidden") == "true"
+
+
 def test_a_short_ranking_has_no_see_all(open_passport):
     page = open_passport()
     expect(page.locator("[data-ranking=routes]")).to_be_hidden()
@@ -288,6 +536,68 @@ def test_charts_follow_a_scheme_change_while_open(open_passport, page):
         "rgb(241, 246, 242)"
     )
     assert page.evaluate("Chart.getChart('trend-chart').options.scales.y.grid.color") != light_grid
+
+
+def test_every_chart_ticks_at_one_size_in_a_system_font(open_passport):
+    """The trend's year axis was 11px against 12px elsewhere, and the stack
+    began with Inter, which is not bundled, so charts measured their labels
+    in whichever font a machine happened to have."""
+    page = open_passport()
+    sizes = page.evaluate(
+        """() => Object.values(Chart.instances).flatMap(chart =>
+             Object.values(chart.scales)
+               .filter(scale => scale.options.display !== false)
+               .map(scale => [chart.canvas.id, scale.id, scale._resolveTickFontOptions(0).size]))"""
+    )
+    assert sizes and {size for _, _, size in sizes} == {12}, sizes
+    font = page.evaluate("getComputedStyle(document.documentElement).fontFamily")
+    assert "Inter" not in font and font.startswith("ui-sans-serif")
+
+
+def test_flight_tags_have_a_dark_scheme_of_their_own(open_passport, page):
+    """In dark mode the tags kept their light pastel fills and white ring,
+    bright stickers on a dark card. Each now has a dark variant."""
+    # Each colour's relative luminance, 0 to 255. Chrome reports a plain
+    # colour as rgb() and a color-mix() as color(srgb r g b) with 0 to 1
+    # channels; both are parsed here.
+    styles = """els => {
+      const luminance = colour => {
+        const srgb = colour.match(/^color\\(srgb ([\\d.]+) ([\\d.]+) ([\\d.]+)/);
+        const [r, g, b] = srgb
+          ? srgb.slice(1, 4).map(channel => Number(channel) * 255)
+          : colour.match(/[\\d.]+/g).slice(0, 3).map(Number);
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      return els.map(el => {
+        const style = getComputedStyle(el);
+        return [el.className, luminance(style.backgroundColor), luminance(style.color),
+                style.boxShadow];
+      });
+    }"""
+
+    page.emulate_media(color_scheme="light")
+    page = open_passport()
+    light = page.locator(".flight-tag").evaluate_all(styles)
+    page.emulate_media(color_scheme="dark")
+    # The scheme change redraws the page, cards and their tags included, in
+    # a task of its own. Read the tags only once that redraw has replaced
+    # them, or a detached tag reports no colour at all.
+    page.wait_for_function("() => matchMedia('(prefers-color-scheme: dark)').matches")
+    page.evaluate("() => new Promise(r => setTimeout(() => requestAnimationFrame(r)))")
+    dark = page.locator(".flight-tag").evaluate_all(styles)
+
+    assert {name for name, *_ in light} >= {
+        "flight-tag cabin-business",
+        "flight-tag cabin-economy",
+        "flight-tag reason-business",
+    }
+    for (name, light_fill, light_ink, light_ring), (_, fill, ink, ring) in zip(
+        light, dark, strict=True
+    ):
+        assert ring != light_ring, name
+        # Dark ink on a light fill becomes light ink on a dark one.
+        assert light_fill > 180 > light_ink, (name, light_fill, light_ink)
+        assert fill < 90 < ink, (name, fill, ink)
 
 
 # -- incomplete data ----------------------------------------------------------
@@ -388,6 +698,76 @@ def test_segmented_controls_stay_one_row(open_passport, page, viewport):
         assert control.evaluate("el => el.scrollWidth <= el.clientWidth"), name
     expect(page.get_by_role("group", name="Headline measure")).to_be_visible()
     expect(page.get_by_role("group", name="Carbon impact grouping")).to_be_visible()
+
+
+TAP_TARGETS = ".see-all, .metric-tabs button, .pattern-tabs button, .leaflet-control-zoom a"
+
+
+def tap_target_sizes(page: Page) -> list[tuple[str, float, float]]:
+    # See all buttons hide on a short ranking; measure them shown.
+    page.evaluate("document.querySelectorAll('.see-all').forEach(b => { b.hidden = false; })")
+    return page.locator(TAP_TARGETS).evaluate_all(
+        """els => els.map(el => {
+          const box = el.getBoundingClientRect();
+          return [el.className || el.textContent.trim(), box.width, box.height];
+        })"""
+    )
+
+
+def test_touch_screens_get_44px_tap_targets(browser, tmp_path):
+    """See all was 63x28, segmented buttons 36px tall and the map's zoom
+    buttons 30x30: under a fingertip on a phone. Where the pointer is coarse
+    each is at least 44px tall, and the zoom buttons 44px square."""
+    output = render(fixture_rows(), tmp_path / "passport.html", NOW)
+    context = browser.new_context(
+        viewport=VIEWPORTS["mobile"], has_touch=True, is_mobile=True, locale="en-GB"
+    )
+    try:
+        page = context.new_page()
+        page.goto(output.as_uri())
+        page.locator("#hero-value").filter(has_text="CO").wait_for()
+        sizes = tap_target_sizes(page)
+        # Six See all, the headline measure, five segmented controls, zoom.
+        assert len(sizes) == 6 + 3 + 14 + 2, sizes
+        assert [size for size in sizes if size[2] < 44] == []
+        zoom = [size for size in sizes if "leaflet-control-zoom" in size[0]]
+        assert len(zoom) == 2 and all(width >= 44 for _, width, _ in zoom)
+    finally:
+        context.close()
+
+
+def test_a_mouse_keeps_the_compact_controls(open_passport, page):
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    heights = {name: height for name, _, height in tap_target_sizes(page)}
+    assert max(heights.values()) < 44, heights
+
+
+@pytest.mark.parametrize(
+    ("viewport", "columns"),
+    [(VIEWPORTS["desktop"], 3), ({"width": 768, "height": 1024}, 3), (VIEWPORTS["mobile"], 2)],
+    ids=["desktop", "tablet", "mobile"],
+)
+def test_the_summary_is_an_even_grid(open_passport, page, viewport, columns):
+    """The six stats wrapped five and one, leaving Countries alone on a row."""
+    page.set_viewport_size(viewport)
+    page = open_passport()
+    boxes = page.locator(".summary-item").evaluate_all(
+        "els => els.map(el => [Math.round(el.getBoundingClientRect().left),"
+        " Math.round(el.getBoundingClientRect().top)])"
+    )
+    assert len({left for left, _ in boxes}) == columns
+    assert len({top for _, top in boxes}) == 6 // columns
+
+
+def test_the_trend_note_sits_level_with_the_chart(open_passport, page):
+    """The note was pinned to the bottom of its column, with empty space
+    above it beside the chart."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    note = page.locator(".trend-note").bounding_box()
+    chart = page.locator(".trend-chart").bounding_box()
+    assert abs(note["y"] - chart["y"]) < 1
 
 
 # -- regressions from shipped fixes -------------------------------------------

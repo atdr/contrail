@@ -23,11 +23,16 @@
   --reason-leisure: #efbe4f;
   --reason-crew: #a95a32;
   --category-unknown: #76827b;
+  /* What a flight tag's category colour is mixed into in dark mode: the
+     dark card, so a tag reads as a tint of it rather than a pastel sticker. */
+  --tag-dark-base: #17211b;
   --control-active: light-dark(#26322b, #e3ebe6);
   --control-active-text: light-dark(#ffffff, #132019);
   --shadow: light-dark(0 18px 55px rgba(29, 53, 39, 0.12), 0 18px 55px rgba(0, 0, 0, 0.34));
-  --font-sans:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* The system stack only. A named web font that is not bundled renders
+     only where it happens to be installed, so the charts, which measure their
+     labels in this font, would lay out differently per machine. */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-family: var(--font-sans);
   color: var(--text);
   background: var(--page);
@@ -241,15 +246,13 @@ h3 {
   color: var(--muted);
 }
 
+/* Six stats as an even grid, 3 by 2 and 2 by 3 on a phone. A wrapping row
+   left the sixth alone on a line of its own. */
 .summary-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px 18px;
   margin-top: 28px;
-}
-.summary-grid > * {
-  flex: 1 1 auto;
-  min-width: 72px;
 }
 .summary-item {
   padding-top: 12px;
@@ -307,11 +310,84 @@ h3 {
   box-shadow: none;
   text-shadow: none;
 }
+/* Every tooltip on the page, the charts' and the map's, is one element
+   style. Leaflet's own rule sets a white box with a pointer; this one, in a
+   later stylesheet at the same specificity, replaces it. */
+.chart-tooltip,
 .leaflet-tooltip {
-  color: #132019;
-  border: 0;
-  border-radius: 9px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 10px 28px light-dark(rgba(19, 32, 25, 0.16), rgba(0, 0, 0, 0.45));
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.leaflet-tooltip::before {
+  display: none;
+}
+.chart-tooltip {
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 16px));
+  pointer-events: none;
+}
+.chart-tooltip[hidden] {
+  display: none;
+}
+.tooltip-title {
+  margin-bottom: 5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.tooltip-row,
+.tooltip-total {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+/* 1fr rather than minmax(0, 1fr): a tooltip is as wide as its content,
+   and a zero minimum lets the label collapse under the value. */
+.tooltip-row.plain {
+  grid-template-columns: 1fr auto;
+}
+.tooltip-row + .tooltip-row {
+  margin-top: 2px;
+}
+.tooltip-value {
+  text-align: right;
+  white-space: nowrap;
+}
+.tooltip-total {
+  grid-template-columns: 1fr auto;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+  font-weight: 600;
+}
+.tooltip-details {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+.tooltip-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--swatch);
+}
+.tooltip-swatch.hatched {
+  background: repeating-linear-gradient(135deg, var(--swatch) 0 2px, transparent 2px 4px);
+  box-shadow: inset 0 0 0 1px var(--swatch);
 }
 .map-caption {
   position: absolute;
@@ -379,7 +455,7 @@ h3 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(230px, 0.3fr);
   gap: 30px;
-  align-items: end;
+  align-items: start;
 }
 .trend-chart,
 .pattern-chart {
@@ -390,12 +466,48 @@ h3 {
   position: relative;
   height: 270px;
 }
+/* A column, so the key below the chart takes its height from the chart's
+   share rather than overflowing a cell the rankings beside it set. */
 .pattern-chart {
-  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 .pattern-chart .chart-stage {
+  flex: 1 1 auto;
   min-height: 420px;
-  height: 100%;
+  height: auto;
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 14px 0 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  list-style: none;
+}
+.chart-legend[hidden] {
+  display: none;
+}
+.chart-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.legend-swatch {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+.legend-swatch.upcoming {
+  background: repeating-linear-gradient(135deg, var(--muted) 0 2px, transparent 2px 5px);
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+.driver-legend {
+  margin: 0 0 18px;
 }
 .trend-note {
   padding: 18px;
@@ -582,7 +694,9 @@ h3 {
   gap: 6px;
   padding: 5px 9px;
   border-radius: 999px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+  /* A light ring lifts a pastel tag off a light card. On a dark card it
+     would outline every tag in white, so there it is barely there. */
+  box-shadow: inset 0 0 0 1px light-dark(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.07));
   font-size: 0.8rem;
 }
 .category-icon {
@@ -612,40 +726,61 @@ h3 {
 }
 .cabin-first {
   --icon-bg: var(--cabin-first);
-  color: #17365f;
-  background: #cddff3;
+  color: light-dark(#17365f, #d5e5f7);
+  background: light-dark(#cddff3, color-mix(in srgb, var(--cabin-first) 42%, var(--tag-dark-base)));
 }
 .cabin-business {
   --icon-bg: var(--cabin-business);
-  color: #113a68;
-  background: #d6eaff;
+  color: light-dark(#113a68, #d6eaff);
+  background: light-dark(
+    #d6eaff,
+    color-mix(in srgb, var(--cabin-business) 38%, var(--tag-dark-base))
+  );
 }
 .cabin-premium {
   --icon-bg: var(--cabin-premium);
-  color: #174b72;
-  background: #d8edf8;
+  color: light-dark(#174b72, #d8edf8);
+  background: light-dark(
+    #d8edf8,
+    color-mix(in srgb, var(--cabin-premium) 34%, var(--tag-dark-base))
+  );
 }
 .cabin-economy {
   --icon-bg: var(--cabin-economy);
-  color: #17485f;
-  background: #daf1fb;
+  color: light-dark(#17485f, #daf1fb);
+  background: light-dark(
+    #daf1fb,
+    color-mix(in srgb, var(--cabin-economy) 28%, var(--tag-dark-base))
+  );
 }
 .cabin-private {
   --icon-bg: var(--cabin-private);
-  color: #10294f;
-  background: #c8d7ec;
+  color: light-dark(#10294f, #d3dff0);
+  background: light-dark(
+    #c8d7ec,
+    color-mix(in srgb, var(--cabin-private) 55%, var(--tag-dark-base))
+  );
 }
 .reason-business {
-  color: #5b3511;
-  background: color-mix(in srgb, var(--reason-business) 28%, #fff);
+  color: light-dark(#5b3511, #f6d4bc);
+  background: light-dark(
+    color-mix(in srgb, var(--reason-business) 28%, #fff),
+    color-mix(in srgb, var(--reason-business) 30%, var(--tag-dark-base))
+  );
 }
 .reason-leisure {
-  color: #704b00;
-  background: color-mix(in srgb, var(--reason-leisure) 32%, #fff);
+  color: light-dark(#704b00, #f8e3ad);
+  background: light-dark(
+    color-mix(in srgb, var(--reason-leisure) 32%, #fff),
+    color-mix(in srgb, var(--reason-leisure) 24%, var(--tag-dark-base))
+  );
 }
 .reason-crew {
-  color: #542711;
-  background: color-mix(in srgb, var(--reason-crew) 26%, #fff);
+  color: light-dark(#542711, #f1cdb8);
+  background: light-dark(
+    color-mix(in srgb, var(--reason-crew) 26%, #fff),
+    color-mix(in srgb, var(--reason-crew) 36%, var(--tag-dark-base))
+  );
 }
 .tag-unknown {
   color: var(--muted);
@@ -816,6 +951,11 @@ h3 {
   color: var(--muted);
   font-size: 0.86rem;
 }
+.ranking-details {
+  grid-column: 2 / -1;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
 .ranking-breakdown-item {
   display: inline-flex;
   align-items: center;
@@ -857,9 +997,6 @@ footer {
   .quality-groups {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .summary-grid > * {
-    flex-basis: calc(33.333% - 18px);
-  }
 }
 
 @media (max-width: 620px) {
@@ -871,8 +1008,8 @@ footer {
   .header-inner {
     padding-top: 24px;
   }
-  .summary-grid > * {
-    flex-basis: calc(50% - 18px);
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .drivers {
     grid-template-columns: minmax(0, 1fr);
@@ -899,10 +1036,8 @@ footer {
   .chart-stage {
     height: 235px;
   }
-  .pattern-chart {
-    height: auto;
-  }
   .pattern-chart .chart-stage {
+    flex: none;
     min-height: 0;
     height: 245px;
   }
@@ -956,5 +1091,25 @@ footer {
   .pattern-tabs button {
     padding-inline: 7px;
     font-size: 0.875rem;
+  }
+}
+
+/* A finger needs about 44px. Only where the pointer is one: a mouse is
+   precise, and desktop keeps its compact controls. Leaflet sizes its touch
+   zoom buttons with a (0, 2, 1) selector, matched here so this one, coming
+   later, wins without !important. */
+@media (pointer: coarse) {
+  .see-all,
+  .metric-tabs button,
+  .pattern-tabs button {
+    min-height: 44px;
+  }
+  .see-all {
+    padding-inline: 14px;
+  }
+  .leaflet-touch .leaflet-control-zoom a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
   }
 }

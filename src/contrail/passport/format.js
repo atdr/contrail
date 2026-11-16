@@ -20,12 +20,16 @@ Passport.format = (() => {
     unit === "t" ? `${formatNumber(kg / 1000, 1)} t` : `${formatNumber(kg, 1)} kg`;
   const formatMassAxisTick = (kg, maximum) => formatMassText(kg, maximum >= 1000 ? "t" : "kg");
 
-  function formatRankingValue(value, metric, includeCarbon = false) {
+  // One unit for a set of masses shown together, from the largest, so a
+  // tooltip never reads "900 kg" over "1.2 t".
+  const massUnit = (values) => (Math.max(0, ...values) >= 1000 ? "t" : "kg");
+
+  function formatRankingValue(value, metric, includeCarbon = false, unit = undefined) {
     if (metric === "distance")
       return `${formatNumber(value, 1)} g${includeCarbon ? " CO₂e / passenger-km" : "/km"}`;
     if (metric === "duration")
       return `${formatNumber(value, 1)} kg${includeCarbon ? " CO₂e / block hour" : "/hr"}`;
-    return `${formatMassText(value)}${includeCarbon ? " CO₂e" : ""}`;
+    return `${formatMassText(value, unit)}${includeCarbon ? " CO₂e" : ""}`;
   }
 
   const MONTHS = [
@@ -47,11 +51,29 @@ Passport.format = (() => {
   // getUTCDay() counts from Sunday; the charts start the week on Monday.
   const weekdayOf = (isoDate) => WEEKDAYS[(new Date(`${isoDate}T00:00:00Z`).getUTCDay() + 6) % 7];
 
+  // A flight's ISO date in the reader's locale, as the footer's timestamp
+  // is. Read and written as UTC: the date is a calendar day, not an instant,
+  // so no time zone may move it to the day before.
+  const formatDate = (isoDate) =>
+    new Date(`${isoDate}T00:00:00Z`).toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+
   function countryFlag(code) {
     return /^[A-Z]{2}$/.test(code)
       ? String.fromCodePoint(...[...code].map((letter) => 127397 + letter.charCodeAt()))
       : "🌐";
   }
+
+  // A ranking's catch-all entry: what flights with no route, airline,
+  // aircraft or reason are counted under. It always ranks after every known
+  // entry, whatever its size, so a large unknown never reads as the leader.
+  const UNKNOWN = "Unknown";
+  const isUnknown = (label) => label === UNKNOWN;
+  const unknownLast = (a, b) => Number(isUnknown(a)) - Number(isUnknown(b));
 
   const routeName = (flight) => `${flight.origin || "?"} → ${flight.destination || "?"}`;
 
@@ -163,6 +185,42 @@ Passport.format = (() => {
     return tags;
   }
 
+  // The content of every tooltip on the page, chart or map, so they read as
+  // one: a title, rows with a colour swatch, an optional total line, and
+  // muted detail rows. A row is { label, value, color?, hatched? }.
+  function tooltipContent({ title, rows = [], total = null, details = [] }) {
+    const element = (className, text = "") => {
+      const node = document.createElement("div");
+      node.className = className;
+      node.textContent = text;
+      return node;
+    };
+    const line = (className, { label, value, color, hatched }) => {
+      const row = element(className);
+      if (color) {
+        const swatch = element(`tooltip-swatch${hatched ? " hatched" : ""}`);
+        swatch.style.setProperty("--swatch", color);
+        row.append(swatch);
+      }
+      row.append(element("tooltip-label", label), element("tooltip-value", value));
+      return row;
+    };
+    const content = element("tooltip-content");
+    if (title) content.append(element("tooltip-title", title));
+    rows.forEach((row) => {
+      content.append(line(row.color ? "tooltip-row" : "tooltip-row plain", row));
+    });
+    if (total) content.append(line("tooltip-total", total));
+    if (details.length) {
+      const block = element("tooltip-details");
+      details.forEach((detail) => {
+        block.append(line("tooltip-row plain", detail));
+      });
+      content.append(block);
+    }
+    return content;
+  }
+
   return {
     formatNumber,
     pct,
@@ -170,16 +228,22 @@ Passport.format = (() => {
     formatMassText,
     formatMassAxisTick,
     formatRankingValue,
+    massUnit,
     MONTHS,
     WEEKDAYS,
     monthOf,
     weekdayOf,
+    formatDate,
     countryFlag,
+    UNKNOWN,
+    isUnknown,
+    unknownLast,
     routeName,
     cssColor,
     categoryColor,
     visualCategory,
     categoryIcon,
     flightTags,
+    tooltipContent,
   };
 })();

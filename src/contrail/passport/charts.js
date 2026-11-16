@@ -9,11 +9,15 @@ Passport.charts = (() => {
     formatMassText,
     formatMassAxisTick,
     formatRankingValue,
+    massUnit,
     MONTHS,
     cssColor,
     categoryColor,
     categoryIcon,
     visualCategory,
+    isUnknown,
+    unknownLast,
+    tooltipContent,
   } = Passport.format;
   const { sum, withEmissions, rankingMetricValue, rankingCategoryValue } = Passport.aggregate;
 
@@ -22,12 +26,17 @@ Passport.charts = (() => {
   const chartFont = getComputedStyle(document.documentElement)
     .getPropertyValue("--font-sans")
     .trim();
+  // One text scale for every chart: 12px ticks at regular weight. Value
+  // labels drawn by the plugins below are the only medium-weight chart text.
+  const TICK_SIZE = 12;
   Chart.defaults.font.family = chartFont;
-  Chart.defaults.plugins.tooltip.titleFont = { family: chartFont, weight: "600" };
-  Chart.defaults.plugins.tooltip.bodyFont = { family: chartFont };
-  Chart.defaults.plugins.tooltip.footerFont = { family: chartFont };
+  Chart.defaults.font.size = TICK_SIZE;
+  Chart.defaults.font.weight = "normal";
 
   const totalColor = () => cssColor("--total-value");
+  // A total bar's colour: grey for the Unknown entry, which is no one
+  // route, airline or aircraft and should not read as one.
+  const entryColor = (label) => cssColor(isUnknown(label) ? "--category-unknown" : "--total-value");
   const breakdownColor = (breakdown, category) =>
     breakdown === "total" ? totalColor() : categoryColor(breakdown, category);
 
@@ -53,7 +62,105 @@ Passport.charts = (() => {
 
   const charts = new Map();
 
-  const TICK_SIZE = 12;
+  // One HTML tooltip for every chart, styled by the stylesheet like the
+  // map's, in place of Chart.js's own canvas box: a black 12px panel that
+  // matched nothing else on the page. Each chart says what to show with a
+  // `build(items)` that returns tooltipContent()'s input, or null for none.
+  const tip = document.createElement("div");
+  tip.className = "chart-tooltip";
+  // Hidden from assistive technology: each canvas carries the same figures
+  // in its aria-label (rankingTooltip's details included), and a live region
+  // would read every hover.
+  tip.setAttribute("aria-hidden", "true");
+  tip.hidden = true;
+  document.body.append(tip);
+  let tipChart = null;
+
+  function hideTooltip() {
+    if (tip.hidden) return;
+    tip.hidden = true;
+    const chart = tipChart;
+    tipChart = null;
+    // Clear the chart's own active state too, or hovering the same bar
+    // again would change nothing and never bring the tooltip back.
+    if (chart?.canvas?.isConnected) {
+      chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+      chart.update("none");
+    }
+  }
+
+  // Beside the point Chart.js chose, above it where there is room, and
+  // always inside the viewport, which on a phone is narrower than a
+  // tooltip centred on a bar near the edge.
+  function placeTooltip(chart, tooltip) {
+    const canvas = chart.canvas.getBoundingClientRect();
+    const margin = 8;
+    const x = canvas.left + tooltip.caretX;
+    const y = canvas.top + tooltip.caretY;
+    const { width, height } = tip.getBoundingClientRect();
+    const left = Math.min(Math.max(x - width / 2, margin), window.innerWidth - width - margin);
+    const above = y - height - 12;
+    // Index interaction can pick a point whose caret is below the viewport
+    // when a chart is only partly on screen, so either choice is clamped to
+    // the bottom edge as well as the top.
+    const preferred = above >= margin ? above : y + 12;
+    const top = Math.min(preferred, window.innerHeight - height - margin);
+    tip.style.left = `${Math.round(left)}px`;
+    tip.style.top = `${Math.floor(Math.max(top, margin))}px`;
+  }
+
+  // A tooltip row's swatch: the bar's own colour, or the dataset's `swatch`
+  // where the bar is filled with a pattern, as an upcoming one is.
+  const swatchOf = (item) => item.dataset.swatch ?? item.element.options.backgroundColor;
+  const hatchedOf = (item) => Boolean(item.dataset.hatched);
+
+  // A stacked bar's tooltip: its non-zero parts, top of the stack first so
+  // the list reads in the order the bar does, all in the unit the total
+  // needs, and the total beneath when there is more than one part.
+  function stackTooltip(items) {
+    const title = String(items[0].label);
+    const shown = items.filter((item) => item.raw > 0).reverse();
+    if (!shown.length) return { title, rows: [{ label: "No CO₂e", value: "" }] };
+    const total = shown.reduce((value, item) => value + item.raw, 0);
+    const unit = massUnit([total]);
+    return {
+      title,
+      rows: shown.map((item) => ({
+        label: item.dataset.label,
+        value: formatMassText(item.raw, unit),
+        color: swatchOf(item),
+        hatched: hatchedOf(item),
+      })),
+      total: shown.length > 1 ? { label: "Total", value: formatMassText(total, unit) } : null,
+    };
+  }
+
+  function tooltipOptions(build) {
+    return {
+      enabled: false,
+      external({ chart, tooltip }) {
+        const content =
+          tooltip.opacity && tooltip.dataPoints?.length ? build(tooltip.dataPoints) : null;
+        if (!content) {
+          if (tipChart === chart) hideTooltip();
+          return;
+        }
+        tip.replaceChildren(tooltipContent(content));
+        tip.hidden = false;
+        tipChart = chart;
+        placeTooltip(chart, tooltip);
+      },
+    };
+  }
+
+  // A tooltip belongs to where the pointer is: scrolling moves the bar out
+  // from under it, and a tap elsewhere on a touch screen means done.
+  document.addEventListener("scroll", hideTooltip, { capture: true, passive: true });
+  window.addEventListener("resize", hideTooltip);
+  document.addEventListener("pointerdown", (event) => {
+    if (tipChart && event.target !== tipChart.canvas) hideTooltip();
+  });
+  document.addEventListener("pointerleave", hideTooltip);
 
   // Below this width a period chart shortens its axis: month initials, and
   // value labels a size smaller.
@@ -249,10 +356,77 @@ Passport.charts = (() => {
         });
       });
     }
-    return [...categoryTotals.entries()].sort((a, b) => b[1] - a[1]).map((entry) => entry[0]);
+    return [...categoryTotals.entries()]
+      .sort((a, b) => unknownLast(a[0], b[0]) || b[1] - a[1])
+      .map((entry) => entry[0]);
   }
 
-  function ranking(id, entries, breakdown, metric) {
+  const MEASURE_NAMES = { total: "Total", distance: "Per km", duration: "Per hour" };
+
+  // A ranking entry's tooltip: the full label, its value or its breakdown,
+  // then how many flights it holds, its share of the period's CO2e, and the
+  // measures the ranking is not sorted by, where the data allows them.
+  function rankingTooltip(entry, breakdown, metric, periodKg, color) {
+    const value = rankingMetricValue(entry, metric);
+    const unit = metric === "total" ? massUnit([value]) : undefined;
+    const parts =
+      breakdown === "total"
+        ? []
+        : [...entry[breakdown].keys()]
+            .map((category) => [category, rankingCategoryValue(entry, breakdown, category, metric)])
+            .filter(([, part]) => part > 0)
+            .sort((a, b) => unknownLast(a[0], b[0]) || b[1] - a[1]);
+    const rows = parts.length
+      ? parts.map(([category, part]) => ({
+          label: category,
+          value: formatRankingValue(part, metric, false, unit),
+          color: categoryColor(breakdown, category),
+        }))
+      : [
+          {
+            label: MEASURE_NAMES[metric],
+            value: formatRankingValue(value, metric, false, unit),
+            color,
+          },
+        ];
+    const others = ["total", "distance", "duration"]
+      .filter((measure) => measure !== metric)
+      .map((measure) => [measure, rankingMetricValue(entry, measure)])
+      .filter(([, other]) => other !== null && other > 0)
+      .map(([measure, other]) => ({
+        label: measure === "total" ? "CO₂e" : MEASURE_NAMES[measure],
+        value: formatRankingValue(other, measure),
+      }));
+    return {
+      title: entry.label,
+      rows,
+      total:
+        parts.length > 1
+          ? { label: MEASURE_NAMES[metric], value: formatRankingValue(value, metric, false, unit) }
+          : null,
+      details: [
+        { label: entry.flights === 1 ? "Flight" : "Flights", value: formatNumber(entry.flights) },
+        ...(periodKg
+          ? [
+              {
+                label: "Share of CO₂e",
+                value: `${formatNumber((entry.metrics.totalKg / periodKg) * 100, 1)}%`,
+              },
+            ]
+          : []),
+        ...others,
+      ],
+    };
+  }
+
+  // rankingTooltip's details as one line of text, for the places a hover
+  // never reaches: a canvas's aria-label and each "See all" row.
+  const rankingDetailsText = (entry, breakdown, metric, periodKg) =>
+    rankingTooltip(entry, breakdown, metric, periodKg)
+      .details.map((detail) => `${detail.label} ${detail.value}`)
+      .join(", ");
+
+  function ranking(id, entries, breakdown, metric, periodKg = 0) {
     const theme = chartTheme();
     const totals = entries.map((entry) => rankingMetricValue(entry, metric));
     const maximum = Math.max(1, ...totals);
@@ -263,8 +437,8 @@ Passport.charts = (() => {
             {
               label: "Total",
               data: totals,
-              backgroundColor: totalColor(),
-              hoverBackgroundColor: totalColor(),
+              backgroundColor: entries.map((entry) => entryColor(entry.label)),
+              hoverBackgroundColor: entries.map((entry) => entryColor(entry.label)),
               borderSkipped: false,
               borderRadius: { topLeft: 0, bottomLeft: 0, topRight: 7, bottomRight: 7 },
               barPercentage: 0.72,
@@ -289,7 +463,7 @@ Passport.charts = (() => {
                 breakdown === "total"
                   ? ""
                   : `; ${[...entry[breakdown].keys()].map((label) => `${label} ${formatRankingValue(rankingCategoryValue(entry, breakdown, label, metric), metric, true)}`).join(", ")}`;
-              return `${entry.label}: ${formatRankingValue(rankingMetricValue(entry, metric), metric, true)}${categoriesText}`;
+              return `${entry.label}: ${formatRankingValue(rankingMetricValue(entry, metric), metric, true)}${categoriesText}; ${rankingDetailsText(entry, breakdown, metric, periodKg)}`;
             })
             .join(", ")
         : `No flights with the data required for ${metric === "distance" ? "distance intensity" : metric === "duration" ? "time intensity" : "total impact"} in this period`,
@@ -307,18 +481,16 @@ Passport.charts = (() => {
         responsive: true,
         maintainAspectRatio: false,
         indexAxis: "y",
+        interaction: { mode: "index", axis: "y", intersect: false },
         layout: { padding: { right: metric === "total" ? 58 : 88 } },
         plugins: {
           legend: { display: false },
-          tooltip: {
-            callbacks: {
-              // The full label: the axis may show it cut short.
-              title: (items) =>
-                items.length ? items[0].chart.data.labels[items[0].dataIndex] : "",
-              label: (context) =>
-                `${context.dataset.label}: ${formatRankingValue(context.raw, metric, true)}`,
-            },
-          },
+          // The whole row answers, not only the bar: a short bar is a
+          // small target.
+          tooltip: tooltipOptions((items) => {
+            const entry = entries[items[0].dataIndex];
+            return rankingTooltip(entry, breakdown, metric, periodKg, entryColor(entry.label));
+          }),
         },
         scales: {
           x: { display: false, stacked: true, beginAtZero: true, max: maximum * 1.24 },
@@ -356,7 +528,7 @@ Passport.charts = (() => {
   // and a bar sized in CSS, split by category when a breakdown is chosen.
   // HTML rather than a canvas because a canvas tall enough for every flight
   // in a long log passes iOS Safari's canvas size limit and draws blank.
-  function rankingList(id, entries, breakdown, metric) {
+  function rankingList(id, entries, breakdown, metric, periodKg = 0) {
     const list = $(id);
     const totals = entries.map((entry) => rankingMetricValue(entry, metric));
     const maximum = Math.max(0, ...totals);
@@ -369,8 +541,13 @@ Passport.charts = (() => {
     };
     // Each " · " part of a label wraps as a whole, so a flight breaks between
     // its route and its date rather than inside the date.
-    const rankingLabel = (label) => {
+    const rankingLabel = (label, flag) => {
       const element = span("ranking-label");
+      if (flag) {
+        const mark = span("ranking-flag", flag);
+        mark.setAttribute("aria-hidden", "true");
+        element.append(mark, " ");
+      }
       const parts = label.split(" · ");
       parts.forEach((part, index) => {
         if (index) element.append(" ");
@@ -389,14 +566,14 @@ Passport.charts = (() => {
         fill.style.width = `${maximum ? (total / maximum) * 100 : 0}%`;
         const parts =
           breakdown === "total"
-            ? [["Total", total, totalColor()]]
+            ? [["Total", total, entryColor(entry.label)]]
             : categories.map((category) => [
                 category,
                 rankingCategoryValue(entry, breakdown, category, metric),
                 categoryColor(breakdown, category),
               ]);
         const present = parts.filter(([, value]) => value > 0);
-        present.forEach(([category, value, color]) => {
+        present.forEach(([, value, color]) => {
           const segment = span("ranking-segment");
           segment.style.width = `${total ? (value / total) * 100 : 0}%`;
           segment.style.background = color;
@@ -405,7 +582,7 @@ Passport.charts = (() => {
         bar.append(fill);
         row.append(
           span("ranking-rank", String(index + 1)),
-          rankingLabel(entry.label),
+          rankingLabel(entry.label, entry.flag),
           span("ranking-value", formatRankingValue(total, metric)),
           bar,
         );
@@ -424,6 +601,8 @@ Passport.charts = (() => {
           });
           row.append(details);
         }
+        // What a hover shows on the chart, visible here, where no hover is.
+        row.append(span("ranking-details", rankingDetailsText(entry, breakdown, metric, periodKg)));
         return row;
       }),
     );
@@ -466,12 +645,16 @@ Passport.charts = (() => {
         indexAxis: "y",
         plugins: {
           legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: (context) =>
-                `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e · ${formatNumber(total ? (context.raw / total) * 100 : 0, 1)}%`,
-            },
-          },
+          tooltip: tooltipOptions(([item]) => ({
+            title: item.dataset.label,
+            rows: [
+              { label: "CO₂e", value: formatMassText(item.raw), color: swatchOf(item) },
+              {
+                label: "Share",
+                value: `${formatNumber(total ? (item.raw / total) * 100 : 0, 1)}%`,
+              },
+            ],
+          })),
         },
         scales: {
           x: { display: false, stacked: true, max: total || 1 },
@@ -501,6 +684,37 @@ Passport.charts = (() => {
       row.append(swatch, name, value, share);
       legend.append(row);
     });
+  }
+
+  // The key to a chart broken down by cabin or reason, in the element `id`:
+  // a swatch, badge and name per category, in the order the chart stacks
+  // them, and the upcoming hatch where the chart draws one. Hidden for the
+  // total, which is one colour and needs no key.
+  function legend(id, breakdown, categories, { upcoming = false } = {}) {
+    const list = $(id);
+    list.hidden = breakdown === "total" || !categories.length;
+    if (list.hidden) {
+      list.replaceChildren();
+      return;
+    }
+    const item = (swatch, ...content) => {
+      const element = document.createElement("li");
+      swatch.className = `legend-swatch${swatch.className ? ` ${swatch.className}` : ""}`;
+      swatch.setAttribute("aria-hidden", "true");
+      element.append(swatch, ...content);
+      return element;
+    };
+    const items = categories.map((category) => {
+      const swatch = document.createElement("span");
+      swatch.style.background = categoryColor(breakdown, category);
+      return item(swatch, categoryIcon(breakdown, category), category);
+    });
+    if (upcoming) {
+      const hatch = document.createElement("span");
+      hatch.className = "upcoming";
+      items.push(item(hatch, "Upcoming"));
+    }
+    list.replaceChildren(...items);
   }
 
   // `buckets` is what Passport.aggregate.patternBuckets returns.
@@ -540,14 +754,11 @@ Passport.charts = (() => {
         animation: false,
         responsive: true,
         maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
         layout: { padding: { top: 28 } },
         plugins: {
           legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e`,
-            },
-          },
+          tooltip: tooltipOptions(stackTooltip),
         },
         scales: {
           x: {
@@ -627,6 +838,8 @@ Passport.charts = (() => {
           ),
           backgroundColor: upcomingPattern,
           hoverBackgroundColor: upcomingPattern,
+          swatch: color,
+          hatched: true,
           borderColor: color,
           borderWidth: 1,
           borderSkipped: false,
@@ -651,18 +864,14 @@ Passport.charts = (() => {
         layout: { padding: { top: 28 } },
         plugins: {
           legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: (context) => `${context.dataset.label}: ${formatMassText(context.raw)} CO₂e`,
-            },
-          },
+          tooltip: tooltipOptions(stackTooltip),
         },
         scales: {
           x: {
             stacked: true,
             grid: { display: false },
             border: { color: theme.grid },
-            ticks: periodTicks(theme.muted, { font: { size: 11 } }),
+            ticks: periodTicks(theme.muted),
           },
           y: {
             stacked: true,
@@ -676,5 +885,5 @@ Passport.charts = (() => {
     });
   }
 
-  return { ranking, rankingList, composition, pattern, trend };
+  return { ranking, rankingList, composition, legend, pattern, trend };
 })();

@@ -8,6 +8,7 @@
     pct,
     formatKg,
     formatMassText,
+    formatDate,
     countryFlag,
     routeName,
     flightTags,
@@ -17,6 +18,7 @@
     sum,
     withEmissions,
     completed,
+    pricedCompleted,
     scoped,
     metricRows,
     aggregateBy,
@@ -97,6 +99,9 @@
     const series = yearSeries(data.flights, data.years);
     const categories = breakdownCategories(withEmissions(data.flights), state.trendBreakdown);
     charts.trend(series, categories, state.trendBreakdown);
+    charts.legend("trend-legend", state.trendBreakdown, categories, {
+      upcoming: series.some((item) => item.planned),
+    });
 
     // With no year chosen, the tile reads the newest year anything was flown
     // in: a year holding only bookings would read zero.
@@ -120,17 +125,18 @@
   }
 
   // Draw a ranking's top six and keep the whole list for its dialog.
-  function showRanking(key, title, entries, breakdown, metric) {
-    rankingData.set(key, { title, entries, breakdown, metric });
-    charts.ranking(key, entries.slice(0, 6), breakdown, metric);
+  // `periodKg` is the period's completed CO2e, what each entry's share in
+  // its tooltip is of.
+  function showRanking(key, title, entries, breakdown, metric, periodKg) {
+    rankingData.set(key, { title, entries, breakdown, metric, periodKg });
+    charts.ranking(key, entries.slice(0, 6), breakdown, metric, periodKg);
     document.querySelector(`[data-ranking="${key}"]`).hidden = entries.length <= 6;
   }
 
   function renderPatterns(rows) {
-    charts.pattern(
-      patternBuckets(rows, state.pattern, state.patternBreakdown),
-      state.patternBreakdown,
-    );
+    const buckets = patternBuckets(rows, state.pattern, state.patternBreakdown);
+    charts.pattern(buckets, state.patternBreakdown);
+    charts.legend("pattern-legend", state.patternBreakdown, buckets.categories);
 
     const countryDisplay =
       typeof Intl.DisplayNames === "function"
@@ -142,7 +148,11 @@
       flight.end?.country,
     ]).map((entry) => ({
       ...entry,
-      label: `${countryFlag(entry.label)} ${countryDisplay ? countryDisplay.of(entry.label) || entry.label : entry.label}`,
+      // The chart draws the name alone: Windows has no flag emoji and shows
+      // two letters instead. The flag rides along for the HTML list, which
+      // also shows the name, so a missing glyph costs nothing there.
+      label: countryDisplay ? countryDisplay.of(entry.label) || entry.label : entry.label,
+      flag: countryFlag(entry.label),
     }));
     showRanking(
       "airports",
@@ -150,6 +160,7 @@
       airportEntries,
       state.patternBreakdown,
       "total",
+      sum(pricedCompleted(rows), "kg"),
     );
     showRanking(
       "countries",
@@ -157,6 +168,7 @@
       countryEntries,
       state.patternBreakdown,
       "total",
+      sum(pricedCompleted(rows), "kg"),
     );
   }
 
@@ -176,7 +188,7 @@
     const route = document.createElement("strong");
     route.textContent = routeName(flight);
     const detail = document.createElement("p");
-    detail.textContent = `${formatter(value)} · ${flight.flight || "Flight unknown"} · ${flight.date || "Date unknown"}`;
+    detail.textContent = `${formatter(value)} · ${flight.flight || "Flight unknown"} · ${flight.date ? formatDate(flight.date) : "Date unknown"}`;
     target.append(route, detail, flightTags(flight));
   }
 
@@ -204,19 +216,35 @@
       groupAll(rows, (row) => row.reason),
       "reason",
     );
+    charts.legend(
+      "driver-legend",
+      state.driverBreakdown,
+      breakdownCategories(pricedCompleted(rows), state.driverBreakdown),
+    );
     [
       ["routes", "All routes", (row) => row.route],
-      ["carriers", "All operating airlines", (row) => row.carrier],
+      [
+        "carriers",
+        "All operating airlines",
+        (row) => (row.carrierName ? `${row.carrierName} (${row.carrier})` : row.carrier),
+      ],
       ["aircraft", "All aircraft", (row) => row.aircraft],
       [
         "flights",
         "All flights by impact",
         (row) =>
-          `${row.flight || "Unknown"} · ${row.origin || "?"}–${row.destination || "?"} · ${row.date || "date unknown"}`,
+          `${row.flight || "Unknown"} · ${row.origin || "?"}–${row.destination || "?"} · ${row.date ? formatDate(row.date) : "date unknown"}`,
       ],
     ].forEach(([key, title, labeler]) => {
       const ranked = rankForMetric(rankAll(rows, labeler), state.driverMetric);
-      showRanking(key, title, ranked, state.driverBreakdown, state.driverMetric);
+      showRanking(
+        key,
+        title,
+        ranked,
+        state.driverBreakdown,
+        state.driverMetric,
+        sum(pricedCompleted(rows), "kg"),
+      );
     });
   }
 
@@ -333,7 +361,7 @@
           : "total CO₂e";
     const breakdownLabel = breakdown === "total" ? "" : ` by ${breakdown}`;
     $("ranking-dialog-title").textContent = `${ranking.title} · ${metricLabel}${breakdownLabel}`;
-    charts.rankingList("ranking-dialog-list", ranking.entries, breakdown, metric);
+    charts.rankingList("ranking-dialog-list", ranking.entries, breakdown, metric, ranking.periodKg);
     $("ranking-dialog").showModal();
     $("ranking-dialog-list").parentElement.scrollTop = 0;
   }
