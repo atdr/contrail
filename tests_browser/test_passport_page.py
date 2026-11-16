@@ -253,6 +253,10 @@ def test_a_ranking_tooltip_gives_the_entry_in_full(open_passport, page):
     ]
     details = page.locator(".chart-tooltip .tooltip-details").inner_text()
     assert "g/km" in details and "kg/hr" in details
+    # The tooltip is hidden from assistive technology, so the same details
+    # are in the canvas's accessible name.
+    label = page.locator("#routes").get_attribute("aria-label")
+    assert "Flights 2, Share of CO₂e 96.7%" in label
 
     # The chart tooltip and the map's are one style.
     style = """el => {
@@ -262,6 +266,35 @@ def test_a_ranking_tooltip_gives_the_entry_in_full(open_passport, page):
     chart_style = page.locator(".chart-tooltip").evaluate(style)
     page.locator(".leaflet-airports-pane path").last.hover(force=True)
     assert page.locator(".leaflet-tooltip").evaluate(style) == chart_style
+
+
+def test_a_tooltip_stays_above_the_bottom_of_the_viewport(open_passport, page):
+    """With a chart only partly on screen, index interaction could pick a
+    point whose caret sat below the viewport, and the tooltip followed it
+    off the bottom edge."""
+    page.set_viewport_size({"width": 1280, "height": 500})
+    page = open_passport()
+    page.evaluate(
+        """() => {
+          const box = document.getElementById('pattern-chart').getBoundingClientRect();
+          window.scrollBy(0, box.top - window.innerHeight + 60);
+        }"""
+    )
+    # A scroll hides the tooltip, and its event lands a frame later.
+    page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+    page.evaluate(
+        """() => {
+          const chart = Chart.getChart('pattern-chart');
+          const index = chart.data.datasets[0].data.findIndex((value) => value > 0);
+          chart.tooltip.setActiveElements([{ datasetIndex: 0, index }],
+            { x: chart.getDatasetMeta(0).data[index].x, y: chart.chartArea.bottom });
+          chart.update('none');
+        }"""
+    )
+    tip = page.locator(".chart-tooltip")
+    expect(tip).to_be_visible()
+    box = tip.bounding_box()
+    assert box["y"] + box["height"] <= 500 - 8
 
 
 def test_the_ranking_dialog_opens_and_closes(open_passport):
@@ -287,6 +320,8 @@ def test_the_ranking_dialog_opens_and_closes(open_passport):
     expect(rows_shown.first.locator(".ranking-rank")).to_have_text("1")
     expect(rows_shown.first.locator(".ranking-label")).to_have_text("LAX ↔ LHR")
     expect(rows_shown.first.locator(".ranking-value")).to_have_text("800 kg")
+    # What a hover gives on the chart, a row gives as text.
+    expect(rows_shown.first.locator(".ranking-details")).to_contain_text("Flight 1, Share of CO₂e")
     assert dialog.locator("canvas").count() == 0
     page.locator("#ranking-dialog-close").click()
     expect(dialog).to_be_hidden()

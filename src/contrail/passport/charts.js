@@ -68,8 +68,9 @@ Passport.charts = (() => {
   // `build(items)` that returns tooltipContent()'s input, or null for none.
   const tip = document.createElement("div");
   tip.className = "chart-tooltip";
-  // Hidden from assistive technology: each canvas already carries its
-  // figures in its aria-label, and a live region would read every hover.
+  // Hidden from assistive technology: each canvas carries the same figures
+  // in its aria-label (rankingTooltip's details included), and a live region
+  // would read every hover.
   tip.setAttribute("aria-hidden", "true");
   tip.hidden = true;
   document.body.append(tip);
@@ -99,9 +100,13 @@ Passport.charts = (() => {
     const { width, height } = tip.getBoundingClientRect();
     const left = Math.min(Math.max(x - width / 2, margin), window.innerWidth - width - margin);
     const above = y - height - 12;
-    const top = above >= margin ? above : Math.min(y + 12, window.innerHeight - height - margin);
+    // Index interaction can pick a point whose caret is below the viewport
+    // when a chart is only partly on screen, so either choice is clamped to
+    // the bottom edge as well as the top.
+    const preferred = above >= margin ? above : y + 12;
+    const top = Math.min(preferred, window.innerHeight - height - margin);
     tip.style.left = `${Math.round(left)}px`;
-    tip.style.top = `${Math.round(Math.max(top, margin))}px`;
+    tip.style.top = `${Math.floor(Math.max(top, margin))}px`;
   }
 
   // A tooltip row's swatch: the bar's own colour, or the dataset's `swatch`
@@ -414,6 +419,13 @@ Passport.charts = (() => {
     };
   }
 
+  // rankingTooltip's details as one line of text, for the places a hover
+  // never reaches: a canvas's aria-label and each "See all" row.
+  const rankingDetailsText = (entry, breakdown, metric, periodKg) =>
+    rankingTooltip(entry, breakdown, metric, periodKg)
+      .details.map((detail) => `${detail.label} ${detail.value}`)
+      .join(", ");
+
   function ranking(id, entries, breakdown, metric, periodKg = 0) {
     const theme = chartTheme();
     const totals = entries.map((entry) => rankingMetricValue(entry, metric));
@@ -451,7 +463,7 @@ Passport.charts = (() => {
                 breakdown === "total"
                   ? ""
                   : `; ${[...entry[breakdown].keys()].map((label) => `${label} ${formatRankingValue(rankingCategoryValue(entry, breakdown, label, metric), metric, true)}`).join(", ")}`;
-              return `${entry.label}: ${formatRankingValue(rankingMetricValue(entry, metric), metric, true)}${categoriesText}`;
+              return `${entry.label}: ${formatRankingValue(rankingMetricValue(entry, metric), metric, true)}${categoriesText}; ${rankingDetailsText(entry, breakdown, metric, periodKg)}`;
             })
             .join(", ")
         : `No flights with the data required for ${metric === "distance" ? "distance intensity" : metric === "duration" ? "time intensity" : "total impact"} in this period`,
@@ -516,7 +528,7 @@ Passport.charts = (() => {
   // and a bar sized in CSS, split by category when a breakdown is chosen.
   // HTML rather than a canvas because a canvas tall enough for every flight
   // in a long log passes iOS Safari's canvas size limit and draws blank.
-  function rankingList(id, entries, breakdown, metric) {
+  function rankingList(id, entries, breakdown, metric, periodKg = 0) {
     const list = $(id);
     const totals = entries.map((entry) => rankingMetricValue(entry, metric));
     const maximum = Math.max(0, ...totals);
@@ -589,6 +601,8 @@ Passport.charts = (() => {
           });
           row.append(details);
         }
+        // What a hover shows on the chart, visible here, where no hover is.
+        row.append(span("ranking-details", rankingDetailsText(entry, breakdown, metric, periodKg)));
         return row;
       }),
     );

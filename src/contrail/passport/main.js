@@ -128,7 +128,7 @@
   // `periodKg` is the period's completed CO2e, what each entry's share in
   // its tooltip is of.
   function showRanking(key, title, entries, breakdown, metric, periodKg) {
-    rankingData.set(key, { title, entries, breakdown, metric });
+    rankingData.set(key, { title, entries, breakdown, metric, periodKg });
     charts.ranking(key, entries.slice(0, 6), breakdown, metric, periodKg);
     document.querySelector(`[data-ranking="${key}"]`).hidden = entries.length <= 6;
   }
@@ -361,7 +361,7 @@
           : "total CO₂e";
     const breakdownLabel = breakdown === "total" ? "" : ` by ${breakdown}`;
     $("ranking-dialog-title").textContent = `${ranking.title} · ${metricLabel}${breakdownLabel}`;
-    charts.rankingList("ranking-dialog-list", ranking.entries, breakdown, metric);
+    charts.rankingList("ranking-dialog-list", ranking.entries, breakdown, metric, ranking.periodKg);
     $("ranking-dialog").showModal();
     $("ranking-dialog-list").parentElement.scrollTop = 0;
   }

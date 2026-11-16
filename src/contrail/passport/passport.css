@@ -951,6 +951,11 @@ h3 {
   color: var(--muted);
   font-size: 0.86rem;
 }
+.ranking-details {
+  grid-column: 2 / -1;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
 .ranking-breakdown-item {
   display: inline-flex;
   align-items: center;
