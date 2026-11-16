@@ -21,6 +21,12 @@ Passport.format = (() => {
       );
     return numberFormats.get(digits).format(Number(value));
   }
+  const changeFormat = new Intl.NumberFormat(undefined, {
+    style: "percent",
+    signDisplay: "exceptZero",
+    maximumFractionDigits: 0,
+  });
+  const formatChange = (fraction) => changeFormat.format(fraction);
   const pct = (part, whole) => (whole ? Math.round((part / whole) * 100) : 0);
   const formatKg = (kg, unit = kg >= 1000 ? "t" : "kg") =>
     unit === "t"
@@ -262,6 +268,7 @@ Passport.format = (() => {
 
   return {
     formatNumber,
+    formatChange,
     formatDuration,
     pct,
     formatKg,

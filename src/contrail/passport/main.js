@@ -5,6 +5,7 @@
 
   const {
     formatNumber,
+    formatChange,
     pct,
     formatKg,
     formatMassText,
@@ -66,6 +67,34 @@
   // The data behind each ranking's "See all" dialog, as last drawn.
   const rankingData = new Map();
 
+  // The headline figure for `metric` over `rows`: total kg, g per km or kg
+  // per hour, or null where no flight carries what it needs.
+  function headline(rows, metric) {
+    if (metric === "distance") {
+      const measured = metricRows(rows, "distanceKm");
+      const km = sum(measured, "distanceKm");
+      return km ? (sum(measured, "kg") * 1000) / km : null;
+    }
+    if (metric === "duration") {
+      const measured = metricRows(rows, "durationHours");
+      const hours = sum(measured, "durationHours");
+      return hours ? sum(measured, "kg") / hours : null;
+    }
+    const priced = pricedCompleted(rows);
+    return priced.length ? sum(priced, "kg") : null;
+  }
+
+  // "+12% vs 2024" for the chosen year against the one before, or "" when
+  // no year is chosen or either year lacks the figure.
+  function yearOnYear(rows) {
+    if (state.year === null) return "";
+    const previous = state.year - 1;
+    const before = headline(scoped(data.flights, previous), state.metric);
+    const now = headline(rows, state.metric);
+    if (!before || now === null) return "";
+    return ` · ${formatChange((now - before) / before)} vs ${previous}`;
+  }
+
   function renderHero(rows) {
     const completedRows = completed(rows);
     const priced = withEmissions(completedRows);
@@ -96,7 +125,7 @@
     }
 
     $("hero-value").innerHTML = value;
-    $("hero-context").textContent = context;
+    $("hero-context").textContent = `${context}${yearOnYear(rows)}`;
     $("flight-count").textContent = formatNumber(completedRows.length);
     $("distance-total").textContent = allDistanceRows.length
       ? `${formatNumber(sum(allDistanceRows, "distanceKm"))} km`

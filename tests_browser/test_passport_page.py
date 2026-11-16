@@ -1043,6 +1043,18 @@ def test_connection_rankings_have_a_per_km_and_per_hour_measure(open_passport):
     pressed(page, "#driver-metric-tabs [data-value=total]")
 
 
+def test_a_chosen_year_says_how_it_compares_with_the_one_before(open_passport):
+    page = open_passport()
+    assert " vs " not in text(page, "#hero-context")
+    page.get_by_role("button", name="2026", exact=True).click()
+    assert re.fullmatch(
+        r"Passenger emissions across 3 completed flights · [-−]79% vs 2025",
+        text(page, "#hero-context"),
+    )
+    page.get_by_role("button", name="2025", exact=True).click()
+    assert " vs " not in text(page, "#hero-context")  # 2024 has no flights
+
+
 def test_the_panel_fits_a_320px_phone(open_passport, page):
     page.set_viewport_size(VIEWPORTS["narrow"])
     page = open_passport()
