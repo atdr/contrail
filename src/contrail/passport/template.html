@@ -266,6 +266,37 @@
             ></ul>
           </div>
           <div class="network-cuts">
+            <div
+              class="pattern-tabs"
+              id="network-metric-tabs"
+              role="group"
+              aria-label="Connection ranking measure"
+            >
+              <button
+                type="button"
+                data-control="networkMetric"
+                data-value="total"
+                aria-pressed="true"
+              >
+                Total CO₂e
+              </button>
+              <button
+                type="button"
+                data-control="networkMetric"
+                data-value="distance"
+                aria-pressed="false"
+              >
+                Avg / km
+              </button>
+              <button
+                type="button"
+                data-control="networkMetric"
+                data-value="duration"
+                aria-pressed="false"
+              >
+                Avg / hr
+              </button>
+            </div>
             <div class="ranking">
               <div class="ranking-head">
                 <h3>Airport connections</h3>

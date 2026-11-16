@@ -56,6 +56,7 @@
     patternBreakdown: "total",
     driverBreakdown: "total",
     driverMetric: "total",
+    networkMetric: "total",
     panel: null,
   };
   const state = { ...DEFAULTS };
@@ -165,22 +166,25 @@
       label: countryName(entry.label),
       flag: countryFlag(entry.label),
     }));
+    // The connection rankings sort by their own measure: a control beside
+    // them, as each chart's controls are, rather than the drivers' one a
+    // section further down that would change them out of sight.
     const periodKg = sum(pricedCompleted(rows), "kg");
     showRanking(
       "airports",
       "All airport connections",
-      airportEntries,
+      rankForMetric(airportEntries, state.networkMetric),
       state.patternBreakdown,
-      "total",
+      state.networkMetric,
       periodKg,
       "airport",
     );
     showRanking(
       "countries",
       "All country connections",
-      countryEntries,
+      rankForMetric(countryEntries, state.networkMetric),
       state.patternBreakdown,
-      "total",
+      state.networkMetric,
       periodKg,
       "country",
     );
@@ -310,7 +314,7 @@
     { draw: renderHero, reads: ["year", "metric"] },
     { draw: map.render, reads: ["year"] },
     { draw: renderTrend, reads: ["year", "trendBreakdown"] },
-    { draw: renderPatterns, reads: ["year", "pattern", "patternBreakdown"] },
+    { draw: renderPatterns, reads: ["year", "pattern", "patternBreakdown", "networkMetric"] },
     { draw: renderExtremes, reads: ["year"] },
     { draw: renderRankings, reads: ["year", "driverBreakdown", "driverMetric"] },
     { draw: renderQuality, reads: ["year"] },

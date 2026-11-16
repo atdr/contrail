@@ -15,7 +15,7 @@ import pytest
 from conftest import NOW, fixture_rows, row
 from playwright.sync_api import Page, expect
 
-from contrail.passport import render
+from contrail.passport import great_circle_km, render
 
 VIEWPORTS = {
     "desktop": {"width": 1280, "height": 800},
@@ -727,8 +727,8 @@ def test_touch_screens_get_44px_tap_targets(browser, tmp_path):
         page.goto(output.as_uri())
         page.locator("#hero-value").filter(has_text="CO").wait_for()
         sizes = tap_target_sizes(page)
-        # Six See all, the headline measure, five segmented controls, zoom.
-        assert len(sizes) == 6 + 3 + 14 + 2, sizes
+        # Six See all, the headline measure, six segmented controls, zoom.
+        assert len(sizes) == 6 + 3 + 17 + 2, sizes
         assert [size for size in sizes if size[2] < 44] == []
         zoom = [size for size in sizes if "leaflet-control-zoom" in size[0]]
         assert len(zoom) == 2 and all(width >= 44 for _, width, _ in zoom)
@@ -1021,6 +1021,26 @@ def test_a_trend_bar_chooses_its_year_and_stands_out(open_passport, page):
     pressed(page, "#periods button:text-is('All time')")
     fills = page.evaluate("Chart.getChart('trend-chart').data.datasets[0].backgroundColor")
     assert fills == ["#0b8071", "#0b8071"]
+
+
+def test_connection_rankings_have_a_per_km_and_per_hour_measure(open_passport):
+    """The airport and country rankings were always total CO2e. They have
+    their own measure control now, beside them."""
+    page = open_passport()
+    page.locator("#network-metric-tabs [data-value=distance]").click()
+    pressed(page, "#network-metric-tabs [data-value=distance]")
+    labels = page.evaluate("Chart.getChart('airports').data.labels")
+    values = page.evaluate("Chart.getChart('airports').data.datasets[0].data")
+    by_airport = dict(zip(labels, values, strict=True))
+    jfk_km = great_circle_km("JFK", "LHR")
+    assert by_airport["JFK"] == pytest.approx(1750 * 1000 / (2 * jfk_km))
+    # Ranked by that measure: CDG's short hop is the most per km.
+    assert labels[0] == "CDG"
+    page.locator("#network-metric-tabs [data-value=duration]").click()
+    # Only the two JFK flights have both times.
+    assert sorted(page.evaluate("Chart.getChart('airports').data.labels")) == ["JFK", "LHR"]
+    # The drivers' measure is its own.
+    pressed(page, "#driver-metric-tabs [data-value=total]")
 
 
 def test_the_panel_fits_a_320px_phone(open_passport, page):
