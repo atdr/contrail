@@ -967,6 +967,39 @@ def test_the_flight_list_sorts_and_searches(open_passport):
     expect(page.locator("#flight-panel-empty")).to_have_text("No flights match that search.")
 
 
+def test_the_phone_sort_select_offers_every_header_order(open_passport, page):
+    """The phone's select offered seven orders, missing Flight, Cabin and
+    Estimate and most reverse directions, so after a header sort on a wide
+    screen and a resize it showed one order while the rows had another.
+    It is built from the columns now: every column, both directions, and
+    it follows a header sort."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    page.locator("#flight-count").click()
+    select = page.locator("#flight-panel-sort")
+    values = select.locator("option").evaluate_all("els => els.map(el => el.value)")
+    columns = page.locator("#flight-panel-head th").evaluate_all(
+        "els => els.map(el => el.dataset.sort)"
+    )
+    assert sorted(values) == sorted(
+        f"{column}:{direction}" for column in columns for direction in ("ascending", "descending")
+    )
+
+    cabin = page.locator("#flight-panel-head th[data-sort=cabin]")
+    cabin.locator("button").click()
+    cabin.locator("button").click()
+    expect(cabin).to_have_attribute("aria-sort", "descending")
+    page.set_viewport_size(VIEWPORTS["mobile"])
+    expect(select).to_be_visible()
+    expect(select).to_have_value("cabin:descending")
+
+    select.select_option("source:ascending")
+    expect(page.locator("#flight-panel-head th[data-sort=source]")).to_have_attribute(
+        "aria-sort", "ascending"
+    )
+    expect(page.locator("#flight-panel-rows .cell-source").first).to_have_text("Exact")
+
+
 def test_flight_detail_shows_every_cabin_and_the_contrail_impact(open_passport):
     page = open_passport(
         [

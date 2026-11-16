@@ -155,28 +155,45 @@ Passport.panel = (() => {
   });
 
   // The table's columns. `value` is what a column sorts by, null last in
-  // either direction; `first` the direction a first click sorts it.
+  // either direction; `first` the direction a first click sorts it;
+  // `orders` names each direction for the phone's sort select, which is
+  // built from this table so it offers every order the headings can.
   const COLUMNS = [
     {
       key: "date",
       label: "Date",
       first: "descending",
+      orders: { descending: "Newest first", ascending: "Oldest first" },
       value: (f) => f.date,
       text: (f) => (f.date ? formatDate(f.date) : "Date unknown"),
     },
     {
       key: "flight",
       label: "Flight",
+      orders: { ascending: "Flight, A to Z", descending: "Flight, Z to A" },
       value: (f) => f.flight || null,
       text: (f) => f.flight || dash,
     },
-    { key: "route", label: "Route", value: routeName, text: routeName },
-    { key: "cabin", label: "Cabin", value: (f) => f.cabin, text: (f) => f.cabin },
+    {
+      key: "route",
+      label: "Route",
+      orders: { ascending: "Route, A to Z", descending: "Route, Z to A" },
+      value: routeName,
+      text: routeName,
+    },
+    {
+      key: "cabin",
+      label: "Cabin",
+      orders: { ascending: "Cabin, A to Z", descending: "Cabin, Z to A" },
+      value: (f) => f.cabin,
+      text: (f) => f.cabin,
+    },
     {
       key: "kg",
       label: "kg CO₂e",
       numeric: true,
       first: "descending",
+      orders: { descending: "Most CO₂e", ascending: "Least CO₂e" },
       value: (f) => f.kg,
       text: (f) => (f.kg === null ? dash : tenths.format(f.kg)),
     },
@@ -185,6 +202,7 @@ Passport.panel = (() => {
       label: "g/km",
       numeric: true,
       first: "descending",
+      orders: { descending: "Most CO₂e per km", ascending: "Least CO₂e per km" },
       value: intensity,
       text: (f) => {
         const value = intensity(f);
@@ -196,12 +214,14 @@ Passport.panel = (() => {
       label: "Block",
       numeric: true,
       first: "descending",
+      orders: { descending: "Longest block time", ascending: "Shortest block time" },
       value: (f) => f.durationHours,
       text: (f) => (f.durationHours === null ? dash : formatDuration(f.durationHours)),
     },
     {
       key: "source",
       label: "Estimate",
+      orders: { ascending: "Exact estimates first", descending: "Missing estimates first" },
       value: (f) => source(f)[1],
       text: (f) => source(f)[0],
     },
@@ -282,6 +302,17 @@ Passport.panel = (() => {
       row.append(cell);
     });
     $("flight-panel-head").replaceChildren(row);
+    // Every column in both directions, its first-click direction first.
+    const options = COLUMNS.flatMap((column) => {
+      const first = column.first || "ascending";
+      const second = first === "ascending" ? "descending" : "ascending";
+      return [first, second].map((direction) => {
+        const option = element("option", "", column.orders[direction]);
+        option.value = `${column.key}:${direction}`;
+        return option;
+      });
+    });
+    $("flight-panel-sort").replaceChildren(...options);
   }
 
   function syncSort() {
@@ -289,9 +320,7 @@ Passport.panel = (() => {
       if (cell.dataset.sort === view.sort) cell.setAttribute("aria-sort", view.direction);
       else cell.removeAttribute("aria-sort");
     });
-    const select = $("flight-panel-sort");
-    const wanted = `${view.sort}:${view.direction}`;
-    if ([...select.options].some((option) => option.value === wanted)) select.value = wanted;
+    $("flight-panel-sort").value = `${view.sort}:${view.direction}`;
   }
 
   // "20:30 · 4 Mar 2026 (UTC−05:00)" from "2026-03-04T20:30-05:00": the
