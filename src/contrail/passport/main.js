@@ -197,7 +197,9 @@
   function showRanking(key, title, entries, breakdown, metric, periodKg, kind) {
     rankingData.set(key, { title, entries, breakdown, metric, periodKg, kind });
     charts.ranking(key, entries.slice(0, 6), breakdown, metric, periodKg, kind);
-    document.querySelector(`[data-ranking="${key}"]`).hidden = entries.length <= 6;
+    // Shown for a short ranking too: the canvas cannot take focus, so the
+    // dialog's list of buttons is the keyboard's only way to its flights.
+    document.querySelector(`[data-ranking="${key}"]`).hidden = entries.length === 0;
   }
 
   function renderPatterns(rows) {

@@ -513,8 +513,21 @@ def test_country_charts_name_countries_without_flags(open_passport):
     assert first.locator(".ranking-flag").get_attribute("aria-hidden") == "true"
 
 
-def test_a_short_ranking_has_no_see_all(open_passport):
+def test_a_short_ranking_still_has_see_all_for_the_keyboard(open_passport):
+    """The canvas cannot take focus, so See all, whose rows are buttons, is
+    the keyboard's way to a ranking's flights however short it is. Only a
+    ranking with nothing in it has none."""
     page = open_passport()
+    see_all = page.locator("[data-ranking=routes]")
+    expect(see_all).to_be_visible()
+    see_all.focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#ranking-dialog-list > li")).to_have_count(2)
+    page.keyboard.press("Tab")  # from the close button to the first row
+    page.keyboard.press("Enter")
+    panel_says(page, "JFK ↔ LHR", "2 flights")
+
+    page = open_passport([], name="empty.html")
     expect(page.locator("[data-ranking=routes]")).to_be_hidden()
 
 
