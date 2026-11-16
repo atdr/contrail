@@ -738,7 +738,9 @@ Passport.charts = (() => {
   // a swatch, badge and name per category, in the order the chart stacks
   // them, and the upcoming hatch where the chart draws one. Hidden for the
   // total, which is one colour and needs no key.
-  function legend(id, breakdown, categories, { upcoming = false } = {}) {
+  // `scope` prefixes each entry's filter kind, as "trend." does for the
+  // annual trajectory, whose key covers every year, flown and booked.
+  function legend(id, breakdown, categories, { upcoming = false, scope = "" } = {}) {
     const list = $(id);
     list.hidden = breakdown === "total" || !categories.length;
     if (list.hidden) {
@@ -762,7 +764,7 @@ Passport.charts = (() => {
       const swatch = document.createElement("span");
       swatch.style.background = categoryColor(breakdown, category);
       return item(
-        panelKey(breakdown, category),
+        panelKey(`${scope}${breakdown}`, category),
         swatch,
         categoryIcon(breakdown, category),
         category,
@@ -771,7 +773,7 @@ Passport.charts = (() => {
     if (upcoming) {
       const hatch = document.createElement("span");
       hatch.className = "upcoming";
-      items.push(item(panelKey("upcoming", ""), hatch, "Upcoming"));
+      items.push(item(panelKey(`${scope}upcoming`, ""), hatch, "Upcoming"));
     }
     list.replaceChildren(...items);
   }

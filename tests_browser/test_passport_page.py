@@ -903,7 +903,7 @@ def test_a_key_entry_and_a_composition_row_open_their_category(open_passport):
     page.locator("#trend-breakdown-tabs [data-value=cabin]").click()
     page.locator("#trend-legend button", has_text="Business").click()
     panel_says(page, "Business", "1 flight")
-    expect(page.locator("#flight-panel-kind")).to_have_text("Cabin")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Cabin · all years, flown and booked")
     close_panel(page)
 
     page.locator("#trend-legend button", has_text="Upcoming").click()
@@ -912,6 +912,66 @@ def test_a_key_entry_and_a_composition_row_open_their_category(open_passport):
 
     page.locator("#reasons-legend button", has_text="Leisure").click()
     panel_says(page, "Leisure", "1 flight")
+
+
+def test_the_trend_key_opens_the_trend_s_own_scope(open_passport):
+    """The trend charts every year, flown and booked, but its key opened the
+    chosen year's completed flights: a category with only bookings read 0
+    flights, and with a year chosen the key opened that year alone. Its key
+    now opens every dated flight in the category, and says so; every other
+    chart's key keeps the chosen period."""
+    rows = [
+        row(
+            flight_date="2025-05-10",
+            origin="LHR",
+            destination="JFK",
+            cabin_class_known="business",
+            flight_reason="business",
+            emissions_kg_actual="1500",
+        ),
+        row(
+            flight_date="2026-03-04",
+            origin="JFK",
+            destination="LHR",
+            cabin_class_known="business",
+            flight_reason="business",
+            emissions_kg_actual="1400",
+        ),
+        row(
+            flight_date="2026-09-01",
+            origin="LHR",
+            destination="SIN",
+            flight_reason="leisure",
+            emissions_kg_actual="900",
+        ),
+    ]
+    page = open_passport(rows)
+    page.locator("#trend-breakdown-tabs [data-value=reason]").click()
+    page.locator("#trend-legend button", has_text="Leisure").click()
+    panel_says(page, "Leisure", "1 flight")  # booked only: it read 0 before
+    expect(page.locator("#flight-panel-kind")).to_have_text("Reason · all years, flown and booked")
+    expect(page.locator("#flight-panel-total")).to_have_text("900 kg CO₂e")
+    close_panel(page)
+
+    page.get_by_role("button", name="2025", exact=True).click()
+    page.locator("#trend-legend button", has_text="Business").click()
+    panel_says(page, "Business", "2 flights")  # both years, not 2025 alone
+    assert "panel=trend.reason%3ABusiness" in page.evaluate("location.href")
+    page.reload(wait_until="networkidle")
+    panel_says(page, "Business", "2 flights")
+    close_panel(page)
+
+    # The drivers' key still opens the chosen year.
+    page.locator("#reasons-legend button", has_text="Business").click()
+    panel_says(page, "Business", "1 flight")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Reason · 2025")
+    close_panel(page)
+
+    # Only the kinds the trend key holds take the prefix.
+    assert page.evaluate(
+        "['trend.cabin:Economy', 'trend.upcoming:', 'trend.route:JFK ↔ LHR', 'trend.flight:x']"
+        ".map(key => Passport.panel.describe(key) !== null)"
+    ) == [True, True, False, False]
 
 
 def test_a_card_opens_its_flight_with_the_detail_shown(open_passport):

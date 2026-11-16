@@ -174,6 +174,7 @@
     );
     charts.legend("trend-legend", state.trendBreakdown, categories, {
       upcoming: series.some((item) => item.planned),
+      scope: "trend.",
     });
 
     // With no year chosen, the tile reads the newest year anything was flown

@@ -109,15 +109,33 @@ Passport.panel = (() => {
     },
   };
 
+  // The annual trajectory charts every dated flight, flown and booked, in
+  // every year, so its key opens its categories in that scope rather than
+  // the chosen year's completed flights: "trend.cabin:Business". Only the
+  // kinds its key can hold take the prefix.
+  const TREND = "trend.";
+  const TREND_KINDS = new Set(["cabin", "reason", "upcoming"]);
+  function trendDefinition(kind) {
+    const base = KINDS[kind];
+    return {
+      ...base,
+      scope: "all",
+      pool: kind === "upcoming" ? "upcoming" : "dated",
+      eyebrow: `${base.eyebrow} · all years, ${kind === "upcoming" ? "booked" : "flown and booked"}`,
+    };
+  }
+
   // The filter a key names, or null for one that names nothing.
   function describe(key) {
     if (typeof key !== "string" || key.length > 300) return null;
     const split = key.indexOf(":");
     if (split < 1) return null;
-    const kind = key.slice(0, split);
+    let kind = key.slice(0, split);
     const value = key.slice(split + 1);
-    if (!Object.hasOwn(KINDS, kind)) return null;
-    const definition = KINDS[kind];
+    const trend = kind.startsWith(TREND);
+    if (trend) kind = kind.slice(TREND.length);
+    if (!Object.hasOwn(KINDS, kind) || (trend && !TREND_KINDS.has(kind))) return null;
+    const definition = trend ? trendDefinition(kind) : KINDS[kind];
     if (definition.bare ? value : definition.valid ? !definition.valid(value) : !value) return null;
     return {
       kind,
@@ -137,7 +155,9 @@ Passport.panel = (() => {
         : definition.pool === "upcoming"
           ? // A flight with no date is neither flown nor upcoming.
             source.filter((flight) => !flight.departed && flight.date)
-          : completed(source);
+          : definition.pool === "dated"
+            ? source.filter((flight) => flight.date)
+            : completed(source);
     return pool.filter(definition.match(value));
   }
 
