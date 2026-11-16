@@ -557,15 +557,15 @@ def test_every_chart_ticks_at_one_size_in_a_system_font(open_passport):
 def test_flight_tags_have_a_dark_scheme_of_their_own(open_passport, page):
     """In dark mode the tags kept their light pastel fills and white ring,
     bright stickers on a dark card. Each now has a dark variant."""
-    # Each colour's relative luminance, 0 to 255, read back from a canvas so
-    # rgb() and the color(srgb ...) that color-mix() computes to compare alike.
+    # Each colour's relative luminance, 0 to 255. Chrome reports a plain
+    # colour as rgb() and a color-mix() as color(srgb r g b) with 0 to 1
+    # channels; both are parsed here.
     styles = """els => {
-      const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
       const luminance = colour => {
-        ctx.clearRect(0, 0, 1, 1);
-        ctx.fillStyle = colour;
-        ctx.fillRect(0, 0, 1, 1);
-        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        const srgb = colour.match(/^color\\(srgb ([\\d.]+) ([\\d.]+) ([\\d.]+)/);
+        const [r, g, b] = srgb
+          ? srgb.slice(1, 4).map(channel => Number(channel) * 255)
+          : colour.match(/[\\d.]+/g).slice(0, 3).map(Number);
         return 0.2126 * r + 0.7152 * g + 0.0722 * b;
       };
       return els.map(el => {
@@ -579,6 +579,11 @@ def test_flight_tags_have_a_dark_scheme_of_their_own(open_passport, page):
     page = open_passport()
     light = page.locator(".flight-tag").evaluate_all(styles)
     page.emulate_media(color_scheme="dark")
+    # The scheme change redraws the page, cards and their tags included, in
+    # a task of its own. Read the tags only once that redraw has replaced
+    # them, or a detached tag reports no colour at all.
+    page.wait_for_function("() => matchMedia('(prefers-color-scheme: dark)').matches")
+    page.evaluate("() => new Promise(r => setTimeout(() => requestAnimationFrame(r)))")
     dark = page.locator(".flight-tag").evaluate_all(styles)
 
     assert {name for name, *_ in light} >= {
