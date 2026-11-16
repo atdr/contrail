@@ -48,6 +48,13 @@ calls for go on the Dependabot branch, and the PR is squash merged;
 [contrail-gh's AGENTS.md](https://github.com/atdr/contrail-gh/blob/main/AGENTS.md#when-contrail-changes)
 is the canonical statement of why.
 
+Two of those reactions are made for you in contrail-gh. `pin-bump.yml` there
+commits the quoted `contrails==X.Y.Z` pins and the regenerated
+`flight_emissions.csv` header to Dependabot's branch, so a release that changes
+nothing else arrives green. It never writes `contrail-surface.json`: when the
+surface changed, it comments the diff and the regenerated file instead, and the
+surface check stays red until a person has made the rest of the reaction.
+
 Dependabot closes the mechanical gap — a bump PR always opens, unprompted. It
 does not close the content gap: whether that release also needs one of the other
 changes in this table is a judgment call, and until the surface-diff check
@@ -81,7 +88,9 @@ Regenerating the header, from a checkout of contrail:
   > ../contrail-gh/flight_emissions.csv
 ```
 
-Regenerating `contrail-surface.json`, from the same checkout:
+Regenerating `contrail-surface.json`, from the same checkout. contrail-gh's
+`surface-check.yml` and `pin-bump.yml` compute the surface the same way, so a
+change to its shape changes all three:
 
 ```bash
 ./venv/bin/python -c '
