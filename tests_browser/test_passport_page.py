@@ -1007,6 +1007,22 @@ def test_flight_detail_shows_every_cabin_and_the_contrail_impact(open_passport):
     expect(detail).to_have_count(0)
 
 
+def test_a_trend_bar_chooses_its_year_and_stands_out(open_passport, page):
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    click_bar(page, "trend-chart", 0)
+    pressed(page, "#periods button:text-is('2025')")
+    assert text(page, "#hero-value") == "1.5 t CO₂e"
+    fills = page.evaluate("Chart.getChart('trend-chart').data.datasets[0].backgroundColor")
+    assert fills[0] == "#0b8071"
+    assert fills[1].startswith("#0b8071") and fills[1] != fills[0]  # dimmed
+
+    click_bar(page, "trend-chart", 0)  # the chosen year again: back to all time
+    pressed(page, "#periods button:text-is('All time')")
+    fills = page.evaluate("Chart.getChart('trend-chart').data.datasets[0].backgroundColor")
+    assert fills == ["#0b8071", "#0b8071"]
+
+
 def test_the_panel_fits_a_320px_phone(open_passport, page):
     page.set_viewport_size(VIEWPORTS["narrow"])
     page = open_passport()

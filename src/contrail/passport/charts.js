@@ -327,11 +327,12 @@ Passport.charts = (() => {
     },
   };
 
-  function hatchPattern(canvas, color) {
+  function hatchPattern(canvas, color, alpha = 1) {
     const hatch = document.createElement("canvas");
     hatch.width = 9;
     hatch.height = 9;
     const context = hatch.getContext("2d");
+    context.globalAlpha = alpha;
     context.fillStyle = `${color}42`;
     context.fillRect(0, 0, 9, 9);
     context.strokeStyle = color;
@@ -840,9 +841,23 @@ Passport.charts = (() => {
     });
   }
 
+  // How strongly a year that is not the chosen one is drawn.
+  const DIMMED = 0.3;
+  const dim = (color) => {
+    const hex = /^#[0-9a-f]{6}$/i.test(color) ? color : null;
+    return hex
+      ? `${hex}${Math.round(DIMMED * 255)
+          .toString(16)
+          .padStart(2, "0")}`
+      : color;
+  };
+
   // `series` is what Passport.aggregate.yearSeries returns; `categories` the
-  // breakdown's categories across every flight.
-  function trend(series, categories, breakdown) {
+  // breakdown's categories across every flight. With a year chosen, its bars
+  // keep their colour and every other year's are dimmed. A click on a year
+  // calls `onYear(year)`.
+  function trend(series, categories, breakdown, selectedYear, onYear) {
+    const chosen = (item) => selectedYear === null || item.year === selectedYear;
     const maximum = Math.max(0, ...series.map((item) => item.completed + item.planned));
     const totals = series.map((item) => item.completed + item.planned);
     const theme = chartTheme();
@@ -870,7 +885,10 @@ Passport.charts = (() => {
     );
     const datasets = categories.flatMap((category) => {
       const color = breakdownColor(breakdown, category);
-      const upcomingPattern = hatchPattern($("trend-chart"), color);
+      const fill = series.map((item) => (chosen(item) ? color : dim(color)));
+      const full = hatchPattern($("trend-chart"), color);
+      const faint = hatchPattern($("trend-chart"), color, DIMMED);
+      const upcomingPattern = series.map((item) => (chosen(item) ? full : faint));
       const filterCategory = (row) =>
         breakdown === "total" || visualCategory(row, breakdown) === category;
       return [
@@ -882,8 +900,8 @@ Passport.charts = (() => {
               "kg",
             ),
           ),
-          backgroundColor: color,
-          hoverBackgroundColor: color,
+          backgroundColor: fill,
+          hoverBackgroundColor: fill,
           borderSkipped: false,
           borderRadius: stackedBorderRadius("x"),
           barPercentage: 0.72,
@@ -900,7 +918,7 @@ Passport.charts = (() => {
           hoverBackgroundColor: upcomingPattern,
           swatch: color,
           hatched: true,
-          borderColor: color,
+          borderColor: fill,
           borderWidth: 1,
           borderSkipped: false,
           borderRadius: stackedBorderRadius("x"),
@@ -921,6 +939,7 @@ Passport.charts = (() => {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
+        onClick: clickAlong("x", (index) => onYear(series[index].year)),
         layout: { padding: { top: 28 } },
         plugins: {
           legend: { display: false },

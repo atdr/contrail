@@ -109,7 +109,11 @@
   function renderTrend() {
     const series = yearSeries(data.flights, data.years);
     const categories = breakdownCategories(withEmissions(data.flights), state.trendBreakdown);
-    charts.trend(series, categories, state.trendBreakdown);
+    // A click on a year chooses it; a click on the chosen year goes back to
+    // all time.
+    charts.trend(series, categories, state.trendBreakdown, state.year, (year) =>
+      setState({ year: state.year === year ? null : year }),
+    );
     charts.legend("trend-legend", state.trendBreakdown, categories, {
       upcoming: series.some((item) => item.planned),
     });
