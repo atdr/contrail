@@ -98,14 +98,23 @@
   }
 
   // "+12% vs 2024" for the chosen year against the one before, or "" when
-  // no year is chosen or either year lacks the figure.
+  // no year is chosen or either year lacks the figure. The year the page
+  // was generated in is still in progress, so its total is compared with
+  // the previous year up to the same day ("vs 2025 to date"): against a
+  // whole year, every year in progress would read as a fall. Per km and
+  // per hour are rates, fair to compare whole year with part year.
   function yearOnYear(rows) {
     if (state.year === null) return "";
     const previous = state.year - 1;
-    const before = headline(scoped(data.flights, previous), state.metric);
+    const generated = data.meta.generatedAt.slice(0, 10);
+    const toDate = state.metric === "total" && Number(generated.slice(0, 4)) === state.year;
+    const earlier = scoped(data.flights, previous).filter(
+      (flight) => !toDate || flight.date.slice(5) <= generated.slice(5),
+    );
+    const before = headline(earlier, state.metric);
     const now = headline(rows, state.metric);
     if (!before || now === null) return "";
-    return ` · ${formatChange((now - before) / before)} vs ${previous}`;
+    return ` · ${formatChange((now - before) / before)} vs ${previous}${toDate ? " to date" : ""}`;
   }
 
   function renderHero(rows) {

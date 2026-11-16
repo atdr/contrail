@@ -1048,11 +1048,29 @@ def test_a_chosen_year_says_how_it_compares_with_the_one_before(open_passport):
     assert " vs " not in text(page, "#hero-context")
     page.get_by_role("button", name="2026", exact=True).click()
     assert re.fullmatch(
-        r"Passenger emissions across 3 completed flights · [-−]79% vs 2025",
+        r"Passenger emissions across 3 completed flights · [-−]79% vs 2025 to date",
         text(page, "#hero-context"),
     )
     page.get_by_role("button", name="2025", exact=True).click()
     assert " vs " not in text(page, "#hero-context")  # 2024 has no flights
+
+
+def test_the_year_in_progress_is_compared_to_date(open_passport):
+    """2026 is the year the page was generated in (14 August), so its total
+    so far is set against 2025 up to 14 August, not against all of 2025,
+    which would make any year in progress look like a fall. A rate is
+    still compared whole year with part year."""
+    rows = [
+        row(flight_date="2025-03-01", origin="LHR", destination="CDG", emissions_kg_actual="100"),
+        row(flight_date="2025-10-01", origin="LHR", destination="CDG", emissions_kg_actual="900"),
+        row(flight_date="2026-03-01", origin="LHR", destination="CDG", emissions_kg_actual="150"),
+    ]
+    page = open_passport(rows)
+    page.get_by_role("button", name="2026", exact=True).click()
+    assert text(page, "#hero-context").endswith("· +50% vs 2025 to date")
+    page.locator("#metric-tabs [data-value=distance]").click()
+    # 150 kg over the same distance as 1000 kg over two of them: -70%.
+    assert re.search(r"· [-−]70% vs 2025$", text(page, "#hero-context"))
 
 
 def test_the_view_survives_a_reload_through_the_hash(open_passport):
