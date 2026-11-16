@@ -48,6 +48,7 @@
           <div
             class="metric-tabs"
             id="metric-tabs"
+            role="group"
             aria-label="Headline measure"
           >
             <button
@@ -179,6 +180,7 @@
             <div
               class="pattern-tabs"
               id="pattern-tabs"
+              role="group"
               aria-label="Carbon impact grouping"
             >
               <button
@@ -533,9 +535,7 @@
         </button>
       </div>
       <div class="dialog-scroll">
-        <div class="dialog-chart" id="ranking-dialog-chart">
-          <canvas id="ranking-dialog-canvas"></canvas>
-        </div>
+        <ol class="ranking-list" id="ranking-dialog-list" role="list"></ol>
       </div>
     </dialog>
 

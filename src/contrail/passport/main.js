@@ -98,8 +98,11 @@
     const categories = breakdownCategories(withEmissions(data.flights), state.trendBreakdown);
     charts.trend(series, categories, state.trendBreakdown);
 
-    const year = state.year || data.years[0];
-    const current = series.find((item) => item.year === year);
+    // With no year chosen, the tile reads the newest year anything was flown
+    // in: a year holding only bookings would read zero.
+    const current = state.year
+      ? series.find((item) => item.year === state.year)
+      : series.findLast((item) => withEmissions(completed(item.rows)).length) || series.at(-1);
     const trendUnit = current && Math.max(current.completed, current.planned) >= 1000 ? "t" : "kg";
     $("trend-note-label").textContent = state.year
       ? String(state.year)
@@ -330,11 +333,9 @@
           : "total CO₂e";
     const breakdownLabel = breakdown === "total" ? "" : ` by ${breakdown}`;
     $("ranking-dialog-title").textContent = `${ranking.title} · ${metricLabel}${breakdownLabel}`;
-    $("ranking-dialog-chart").style.height = `${Math.max(360, ranking.entries.length * 34)}px`;
+    charts.rankingList("ranking-dialog-list", ranking.entries, breakdown, metric);
     $("ranking-dialog").showModal();
-    requestAnimationFrame(() =>
-      charts.ranking("ranking-dialog-canvas", ranking.entries, breakdown, metric),
-    );
+    $("ranking-dialog-list").parentElement.scrollTop = 0;
   }
 
   // One listener for every segmented control, the year buttons included.
@@ -352,6 +353,10 @@
   $("ranking-dialog").addEventListener("click", (event) => {
     if (event.target === $("ranking-dialog")) $("ranking-dialog").close();
   });
+
+  // Charts read their colours when drawn, so a scheme change while the page
+  // is open redraws every section rather than leaving last scheme's ink.
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render());
 
   buildPeriods();
   map.setup(world);

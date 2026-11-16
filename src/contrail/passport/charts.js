@@ -9,6 +9,7 @@ Passport.charts = (() => {
     formatMassText,
     formatMassAxisTick,
     formatRankingValue,
+    MONTHS,
     cssColor,
     categoryColor,
     categoryIcon,
@@ -30,23 +31,87 @@ Passport.charts = (() => {
   const breakdownColor = (breakdown, category) =>
     breakdown === "total" ? totalColor() : categoryColor(breakdown, category);
 
+  // Chart colours are the stylesheet's, read at each draw. A custom property
+  // set with light-dark() computes to that function rather than a colour, so
+  // each is resolved through a hidden element's `color`, which applies the
+  // active scheme.
+  const probe = document.createElement("span");
+  probe.hidden = true;
+  document.body.append(probe);
+  function themeColor(name) {
+    probe.style.color = `var(${name})`;
+    return getComputedStyle(probe).color;
+  }
+
   function chartTheme() {
-    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     return {
-      text: getComputedStyle(document.body).color,
-      muted: dark ? "#a5b2aa" : "#647068",
-      grid: dark ? "rgba(165,178,170,0.18)" : "rgba(100,112,104,0.16)",
+      text: themeColor("--text"),
+      muted: themeColor("--muted"),
+      grid: themeColor("--chart-grid"),
     };
   }
 
   const charts = new Map();
 
+  const TICK_SIZE = 12;
+
+  // Below this width a period chart shortens its axis: month initials, and
+  // value labels a size smaller.
+  const narrow = (chart) => chart.width < 420;
+
+  // A period chart's x ticks: never rotated, thinned to what fits, and a
+  // month as its initial on a narrow chart.
+  const periodTicks = (color, extra = {}) => ({
+    autoSkip: true,
+    autoSkipPadding: 6,
+    maxRotation: 0,
+    minRotation: 0,
+    color,
+    ...extra,
+    callback(value) {
+      const label = String(this.getLabelForValue(value));
+      return narrow(this.chart) && MONTHS.includes(label) ? label[0] : label;
+    },
+  });
+
+  // Every ranking chart's label gutter, the same share of its width within
+  // fixed bounds, so rankings of one width start their bars at one x rather
+  // than each sizing a gutter to its own longest label.
+  const rankingGutter = (chart) => Math.round(Math.min(220, Math.max(96, chart.width * 0.44)));
+
+  const fits = (ctx, text, width) => ctx.measureText(text).width <= width;
+  const firstParts = (label, count) => label.split(" · ").slice(0, count).join(" · ");
+
+  // Labels are cut to `width` px in ctx's current font. Whole " · " parts go
+  // from the end first, the same number from every label so a ranking reads
+  // as one list: a flight keeps its number and route before its date. Then a
+  // label still too long loses characters and ends in an ellipsis.
+  function sharedParts(ctx, labels, width) {
+    const most = Math.max(1, ...labels.map((label) => label.split(" · ").length));
+    for (let count = most; count > 1; count -= 1) {
+      if (labels.every((label) => fits(ctx, firstParts(label, count), width))) return count;
+    }
+    return 1;
+  }
+
+  function fitLabel(ctx, label, width, parts) {
+    const kept = firstParts(label, parts);
+    if (fits(ctx, kept, width)) return kept;
+    const characters = Array.from(kept);
+    let low = 0;
+    let high = characters.length;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (fits(ctx, `${characters.slice(0, middle).join("").trimEnd()}…`, width)) low = middle;
+      else high = middle - 1;
+    }
+    return `${characters.slice(0, low).join("").trimEnd()}…`;
+  }
+
   // Draw `configuration` on the canvas `id`. The first call makes the chart;
   // later calls swap its data and options and redraw it in place. Plugins are
   // fixed when the chart is made, so a plugin that needs this draw's figures
   // reads them from `chart.data.valueLabels`, which travels with the data.
-  // Resizing first measures the container now, as a new chart would: the
-  // dialog's canvas changes height between openings while it is hidden.
   function draw(id, configuration) {
     const existing = charts.get(id);
     if (!existing) {
@@ -55,7 +120,6 @@ Passport.charts = (() => {
     }
     existing.data = configuration.data;
     existing.options = configuration.options;
-    existing.resize();
     existing.update("none");
   }
 
@@ -87,30 +151,49 @@ Passport.charts = (() => {
   };
 
   // A mass above each vertical stack: `totals` and `unit` from
-  // chart.data.valueLabels.
+  // chart.data.valueLabels. Drawn newest first, each kept inside the canvas
+  // at either edge. When bars are narrow a label is wider than its bar, so
+  // one that would overlap a neighbouring bar or a label already drawn is
+  // left out rather than drawn as a smear.
   const periodValueLabels = {
     id: "passport-period-value-labels",
     afterDatasetsDraw(chart) {
       const { totals, unit } = chart.data.valueLabels;
-      const { ctx } = chart;
-      ctx.save();
-      ctx.fillStyle = chartTheme().text;
-      ctx.font = `500 12px ${chartFont}`;
-      totals.forEach((total, index) => {
-        const bars = chart.data.datasets
+      const { ctx, width } = chart;
+      const size = narrow(chart) ? 11 : 12;
+      const stacks = totals.map((_, index) =>
+        chart.data.datasets
           .map((dataset, datasetIndex) =>
             dataset.data[index] ? chart.getDatasetMeta(datasetIndex).data[index] : null,
           )
-          .filter(Boolean);
-        const anchor = bars.reduce(
-          (highest, bar) => (!highest || bar.y < highest.y ? bar : highest),
-          null,
+          .filter(Boolean)
+          .reduce((highest, bar) => (!highest || bar.y < highest.y ? bar : highest), null),
+      );
+      ctx.save();
+      ctx.fillStyle = chartTheme().text;
+      ctx.font = `500 ${size}px ${chartFont}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      let limit = Number.POSITIVE_INFINITY;
+      for (let index = totals.length - 1; index >= 0; index -= 1) {
+        const anchor = stacks[index];
+        if (!anchor) continue;
+        const text = formatMassText(totals[index], unit);
+        const half = ctx.measureText(text).width / 2;
+        const x = Math.min(Math.max(anchor.x, half), width - half);
+        const bottom = anchor.y - 7;
+        const blocked = stacks.some(
+          (bar, other) =>
+            bar &&
+            other !== index &&
+            bar.x + bar.width / 2 > x - half &&
+            bar.x - bar.width / 2 < x + half &&
+            bar.y < bottom,
         );
-        if (!anchor) return;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "bottom";
-        ctx.fillText(formatMassText(total, unit), anchor.x, anchor.y - 7);
-      });
+        if (blocked || x + half > limit - 4) continue;
+        ctx.fillText(text, x, bottom);
+        limit = x - half;
+      }
       ctx.restore();
     },
   };
@@ -154,10 +237,9 @@ Passport.charts = (() => {
     };
   }
 
-  function ranking(id, entries, breakdown, metric) {
-    const theme = chartTheme();
-    const totals = entries.map((entry) => rankingMetricValue(entry, metric));
-    const maximum = Math.max(1, ...totals);
+  // A ranking's breakdown categories, heaviest across its entries first;
+  // none for the total.
+  function rankingCategories(entries, breakdown, metric) {
     const categoryTotals = new Map();
     if (breakdown !== "total") {
       entries.forEach((entry) => {
@@ -167,9 +249,14 @@ Passport.charts = (() => {
         });
       });
     }
-    const categories = [...categoryTotals.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map((entry) => entry[0]);
+    return [...categoryTotals.entries()].sort((a, b) => b[1] - a[1]).map((entry) => entry[0]);
+  }
+
+  function ranking(id, entries, breakdown, metric) {
+    const theme = chartTheme();
+    const totals = entries.map((entry) => rankingMetricValue(entry, metric));
+    const maximum = Math.max(1, ...totals);
+    const categories = rankingCategories(entries, breakdown, metric);
     const datasets =
       breakdown === "total"
         ? [
@@ -225,6 +312,9 @@ Passport.charts = (() => {
           legend: { display: false },
           tooltip: {
             callbacks: {
+              // The full label: the axis may show it cut short.
+              title: (items) =>
+                items.length ? items[0].chart.data.labels[items[0].dataIndex] : "",
               label: (context) =>
                 `${context.dataset.label}: ${formatRankingValue(context.raw, metric, true)}`,
             },
@@ -234,13 +324,109 @@ Passport.charts = (() => {
           x: { display: false, stacked: true, beginAtZero: true, max: maximum * 1.24 },
           y: {
             stacked: true,
-            grid: { display: false },
+            // No tick marks: they take 8px of the gutter even with the grid
+            // hidden, which is room the labels were measured to have.
+            grid: { display: false, drawTicks: false },
             border: { display: false },
-            ticks: { autoSkip: false, color: theme.text, font: { size: 12 } },
+            afterFit: (scale) => {
+              scale.width = rankingGutter(scale.chart);
+            },
+            ticks: {
+              autoSkip: false,
+              color: theme.text,
+              font: { size: TICK_SIZE },
+              callback(value) {
+                const { ctx } = this.chart;
+                const width = rankingGutter(this.chart) - this.options.ticks.padding - 2;
+                ctx.save();
+                ctx.font = `${TICK_SIZE}px ${chartFont}`;
+                const parts = sharedParts(ctx, this.chart.data.labels, width);
+                const label = fitLabel(ctx, this.getLabelForValue(value), width, parts);
+                ctx.restore();
+                return label;
+              },
+            },
           },
         },
       },
     });
+  }
+
+  // A whole ranking as an HTML list in the element `id`: rank, label, value,
+  // and a bar sized in CSS, split by category when a breakdown is chosen.
+  // HTML rather than a canvas because a canvas tall enough for every flight
+  // in a long log passes iOS Safari's canvas size limit and draws blank.
+  function rankingList(id, entries, breakdown, metric) {
+    const list = $(id);
+    const totals = entries.map((entry) => rankingMetricValue(entry, metric));
+    const maximum = Math.max(0, ...totals);
+    const categories = rankingCategories(entries, breakdown, metric);
+    const span = (className, text = "") => {
+      const element = document.createElement("span");
+      element.className = className;
+      element.textContent = text;
+      return element;
+    };
+    // Each " · " part of a label wraps as a whole, so a flight breaks between
+    // its route and its date rather than inside the date.
+    const rankingLabel = (label) => {
+      const element = span("ranking-label");
+      const parts = label.split(" · ");
+      parts.forEach((part, index) => {
+        if (index) element.append(" ");
+        element.append(span("", index < parts.length - 1 ? `${part} ·` : part));
+      });
+      return element;
+    };
+    list.replaceChildren(
+      ...entries.map((entry, index) => {
+        const total = totals[index];
+        const row = document.createElement("li");
+        row.className = "ranking-row";
+        const bar = span("ranking-bar");
+        bar.setAttribute("aria-hidden", "true");
+        const fill = span("ranking-fill");
+        fill.style.width = `${maximum ? (total / maximum) * 100 : 0}%`;
+        const parts =
+          breakdown === "total"
+            ? [["Total", total, totalColor()]]
+            : categories.map((category) => [
+                category,
+                rankingCategoryValue(entry, breakdown, category, metric),
+                categoryColor(breakdown, category),
+              ]);
+        const present = parts.filter(([, value]) => value > 0);
+        present.forEach(([category, value, color]) => {
+          const segment = span("ranking-segment");
+          segment.style.width = `${total ? (value / total) * 100 : 0}%`;
+          segment.style.background = color;
+          fill.append(segment);
+        });
+        bar.append(fill);
+        row.append(
+          span("ranking-rank", String(index + 1)),
+          rankingLabel(entry.label),
+          span("ranking-value", formatRankingValue(total, metric)),
+          bar,
+        );
+        // A breakdown is spelled out under the bar, not left to colour or a
+        // hover title: touch screens never show a title, and screen readers
+        // need the figures as text.
+        if (breakdown !== "total") {
+          const details = span("ranking-breakdown");
+          present.forEach(([category, value, color]) => {
+            const item = span("ranking-breakdown-item");
+            const swatch = span("ranking-swatch");
+            swatch.style.background = color;
+            swatch.setAttribute("aria-hidden", "true");
+            item.append(swatch, `${category} ${formatRankingValue(value, metric)}`);
+            details.append(item);
+          });
+          row.append(details);
+        }
+        return row;
+      }),
+    );
   }
 
   function composition(id, entries, kind) {
@@ -368,7 +554,7 @@ Passport.charts = (() => {
             stacked: true,
             grid: { display: false },
             border: { color: theme.grid },
-            ticks: { autoSkip: false, color: theme.muted },
+            ticks: periodTicks(theme.muted),
           },
           y: {
             stacked: true,
@@ -476,7 +662,7 @@ Passport.charts = (() => {
             stacked: true,
             grid: { display: false },
             border: { color: theme.grid },
-            ticks: { autoSkip: false, color: theme.muted, font: { size: 11 } },
+            ticks: periodTicks(theme.muted, { font: { size: 11 } }),
           },
           y: {
             stacked: true,
@@ -490,5 +676,5 @@ Passport.charts = (() => {
     });
   }
 
-  return { ranking, composition, pattern, trend };
+  return { ranking, rankingList, composition, pattern, trend };
 })();

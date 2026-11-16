@@ -6,6 +6,7 @@
   --text: light-dark(#132019, #f1f6f2);
   --muted: light-dark(#647068, #a5b2aa);
   --line: light-dark(#dce5df, #34443a);
+  --chart-grid: light-dark(rgba(100, 112, 104, 0.16), rgba(165, 178, 170, 0.18));
   --forest: light-dark(#123c2c, #1a4d39);
   --teal: light-dark(#087567, #36c8ae);
   --teal-soft: light-dark(#83d9ca, #167d6e);
@@ -194,13 +195,13 @@ h3 {
   width: max-content;
   max-width: 100%;
   gap: 4px;
-  flex-wrap: wrap;
   margin: 24px 0 18px;
   padding: 4px;
   border-radius: 999px;
   background: var(--surface-soft);
 }
 .metric-tabs button {
+  flex: 0 0 auto;
   min-height: 36px;
   padding: 7px 13px;
   border: 0;
@@ -351,10 +352,11 @@ h3 {
   gap: 18px;
   flex-wrap: wrap;
 }
+/* A segmented control is one row: a pill that wraps is no longer a pill.
+   Below 620px one that cannot fit scrolls inside itself instead. */
 .pattern-tabs {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
   padding: 4px;
   border-radius: 999px;
   background: var(--surface-soft);
@@ -382,18 +384,16 @@ h3 {
 .trend-chart,
 .pattern-chart {
   width: 100%;
-  overflow-x: auto;
+  min-width: 0;
 }
 .chart-stage {
   position: relative;
-  min-width: 720px;
   height: 270px;
 }
 .pattern-chart {
   height: 100%;
 }
 .pattern-chart .chart-stage {
-  min-width: 680px;
   min-height: 420px;
   height: 100%;
 }
@@ -509,6 +509,7 @@ h3 {
 }
 
 .pattern-tabs button {
+  flex: 0 0 auto;
   min-height: 36px;
   padding: 7px 13px;
   border: 0;
@@ -516,6 +517,7 @@ h3 {
   color: var(--muted);
   background: transparent;
   cursor: pointer;
+  white-space: nowrap;
 }
 .pattern-tabs button[aria-pressed="true"] {
   color: var(--control-active-text);
@@ -758,9 +760,72 @@ h3 {
   padding: 16px 20px 24px;
   overflow-y: auto;
 }
-.dialog-chart {
-  position: relative;
-  min-height: 360px;
+/* list-style: none drops an <ol>'s list semantics in Safari, so the element
+   also carries role="list" in template.html. */
+.ranking-list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ranking-row {
+  display: grid;
+  grid-template-columns: 2.2em minmax(0, 1fr) auto;
+  column-gap: 12px;
+  row-gap: 6px;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+.ranking-rank {
+  color: var(--muted);
+  text-align: right;
+}
+.ranking-label {
+  overflow-wrap: anywhere;
+}
+.ranking-label > span {
+  display: inline-block;
+  max-width: 100%;
+}
+.ranking-value {
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ranking-bar {
+  grid-column: 2 / -1;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+}
+.ranking-fill {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+}
+.ranking-segment {
+  flex: 0 0 auto;
+  height: 100%;
+}
+.ranking-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 2 / -1;
+  gap: 4px 14px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.ranking-breakdown-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.ranking-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
 }
 
 footer {
@@ -769,20 +834,25 @@ footer {
   text-align: center;
 }
 
+/* A single column is minmax(0, 1fr), never 1fr: a bare 1fr track is at least
+   its content's min-content width, and a canvas reports its own width as
+   that, 300px before Chart.js first sizes it. The track then holds the
+   canvas at 300px and Chart.js sizes the chart to match, wider than a
+   320px phone. */
 @media (max-width: 900px) {
   .overview,
   .trend-layout,
   .patterns-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .drivers {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .compositions {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .quality-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .quality-groups {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -805,10 +875,10 @@ footer {
     flex-basis: calc(50% - 18px);
   }
   .drivers {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .extremes {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   section {
     border-radius: 18px;
@@ -836,18 +906,55 @@ footer {
     min-height: 0;
     height: 245px;
   }
+  /* The heading above its controls, not squeezed into a column beside them. */
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .chart-controls {
+    max-width: 100%;
+  }
   .chart-controls,
   .driver-controls {
     justify-content: flex-start;
+    gap: 10px;
+  }
+  .metric-tabs button,
+  .pattern-tabs button {
+    padding-inline: 11px;
+  }
+  .metric-tabs,
+  .pattern-tabs {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
   .chart-controls .pattern-tabs + .pattern-tabs::before,
   .driver-controls .pattern-tabs + .pattern-tabs::before {
     display: none;
   }
   .quality-groups {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .quality-parts {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The widest controls, "Total CO2e / Avg / km / Avg / hr" and the headline
+   measure, fit a 320px phone only with tighter buttons. */
+/* The widest control (Total CO₂e, Avg / km, Avg / hr) needs room for wider
+   fallback fonts too: on Linux Chromium it overflowed by a few pixels at
+   320px with padding alone, so the type steps down as well. */
+@media (max-width: 360px) {
+  .metric-tabs,
+  .pattern-tabs {
+    gap: 2px;
+  }
+  .metric-tabs button,
+  .pattern-tabs button {
+    padding-inline: 7px;
+    font-size: 0.875rem;
   }
 }
