@@ -170,7 +170,7 @@ MARKERS = (
     "PASSPORT_CSS",
     "PASSPORT_JS",
 )
-AUTHORED = ("template.html", "passport.css", "passport.js")
+AUTHORED = ("template.html", "passport.css", *passport.PASSPORT_SCRIPTS)
 
 
 def payload(document: str) -> dict:

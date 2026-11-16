@@ -13,16 +13,17 @@
       "preset": "recommended",
       "suspicious": {
         // Biome reads every .js file as an ES module, where strict mode is
-        // implied. passport.js is inlined into a classic <script>, where it
-        // is not, so its "use strict" is doing real work.
+        // implied. Passport's scripts are inlined into a classic <script>,
+        // where it is not, so each module's "use strict" is doing real work.
         "noRedundantUseStrict": "off"
       }
     }
   },
   "javascript": {
-    // Provided by the Chart.js and Leaflet bundles inlined ahead of the page's
-    // own script.
-    "globals": ["Chart", "L"],
+    // Chart and L are provided by the Chart.js and Leaflet bundles inlined
+    // ahead of the page's own script. Passport is the namespace format.js
+    // declares, which every later file in PASSPORT_SCRIPTS adds to.
+    "globals": ["Chart", "L", "Passport"],
     "formatter": { "quoteStyle": "double" }
   }
 }

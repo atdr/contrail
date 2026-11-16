@@ -16,6 +16,12 @@ from contrail.storage.local_csv import is_cancelled
 
 EARTH_RADIUS_KM = 6371.0088
 
+# Passport's authored script, in the order the files are joined into the one
+# inline <script>. Each file adds a module to the `Passport` namespace and may
+# read only the modules before it, so the order is part of the code: format.js
+# declares the namespace and goes first, main.js draws the page and goes last.
+PASSPORT_SCRIPTS = ("format.js", "aggregate.js", "charts.js", "map.js", "panel.js", "main.js")
+
 
 def _number(value) -> float | None:
     try:
@@ -173,7 +179,9 @@ def _document(rows: list[dict], now: datetime | None) -> str:
         # The authored styles and script. Separate files so each can be read,
         # reviewed and checked as the language it is.
         "__PASSPORT_CSS__": package.joinpath("passport.css").read_text(encoding="utf-8"),
-        "__PASSPORT_JS__": package.joinpath("passport.js").read_text(encoding="utf-8"),
+        "__PASSPORT_JS__": "\n".join(
+            package.joinpath(name).read_text(encoding="utf-8") for name in PASSPORT_SCRIPTS
+        ),
     }
     return _fill(template, assets)
 

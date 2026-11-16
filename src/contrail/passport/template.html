@@ -50,13 +50,28 @@
             id="metric-tabs"
             aria-label="Headline measure"
           >
-            <button type="button" data-metric="total" aria-pressed="true">
+            <button
+              type="button"
+              data-control="metric"
+              data-value="total"
+              aria-pressed="true"
+            >
               CO₂e total
             </button>
-            <button type="button" data-metric="distance" aria-pressed="false">
+            <button
+              type="button"
+              data-control="metric"
+              data-value="distance"
+              aria-pressed="false"
+            >
               Per km
             </button>
-            <button type="button" data-metric="duration" aria-pressed="false">
+            <button
+              type="button"
+              data-control="metric"
+              data-value="duration"
+              aria-pressed="false"
+            >
               Per hour
             </button>
           </div>
@@ -112,21 +127,24 @@
           >
             <button
               type="button"
-              data-trend-breakdown="total"
+              data-control="trendBreakdown"
+              data-value="total"
               aria-pressed="true"
             >
               Total
             </button>
             <button
               type="button"
-              data-trend-breakdown="cabin"
+              data-control="trendBreakdown"
+              data-value="cabin"
               aria-pressed="false"
             >
               Cabin
             </button>
             <button
               type="button"
-              data-trend-breakdown="reason"
+              data-control="trendBreakdown"
+              data-value="reason"
               aria-pressed="false"
             >
               Reason
@@ -163,10 +181,20 @@
               id="pattern-tabs"
               aria-label="Carbon impact grouping"
             >
-              <button type="button" data-pattern="month" aria-pressed="true">
+              <button
+                type="button"
+                data-control="pattern"
+                data-value="month"
+                aria-pressed="true"
+              >
                 Month
               </button>
-              <button type="button" data-pattern="weekday" aria-pressed="false">
+              <button
+                type="button"
+                data-control="pattern"
+                data-value="weekday"
+                aria-pressed="false"
+              >
                 Weekday
               </button>
             </div>
@@ -178,21 +206,24 @@
             >
               <button
                 type="button"
-                data-pattern-breakdown="total"
+                data-control="patternBreakdown"
+                data-value="total"
                 aria-pressed="true"
               >
                 Total
               </button>
               <button
                 type="button"
-                data-pattern-breakdown="cabin"
+                data-control="patternBreakdown"
+                data-value="cabin"
                 aria-pressed="false"
               >
                 Cabin
               </button>
               <button
                 type="button"
-                data-pattern-breakdown="reason"
+                data-control="patternBreakdown"
+                data-value="reason"
                 aria-pressed="false"
               >
                 Reason
@@ -311,21 +342,24 @@
           >
             <button
               type="button"
-              data-driver-metric="total"
+              data-control="driverMetric"
+              data-value="total"
               aria-pressed="true"
             >
               Total CO₂e
             </button>
             <button
               type="button"
-              data-driver-metric="distance"
+              data-control="driverMetric"
+              data-value="distance"
               aria-pressed="false"
             >
               Avg / km
             </button>
             <button
               type="button"
-              data-driver-metric="duration"
+              data-control="driverMetric"
+              data-value="duration"
               aria-pressed="false"
             >
               Avg / hr
@@ -337,13 +371,28 @@
             role="group"
             aria-label="Break down contributor rankings"
           >
-            <button type="button" data-breakdown="total" aria-pressed="true">
+            <button
+              type="button"
+              data-control="driverBreakdown"
+              data-value="total"
+              aria-pressed="true"
+            >
               Total
             </button>
-            <button type="button" data-breakdown="cabin" aria-pressed="false">
+            <button
+              type="button"
+              data-control="driverBreakdown"
+              data-value="cabin"
+              aria-pressed="false"
+            >
               Cabin
             </button>
-            <button type="button" data-breakdown="reason" aria-pressed="false">
+            <button
+              type="button"
+              data-control="driverBreakdown"
+              data-value="reason"
+              aria-pressed="false"
+            >
               Reason
             </button>
           </div>
