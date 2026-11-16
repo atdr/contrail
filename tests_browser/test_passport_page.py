@@ -770,6 +770,298 @@ def test_the_trend_note_sits_level_with_the_chart(open_passport, page):
     assert abs(note["y"] - chart["y"]) < 1
 
 
+# -- drill-down ---------------------------------------------------------------
+
+
+def panel_says(page: Page, title: str, count: str) -> None:
+    expect(page.locator("#flight-panel")).to_be_visible()
+    expect(page.locator("#flight-panel-title")).to_have_text(title)
+    expect(page.locator("#flight-panel-count")).to_have_text(count)
+
+
+def close_panel(page: Page) -> None:
+    page.keyboard.press("Escape")
+    expect(page.locator("#flight-panel")).to_be_hidden()
+
+
+def click_bar(page: Page, canvas: str, index: int) -> None:
+    """Click the middle of bar `index`, or its row's label on a ranking."""
+    page.locator(f"#{canvas}").scroll_into_view_if_needed()
+    x, y = page.evaluate(
+        """([id, index]) => {
+          const chart = Chart.getChart(id);
+          const box = chart.canvas.getBoundingClientRect();
+          const bar = chart.getDatasetMeta(0).data[index];
+          const across = chart.options.indexAxis === 'y';
+          return [box.left + (across ? chart.chartArea.left + 4 : bar.x),
+                  box.top + (across ? bar.y : chart.chartArea.bottom - 2)];
+        }""",
+        [canvas, index],
+    )
+    page.mouse.click(x, y)
+
+
+def test_a_chart_bar_opens_the_flights_behind_it(open_passport, page):
+    """Nothing on the page could be clicked for detail. Every chart now
+    opens the flight panel for what was clicked: a ranking row, a month and
+    a cabin's share of the composition bar."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+
+    click_bar(page, "routes", 0)
+    panel_says(page, "JFK ↔ LHR", "2 flights")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Route")
+    expect(page.locator("#flight-panel-total")).to_have_text("1.8 t CO₂e")
+    close_panel(page)
+
+    click_bar(page, "pattern-chart", 4)  # May
+    panel_says(page, "May", "1 flight")
+    close_panel(page)
+
+    page.get_by_role("button", name="2026", exact=True).click()
+    click_bar(page, "carriers", 0)
+    panel_says(page, "British Airways (BA)", "3 flights")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Operating airline · 2026")
+    # An unpriced flight is listed, and the heading says it has no figure.
+    expect(page.locator("#flight-panel-note")).to_have_text("1 without an estimate")
+
+
+def test_a_see_all_row_opens_its_flights_and_escape_returns_to_it(open_passport):
+    """The dialog's rows are buttons, the keyboard's way into a ranking that
+    is otherwise drawn on a canvas. The panel opens over the dialog, and
+    Escape closes only the panel and puts focus back on the row."""
+    destinations = ["JFK", "CDG", "SIN", "AMS", "DXB", "HND", "SYD", "LAX"]
+    rows = [
+        row(
+            flight_date=f"2026-0{month}-01",
+            origin="LHR",
+            destination=destination,
+            emissions_kg_actual=str(100 * month),
+        )
+        for month, destination in enumerate(destinations, start=1)
+    ]
+    page = open_passport(rows)
+    page.locator("[data-ranking=routes]").click()
+    first = page.locator("#ranking-dialog-list > li button").first
+    first.focus()
+    page.keyboard.press("Enter")
+    panel_says(page, "LAX ↔ LHR", "1 flight")
+
+    close_panel(page)
+    expect(page.locator("#ranking-dialog")).to_be_visible()
+    expect(first).to_be_focused()
+
+
+def test_a_key_entry_and_a_composition_row_open_their_category(open_passport):
+    page = open_passport()
+    page.locator("#trend-breakdown-tabs [data-value=cabin]").click()
+    page.locator("#trend-legend button", has_text="Business").click()
+    panel_says(page, "Business", "1 flight")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Cabin")
+    close_panel(page)
+
+    page.locator("#trend-legend button", has_text="Upcoming").click()
+    panel_says(page, "Upcoming flights", "1 flight")
+    close_panel(page)
+
+    page.locator("#reasons-legend button", has_text="Leisure").click()
+    panel_says(page, "Leisure", "1 flight")
+
+
+def test_a_card_opens_its_flight_with_the_detail_shown(open_passport):
+    page = open_passport()
+    page.locator("#heaviest-total").click()
+    panel_says(page, "BA1 · LHR → JFK · 10 May 2025", "1 flight")
+    expect(page.locator(".flight-detail")).to_contain_text("Business")
+    # A list of one needs no search.
+    expect(page.locator("#flight-panel-tools")).to_be_hidden()
+
+
+def test_a_quality_count_opens_its_bucket(open_passport):
+    page = open_passport()
+    expect(page.locator("#missing-count")).to_have_text("1 · 25%")
+    page.locator("#missing-count").click()
+    panel_says(page, "No emissions estimate", "1 flight")
+    expect(page.locator("#flight-panel-total")).to_have_text("0 kg CO₂e")
+    expect(page.locator("#flight-panel-rows .cell-route")).to_have_text("▸ CDG → XXX".lstrip("▸ "))
+    close_panel(page)
+
+    page.locator("#cabin-assumed").click()
+    panel_says(page, "Cabin assumed economy", "3 flights")
+
+
+def test_the_hero_stats_open_completed_and_upcoming_flights(open_passport):
+    page = open_passport()
+    page.locator("#flight-count").click()
+    panel_says(page, "All flights", f"{text(page, '#flight-count')} flights")
+    close_panel(page)
+    expect(page.locator("button:has(#flight-count)")).to_be_focused()
+
+    page.locator("#planned-total").click()
+    panel_says(page, "Upcoming flights", "1 flight")
+    expect(page.locator("#flight-panel-total")).to_have_text("900 kg CO₂e")
+
+
+def test_a_map_airport_opens_its_flights(open_passport):
+    page = open_passport()
+    page.locator(".leaflet-airports-pane path").last.click(force=True)  # LHR, the heaviest
+    panel_says(page, "LHR", "3 flights")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Airport")
+    close_panel(page)
+
+    # A route's middle can sit under an airport, so the click goes to the line.
+    page.locator(".leaflet-routes-pane path").first.dispatch_event("click")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Route")
+
+
+def test_the_flight_list_sorts_and_searches(open_passport):
+    destinations = ["JFK", "CDG", "SIN", "AMS", "DXB", "HND", "SYD", "LAX"]
+    rows = [
+        row(
+            flight_date=f"2026-0{month}-01",
+            origin="LHR",
+            destination=destination,
+            operating_carrier_code="QF" if destination == "SYD" else "",
+            emissions_kg_actual=str(100 * ((month * 3) % 8 + 1)),
+        )
+        for month, destination in enumerate(destinations, start=1)
+    ]
+    page = open_passport(rows)
+    page.locator("#flight-count").click()
+    kg = page.locator("#flight-panel-rows .cell-kg")
+    header = page.locator("#flight-panel-head th[data-sort=kg]")
+    date_header = page.locator("#flight-panel-head th[data-sort=date]")
+
+    # Newest first by default.
+    expect(date_header).to_have_attribute("aria-sort", "descending")
+    expect(page.locator("#flight-panel-rows .cell-date").first).to_have_text("1 Aug 2026")
+
+    header.locator("button").click()
+    expect(header).to_have_attribute("aria-sort", "descending")
+    expect(date_header).not_to_have_attribute("aria-sort", re.compile("."))
+    assert kg.all_inner_texts()[0] == "800.0"
+    header.locator("button").click()
+    expect(header).to_have_attribute("aria-sort", "ascending")
+    assert kg.all_inner_texts()[0] == "100.0"
+
+    page.locator("#flight-panel-search").fill("qf")  # the operating airline's code
+    expect(page.locator("#flight-panel-rows tr")).to_have_count(1)
+    expect(page.locator("#flight-panel-rows .cell-route")).to_have_text("LHR → SYD")
+    expect(page.locator("#flight-panel-status")).to_have_text("Showing 1 of 8")
+    page.locator("#flight-panel-search").fill("lhr hnd")
+    expect(page.locator("#flight-panel-rows tr")).to_have_count(1)
+    page.locator("#flight-panel-search").fill("zzz")
+    expect(page.locator("#flight-panel-empty")).to_have_text("No flights match that search.")
+
+
+def test_flight_detail_shows_every_cabin_and_the_contrail_impact(open_passport):
+    page = open_passport(
+        [
+            row(
+                flight_date="2026-03-04",
+                origin="JFK",
+                destination="LHR",
+                flight_number="112",
+                departure_time="2026-03-04T20:30:00-05:00",
+                arrival_time="2026-03-05T08:15:00+00:00",
+                cabin_class_known="business",
+                emissions_kg_actual="716.4",
+                emissions_kg_economy="247",
+                emissions_kg_business="716.4",
+                emissions_kg_first="1004.5",
+                contrails_impact="moderate",
+                model_version="3.0.0+20260814",
+            ),
+            row(
+                flight_date="2026-04-01", origin="LHR", destination="CDG", emissions_kg_actual="60"
+            ),
+        ]
+    )
+    page.locator("#flight-count").click()
+    page.locator("#flight-panel").get_by_role("button", name="JFK → LHR").click()
+    detail = page.locator(".flight-detail")
+    expect(detail).to_be_visible()
+    expect(page.locator("#flight-panel").get_by_role("button", name="JFK → LHR")).to_have_attribute(
+        "aria-expanded", "true"
+    )
+    figures = detail.locator(".cabin-figures li").all_inner_texts()
+    assert figures == [
+        "In economy this flight would have been 247 kg CO₂e.",
+        "In first this flight would have been 1,004.5 kg CO₂e.",
+    ]
+    facts = dict(
+        zip(
+            detail.locator("dt").all_inner_texts(),
+            detail.locator("dd").all_inner_texts(),
+            strict=True,
+        )
+    )
+    assert facts["Contrail impact"] == "Moderate"
+    assert facts["Model version"] == "TIM 3.0.0+20260814"
+    assert facts["Estimate"] == "Exact TIM estimate"
+    assert facts["Scheduled departure"] == "20:30 · 4 Mar 2026 (UTC−05:00)"
+    assert facts["Scheduled arrival"] == "08:15 · 5 Mar 2026 (UTC+00:00)"
+    assert facts["Block time"] == "6 h 45 min"
+
+    page.locator("#flight-panel").get_by_role("button", name="JFK → LHR").click()
+    expect(detail).to_have_count(0)
+
+
+def test_the_panel_fits_a_320px_phone(open_passport, page):
+    page.set_viewport_size(VIEWPORTS["narrow"])
+    page = open_passport()
+    page.locator("#flight-count").click()
+    expect(page.locator("#flight-panel")).to_be_visible()
+    page.locator(".flight-toggle").first.click()
+    expect(page.locator(".flight-detail")).to_be_visible()
+    assert sideways_scroll(page) <= 0
+    scroll = page.locator(".panel-scroll")
+    assert scroll.evaluate("el => el.scrollWidth <= el.clientWidth")
+    box = page.locator("#flight-panel").bounding_box()
+    assert box["x"] >= 0 and box["x"] + box["width"] <= VIEWPORTS["narrow"]["width"]
+    # Stacked rows, not a table with headings.
+    expect(page.locator("#flight-panel-head")).to_be_hidden()
+    expect(page.locator("#flight-panel-sort")).to_be_visible()
+
+
+def test_the_panel_is_a_side_sheet_on_a_desktop(open_passport, page):
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    page.locator("#flight-count").click()
+    box = page.locator("#flight-panel").bounding_box()
+    assert box["x"] + box["width"] == pytest.approx(VIEWPORTS["desktop"]["width"], abs=1)
+    assert box["height"] == pytest.approx(VIEWPORTS["desktop"]["height"], abs=1)
+    expect(page.locator("#flight-panel-sort")).to_be_hidden()
+    page.mouse.click(10, 400)  # the backdrop
+    expect(page.locator("#flight-panel")).to_be_hidden()
+
+
+def test_a_long_log_opens_quickly(open_passport):
+    """1000 flights as plain DOM rows, drawn in well under 200 ms."""
+    rows = [
+        row(
+            flight_date=f"{2000 + index // 50}-{1 + index % 12:02d}-{1 + index % 28:02d}",
+            origin="LHR",
+            destination=["JFK", "CDG", "SIN", "SYD"][index % 4],
+            flight_number=str(index),
+            source_id=str(index),
+            emissions_kg_actual=str(100 + index),
+        )
+        for index in range(1000)
+    ]
+    page = open_passport(rows)
+    elapsed = page.evaluate(
+        """() => {
+          const start = performance.now();
+          document.getElementById('flight-count').click();
+          document.body.offsetHeight;  // include layout
+          return performance.now() - start;
+        }"""
+    )
+    expect(page.locator("#flight-panel-rows tr")).to_have_count(1000)
+    assert elapsed < 200, elapsed
+
+
 # -- regressions from shipped fixes -------------------------------------------
 
 

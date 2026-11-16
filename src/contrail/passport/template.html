@@ -79,10 +79,14 @@
           <p class="hero-value tabular" id="hero-value"></p>
           <p class="hero-context" id="hero-context" aria-live="polite"></p>
           <div class="summary-grid">
-            <div class="summary-item">
+            <button
+              class="summary-item opens-panel"
+              type="button"
+              data-open-panel="all:"
+            >
               <span>Flights</span
               ><strong class="tabular" id="flight-count"></strong>
-            </div>
+            </button>
             <div class="summary-item">
               <span>Est. distance</span
               ><strong class="tabular" id="distance-total"></strong>
@@ -91,10 +95,14 @@
               <span>Block time</span
               ><strong class="tabular" id="duration-total"></strong>
             </div>
-            <div class="summary-item">
+            <button
+              class="summary-item opens-panel"
+              type="button"
+              data-open-panel="upcoming:"
+            >
               <span>Upcoming</span
               ><strong class="tabular" id="planned-total"></strong>
-            </div>
+            </button>
             <div class="summary-item">
               <span>Airports</span
               ><strong class="tabular" id="airport-count"></strong>
@@ -468,69 +476,117 @@
           </div>
         </div>
         <div class="quality-layout">
-          <div class="quality-total">
+          <button
+            class="quality-total opens-panel"
+            type="button"
+            data-open-panel="all:"
+          >
             <span>Completed flights</span><strong id="quality-total"></strong>
-          </div>
+          </button>
           <div class="quality-groups">
             <article class="quality-group">
               <h3>Emissions data</h3>
               <div class="quality-parts">
-                <div class="quality-part">
+                <button
+                  class="quality-part"
+                  type="button"
+                  data-open-panel="quality:emissions:exact"
+                >
                   <span>Exact TIM</span><strong id="exact-count"></strong>
-                </div>
-                <div class="quality-part">
+                </button>
+                <button
+                  class="quality-part"
+                  type="button"
+                  data-open-panel="quality:emissions:typical"
+                >
                   <span>Route average</span><strong id="typical-count"></strong>
-                </div>
-                <div class="quality-part">
+                </button>
+                <button
+                  class="quality-part"
+                  type="button"
+                  data-open-panel="quality:emissions:missing"
+                >
                   <span>Missing</span><strong id="missing-count"></strong>
-                </div>
+                </button>
               </div>
             </article>
             <article class="quality-group">
               <h3>Distance</h3>
               <div class="quality-parts">
-                <div class="quality-part">
+                <button
+                  class="quality-part"
+                  type="button"
+                  data-open-panel="quality:distance:available"
+                >
                   <span>Available</span
                   ><strong id="distance-available"></strong>
-                </div>
-                <div class="quality-part">
+                </button>
+                <button
+                  class="quality-part"
+                  type="button"
+                  data-open-panel="quality:distance:missing"
+                >
                   <span>Missing</span><strong id="distance-missing"></strong>
-                </div>
+                </button>
               </div>
             </article>
             <article class="quality-group">
               <h3>Cabin</h3>
               <div class="quality-parts">
-                <div class="quality-part">
+                <button
+                  class="quality-part"
+                  type="button"
+                  data-open-panel="quality:cabin:known"
+                >
                   <span>Known</span><strong id="cabin-known"></strong>
-                </div>
-                <div class="quality-part">
+                </button>
+                <button
+                  class="quality-part"
+                  type="button"
+                  data-open-panel="quality:cabin:assumed"
+                >
                   <span>Assumed economy</span
                   ><strong id="cabin-assumed"></strong>
-                </div>
+                </button>
               </div>
             </article>
             <article class="quality-group">
               <h3>Reason</h3>
               <div class="quality-parts">
-                <div class="quality-part">
+                <button
+                  class="quality-part"
+                  type="button"
+                  data-open-panel="quality:reason:known"
+                >
                   <span>Known</span><strong id="reason-known"></strong>
-                </div>
-                <div class="quality-part">
+                </button>
+                <button
+                  class="quality-part"
+                  type="button"
+                  data-open-panel="quality:reason:missing"
+                >
                   <span>Missing</span><strong id="reason-missing"></strong>
-                </div>
+                </button>
               </div>
             </article>
             <article class="quality-group">
               <h3>Block time</h3>
               <div class="quality-parts">
-                <div class="quality-part">
+                <button
+                  class="quality-part"
+                  type="button"
+                  data-open-panel="quality:duration:available"
+                >
                   <span>Available</span
                   ><strong id="duration-available"></strong>
-                </div>
-                <div class="quality-part">
+                </button>
+                <button
+                  class="quality-part"
+                  type="button"
+                  data-open-panel="quality:duration:missing"
+                >
                   <span>Missing</span><strong id="duration-missing"></strong>
-                </div>
+                </button>
               </div>
             </article>
           </div>
@@ -557,6 +613,72 @@
       </div>
       <div class="dialog-scroll">
         <ol class="ranking-list" id="ranking-dialog-list" role="list"></ol>
+      </div>
+    </dialog>
+
+    <dialog
+      class="flight-panel"
+      id="flight-panel"
+      aria-labelledby="flight-panel-title"
+    >
+      <div class="panel-sheet">
+        <div class="panel-top">
+          <div class="panel-heading">
+            <p class="eyebrow" id="flight-panel-kind"></p>
+            <h2 id="flight-panel-title"></h2>
+            <p class="panel-summary tabular">
+              <span id="flight-panel-count"></span>
+              <span id="flight-panel-total"></span>
+              <span id="flight-panel-note" hidden></span>
+            </p>
+          </div>
+          <button
+            class="dialog-close"
+            id="flight-panel-close"
+            type="button"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        <div class="panel-tools" id="flight-panel-tools">
+          <label class="panel-search">
+            <span class="visually-hidden"
+              >Search by flight, route, airport, airline or aircraft</span
+            >
+            <input
+              type="search"
+              id="flight-panel-search"
+              placeholder="Search flights"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+          <label class="panel-sort">
+            <span class="visually-hidden">Sort by</span>
+            <select id="flight-panel-sort">
+              <option value="date:descending">Newest first</option>
+              <option value="date:ascending">Oldest first</option>
+              <option value="kg:descending">Most CO₂e</option>
+              <option value="kg:ascending">Least CO₂e</option>
+              <option value="intensity:descending">Most CO₂e per km</option>
+              <option value="duration:descending">Longest block time</option>
+              <option value="route:ascending">Route A to Z</option>
+            </select>
+          </label>
+        </div>
+        <p class="panel-status" id="flight-panel-status" aria-live="polite"></p>
+        <div class="panel-scroll">
+          <table class="flight-table">
+            <caption class="visually-hidden">
+              Matching flights. Choose a column heading to sort, or a route
+              to show that flight's details.
+            </caption>
+            <thead id="flight-panel-head"></thead>
+            <tbody id="flight-panel-rows"></tbody>
+          </table>
+          <p class="panel-empty" id="flight-panel-empty" hidden></p>
+        </div>
       </div>
     </dialog>
 

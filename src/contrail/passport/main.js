@@ -9,12 +9,14 @@
     formatKg,
     formatMassText,
     formatDate,
+    countryName,
     countryFlag,
     routeName,
     flightTags,
     visualCategory,
   } = Passport.format;
   const {
+    QUALITY,
     sum,
     withEmissions,
     completed,
@@ -32,14 +34,21 @@
   } = Passport.aggregate;
   const charts = Passport.charts;
   const map = Passport.map;
+  const panel = Passport.panel;
 
   const $ = (id) => document.getElementById(id);
   const data = JSON.parse($("passport-data").textContent);
   const world = JSON.parse($("world-data").textContent);
+  // A flight's id is its place in the payload: what a flight panel filter,
+  // and so a link to one flight, names it by.
+  data.flights.forEach((flight, index) => {
+    flight.id = index;
+  });
 
-  // Each key is a segmented control: a button with data-control="<key>" and
-  // data-value="<value>" sets it. `year` is null for all time.
-  const state = {
+  // Each key but `panel` is a segmented control: a button with
+  // data-control="<key>" and data-value="<value>" sets it. `year` is null
+  // for all time. `panel` is the open flight panel's filter key, or null.
+  const DEFAULTS = {
     year: null,
     metric: "total",
     pattern: "month",
@@ -47,7 +56,9 @@
     patternBreakdown: "total",
     driverBreakdown: "total",
     driverMetric: "total",
+    panel: null,
   };
+  const state = { ...DEFAULTS };
   const parseValue = { year: (value) => (value === "all" ? null : Number(value)) };
   const controlValue = (value) => (value === null ? "all" : String(value));
 
@@ -126,22 +137,18 @@
 
   // Draw a ranking's top six and keep the whole list for its dialog.
   // `periodKg` is the period's completed CO2e, what each entry's share in
-  // its tooltip is of.
-  function showRanking(key, title, entries, breakdown, metric, periodKg) {
-    rankingData.set(key, { title, entries, breakdown, metric, periodKg });
-    charts.ranking(key, entries.slice(0, 6), breakdown, metric, periodKg);
+  // its tooltip is of. `kind` is the flight panel filter an entry opens.
+  function showRanking(key, title, entries, breakdown, metric, periodKg, kind) {
+    rankingData.set(key, { title, entries, breakdown, metric, periodKg, kind });
+    charts.ranking(key, entries.slice(0, 6), breakdown, metric, periodKg, kind);
     document.querySelector(`[data-ranking="${key}"]`).hidden = entries.length <= 6;
   }
 
   function renderPatterns(rows) {
     const buckets = patternBuckets(rows, state.pattern, state.patternBreakdown);
-    charts.pattern(buckets, state.patternBreakdown);
+    charts.pattern(buckets, state.patternBreakdown, state.pattern);
     charts.legend("pattern-legend", state.patternBreakdown, buckets.categories);
 
-    const countryDisplay =
-      typeof Intl.DisplayNames === "function"
-        ? new Intl.DisplayNames(undefined, { type: "region" })
-        : null;
     const airportEntries = aggregateBy(rows, (flight) => [flight.origin, flight.destination]);
     const countryEntries = aggregateBy(rows, (flight) => [
       flight.start?.country,
@@ -151,16 +158,18 @@
       // The chart draws the name alone: Windows has no flag emoji and shows
       // two letters instead. The flag rides along for the HTML list, which
       // also shows the name, so a missing glyph costs nothing there.
-      label: countryDisplay ? countryDisplay.of(entry.label) || entry.label : entry.label,
+      label: countryName(entry.label),
       flag: countryFlag(entry.label),
     }));
+    const periodKg = sum(pricedCompleted(rows), "kg");
     showRanking(
       "airports",
       "All airport connections",
       airportEntries,
       state.patternBreakdown,
       "total",
-      sum(pricedCompleted(rows), "kg"),
+      periodKg,
+      "airport",
     );
     showRanking(
       "countries",
@@ -168,7 +177,8 @@
       countryEntries,
       state.patternBreakdown,
       "total",
-      sum(pricedCompleted(rows), "kg"),
+      periodKg,
+      "country",
     );
   }
 
@@ -185,8 +195,15 @@
       return;
     }
     const [flight, value] = item;
+    // The route is a button stretched over the whole card, so the card opens
+    // the flight while its content stays text a card can hold.
     const route = document.createElement("strong");
-    route.textContent = routeName(flight);
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "card-open";
+    open.dataset.openPanel = `flight:${flight.id}`;
+    open.textContent = routeName(flight);
+    route.append(open);
     const detail = document.createElement("p");
     detail.textContent = `${formatter(value)} · ${flight.flight || "Flight unknown"} · ${flight.date ? formatDate(flight.date) : "Date unknown"}`;
     target.append(route, detail, flightTags(flight));
@@ -211,6 +228,9 @@
       groupAll(rows, (row) => visualCategory(row, "cabin")),
       "cabin",
     );
+    const carrierNames = new Map(
+      rows.filter((row) => row.carrierName).map((row) => [row.carrier, row.carrierName]),
+    );
     charts.composition(
       "reasons",
       groupAll(rows, (row) => row.reason),
@@ -221,68 +241,61 @@
       state.driverBreakdown,
       breakdownCategories(pricedCompleted(rows), state.driverBreakdown),
     );
+    // Each ranking groups by the value its panel filter matches, then names
+    // the entry for display.
+    const flightLabel = (row) =>
+      `${row.flight || "Unknown"} · ${row.origin || "?"}–${row.destination || "?"} · ${row.date ? formatDate(row.date) : "date unknown"}`;
     [
-      ["routes", "All routes", (row) => row.route],
+      ["routes", "All routes", "route", (row) => row.route],
       [
         "carriers",
         "All operating airlines",
-        (row) => (row.carrierName ? `${row.carrierName} (${row.carrier})` : row.carrier),
+        "carrier",
+        (row) => row.carrier,
+        (code) => (carrierNames.has(code) ? `${carrierNames.get(code)} (${code})` : code),
       ],
-      ["aircraft", "All aircraft", (row) => row.aircraft],
+      ["aircraft", "All aircraft", "aircraft", (row) => row.aircraft],
       [
         "flights",
         "All flights by impact",
-        (row) =>
-          `${row.flight || "Unknown"} · ${row.origin || "?"}–${row.destination || "?"} · ${row.date ? formatDate(row.date) : "date unknown"}`,
+        "flight",
+        (row) => String(row.id),
+        (id) => flightLabel(data.flights[Number(id)]),
       ],
-    ].forEach(([key, title, labeler]) => {
-      const ranked = rankForMetric(rankAll(rows, labeler), state.driverMetric);
+    ].forEach(([key, title, kind, keyer, name]) => {
+      const entries = rankAll(rows, keyer).map((entry) =>
+        name ? { ...entry, label: name(entry.value) } : entry,
+      );
       showRanking(
         key,
         title,
-        ranked,
+        rankForMetric(entries, state.driverMetric),
         state.driverBreakdown,
         state.driverMetric,
         sum(pricedCompleted(rows), "kg"),
+        kind,
       );
     });
   }
 
   function renderQuality(rows) {
     const done = completed(rows);
-    const exact = done.filter((flight) => flight.emissionsSource === "exact").length;
-    const typical = done.filter(
-      (flight) => flight.emissionsSource === "typical_route_average",
-    ).length;
-    const missing = done.length - exact - typical;
-    const cabinKnown = done.filter((flight) => flight.cabinKnown).length;
-    const reasonKnown = done.filter(
-      (flight) => flight.reason && flight.reason.toLowerCase() !== "unknown",
-    ).length;
-    const distance = done.filter((flight) => flight.distanceKm !== null).length;
-    const duration = done.filter((flight) => flight.durationHours !== null).length;
+    const count = (key) => done.filter(QUALITY[key].test).length;
     const airports = new Set(
       done.flatMap((flight) => [flight.origin, flight.destination]).filter(Boolean),
     );
     const countries = new Set(
       done.flatMap((flight) => [flight.start?.country, flight.end?.country]).filter(Boolean),
     );
-    const partition = (count) => `${count} · ${pct(count, done.length)}%`;
     $("quality-total").textContent = formatNumber(done.length);
-    $("exact-count").textContent = partition(exact);
-    $("typical-count").textContent = partition(typical);
-    $("missing-count").textContent = partition(missing);
-    $("distance-available").textContent = partition(distance);
-    $("distance-missing").textContent = partition(done.length - distance);
-    $("duration-available").textContent = partition(duration);
-    $("duration-missing").textContent = partition(done.length - duration);
-    $("cabin-known").textContent = partition(cabinKnown);
-    $("cabin-assumed").textContent = partition(done.length - cabinKnown);
-    $("reason-known").textContent = partition(reasonKnown);
-    $("reason-missing").textContent = partition(done.length - reasonKnown);
+    // Each count is a button opening its bucket, from the same table.
+    document.querySelectorAll("[data-open-panel^='quality:']").forEach((button) => {
+      const value = count(button.dataset.openPanel.slice("quality:".length));
+      button.querySelector("strong").textContent = `${value} · ${pct(value, done.length)}%`;
+    });
     $("airport-count").textContent = String(airports.size);
     $("country-count").textContent = String(countries.size);
-    const assumed = done.length - cabinKnown;
+    const assumed = count("cabin:assumed");
     $("methodology").textContent =
       `Impact figures are per passenger. Distance intensity uses ${data.meta.distanceMethod}. Time intensity uses ${data.meta.durationMethod}. ${assumed ? `${assumed} flight${assumed === 1 ? "" : "s"} without cabin data ${assumed === 1 ? "is" : "are"} shown as Economy in charts.` : "Every flight has cabin data."} Missing values are never extrapolated.`;
   }
@@ -297,7 +310,26 @@
     { draw: renderExtremes, reads: ["year"] },
     { draw: renderRankings, reads: ["year", "driverBreakdown", "driverMetric"] },
     { draw: renderQuality, reads: ["year"] },
+    { draw: renderPanel, reads: ["year", "panel"] },
   ];
+
+  // The element a panel was opened from, which gets focus back on close.
+  let panelOpener = null;
+
+  function renderPanel(rows) {
+    if (state.panel === null) {
+      panel.hide();
+      return;
+    }
+    // A key that names nothing in this file closes rather than shows empty.
+    if (!panel.show(state.panel, rows, state.year, panelOpener)) state.panel = null;
+    panelOpener = null;
+  }
+
+  function openPanel(key, opener = null) {
+    panelOpener = opener;
+    setState({ panel: key });
+  }
 
   function syncControls() {
     document.querySelectorAll("button[data-control]").forEach((button) => {
@@ -361,17 +393,29 @@
           : "total CO₂e";
     const breakdownLabel = breakdown === "total" ? "" : ` by ${breakdown}`;
     $("ranking-dialog-title").textContent = `${ranking.title} · ${metricLabel}${breakdownLabel}`;
-    charts.rankingList("ranking-dialog-list", ranking.entries, breakdown, metric, ranking.periodKg);
+    charts.rankingList(
+      "ranking-dialog-list",
+      ranking.entries,
+      breakdown,
+      metric,
+      ranking.periodKg,
+      ranking.kind,
+    );
     $("ranking-dialog").showModal();
     $("ranking-dialog-list").parentElement.scrollTop = 0;
   }
 
-  // One listener for every segmented control, the year buttons included.
+  // One listener for every segmented control, the year buttons included,
+  // and one for everything that opens the flight panel.
   document.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-control]");
     if (!button) return;
     const { control, value } = button.dataset;
     setState({ [control]: (parseValue[control] || String)(value) });
+  });
+  document.addEventListener("click", (event) => {
+    const opener = event.target.closest("[data-open-panel]");
+    if (opener) openPanel(opener.dataset.openPanel, opener);
   });
 
   document.querySelectorAll("[data-ranking]").forEach((button) => {
@@ -387,7 +431,9 @@
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render());
 
   buildPeriods();
-  map.setup(world);
+  charts.onSelect(openPanel);
+  map.setup(world, openPanel);
+  panel.setup({ flights: data.flights, onClose: () => setState({ panel: null }) });
   $("generated").textContent =
     `Generated ${new Date(data.meta.generatedAt).toLocaleString()} with contrail ${data.meta.contrailVersion}. Keep this file private.`;
   render();

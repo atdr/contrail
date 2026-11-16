@@ -9,8 +9,18 @@ const Passport = {};
 Passport.format = (() => {
   "use strict";
 
-  const formatNumber = (value, digits = 0) =>
-    Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
+  // One Intl formatter per precision, made once. toLocaleString() builds a
+  // new one on every call, which is most of the cost of drawing a long
+  // flight list.
+  const numberFormats = new Map();
+  function formatNumber(value, digits = 0) {
+    if (!numberFormats.has(digits))
+      numberFormats.set(
+        digits,
+        new Intl.NumberFormat(undefined, { maximumFractionDigits: digits }),
+      );
+    return numberFormats.get(digits).format(Number(value));
+  }
   const pct = (part, whole) => (whole ? Math.round((part / whole) * 100) : 0);
   const formatKg = (kg, unit = kg >= 1000 ? "t" : "kg") =>
     unit === "t"
@@ -54,13 +64,42 @@ Passport.format = (() => {
   // A flight's ISO date in the reader's locale, as the footer's timestamp
   // is. Read and written as UTC: the date is a calendar day, not an instant,
   // so no time zone may move it to the day before.
-  const formatDate = (isoDate) =>
-    new Date(`${isoDate}T00:00:00Z`).toLocaleDateString(undefined, {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      timeZone: "UTC",
-    });
+  const dateFormat = new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  const formatDate = (isoDate) => dateFormat.format(new Date(`${isoDate}T00:00:00Z`));
+
+  // A month or weekday's full name in the reader's locale, from the short
+  // English label the charts use. 1 January 2024 was a Monday.
+  const monthFormat = new Intl.DateTimeFormat(undefined, { month: "long", timeZone: "UTC" });
+  const weekdayFormat = new Intl.DateTimeFormat(undefined, { weekday: "long", timeZone: "UTC" });
+  const monthName = (label) => monthFormat.format(Date.UTC(2024, MONTHS.indexOf(label), 1));
+  const weekdayName = (label) =>
+    weekdayFormat.format(Date.UTC(2024, 0, 1 + WEEKDAYS.indexOf(label)));
+
+  const regionNames =
+    typeof Intl.DisplayNames === "function"
+      ? new Intl.DisplayNames(undefined, { type: "region" })
+      : null;
+  function countryName(code) {
+    try {
+      return regionNames?.of(code) || code;
+    } catch {
+      return code;
+    }
+  }
+
+  // Hours as "6 h 45 min", to the minute.
+  function formatDuration(hours) {
+    const minutes = Math.round(hours * 60);
+    const whole = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    if (!whole) return `${rest} min`;
+    return rest ? `${whole} h ${rest} min` : `${whole} h`;
+  }
 
   function countryFlag(code) {
     return /^[A-Z]{2}$/.test(code)
@@ -223,6 +262,7 @@ Passport.format = (() => {
 
   return {
     formatNumber,
+    formatDuration,
     pct,
     formatKg,
     formatMassText,
@@ -234,6 +274,9 @@ Passport.format = (() => {
     monthOf,
     weekdayOf,
     formatDate,
+    monthName,
+    weekdayName,
+    countryName,
     countryFlag,
     UNKNOWN,
     isUnknown,

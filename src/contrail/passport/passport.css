@@ -968,6 +968,331 @@ h3 {
   border-radius: 3px;
 }
 
+/* Drill-down. Every count, key entry, card and dialog row that opens the
+   flight panel is a real button, drawn as the text it replaced, with a
+   hover wash and the browser's own focus ring. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.opens-panel,
+.quality-part,
+.composition-row,
+.legend-button,
+.ranking-row,
+.card-open {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.summary-item.opens-panel {
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+}
+.summary-item.opens-panel span::after,
+.quality-total.opens-panel span::after {
+  content: " ›";
+}
+.opens-panel:hover strong,
+.quality-part:hover strong,
+.card-open:hover {
+  color: var(--teal);
+}
+.quality-total.opens-panel {
+  padding: 18px;
+  background: var(--surface-soft);
+}
+.quality-part {
+  padding: 0 0 0 12px;
+  border-left: 3px solid var(--teal);
+}
+.composition-row,
+.ranking-row {
+  padding: 4px 6px;
+  border-radius: 10px;
+}
+.composition-row:hover,
+.ranking-row:hover,
+.legend-button:hover {
+  background: var(--surface-soft);
+}
+.chart-legend li {
+  display: flex;
+}
+.legend-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  padding: 2px 6px;
+  border-radius: 8px;
+  color: inherit;
+  white-space: nowrap;
+}
+/* The card's route is its button, stretched over the card by ::after so
+   the whole card answers a click while its text stays outside the button. */
+.extreme-card {
+  position: relative;
+}
+.card-open {
+  width: auto;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.card-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+}
+.chart-stage canvas,
+.ranking-chart canvas,
+.composition-chart canvas {
+  cursor: pointer;
+}
+
+/* The flight panel: a sheet from the bottom on phones and tablets, from the
+   right on a desktop wide enough to keep the page beside it. One <dialog>
+   either way, so focus is trapped and Escape and the backdrop close it. */
+.flight-panel {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: 92dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 22px 22px 0 0;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.flight-panel::backdrop {
+  background: rgba(4, 16, 11, 0.56);
+}
+.flight-panel[open] {
+  display: flex;
+}
+.panel-sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  max-height: inherit;
+}
+.panel-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 20px 20px 12px;
+}
+.panel-heading {
+  min-width: 0;
+}
+.panel-heading .eyebrow {
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+}
+.panel-heading h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.panel-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 0;
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+.panel-summary span + span::before {
+  content: "·";
+  padding-inline: 0.45em;
+}
+.panel-summary [hidden] {
+  display: none;
+}
+.panel-tools {
+  display: flex;
+  gap: 8px;
+  padding: 0 20px 10px;
+}
+.panel-tools[hidden] {
+  display: none;
+}
+.panel-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.panel-search input,
+.panel-sort select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--page);
+  font: inherit;
+}
+/* Sorting is the column headings' job where there are headings. */
+.panel-sort {
+  display: none;
+}
+.panel-status {
+  margin: 0;
+  padding: 0 20px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.panel-status:empty {
+  display: none;
+}
+.panel-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 12px 24px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.panel-empty {
+  margin: 18px 8px;
+  color: var(--muted);
+}
+.flight-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.flight-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  font-weight: 500;
+  text-align: left;
+}
+.flight-table .numeric {
+  text-align: right;
+}
+.sort-button {
+  width: 100%;
+  padding: 10px 8px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  text-align: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+th[aria-sort] .sort-button {
+  color: var(--text);
+}
+th[aria-sort="ascending"] .sort-button::after {
+  content: " ↑";
+}
+th[aria-sort="descending"] .sort-button::after {
+  content: " ↓";
+}
+.flight-table td {
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.flight-row {
+  cursor: pointer;
+}
+.flight-row:hover,
+.flight-row.expanded {
+  background: var(--surface-soft);
+}
+.flight-toggle {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.flight-toggle::before {
+  content: "▸ ";
+  color: var(--muted);
+}
+.flight-toggle[aria-expanded="true"]::before {
+  content: "▾ ";
+}
+.flight-detail td {
+  padding: 4px 8px 18px;
+  background: var(--surface-soft);
+}
+.flight-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px 18px;
+  margin: 0;
+}
+.flight-facts dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.flight-facts dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+.cabin-figures {
+  margin: 14px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+.cabin-figures li + li {
+  margin-top: 4px;
+}
+
+@media (min-width: 900px) {
+  .flight-panel {
+    inset: 0 0 0 auto;
+    width: min(780px, 64vw);
+    height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-left: 1px solid var(--line);
+    border-radius: 22px 0 0 22px;
+  }
+  .panel-top {
+    padding: 26px 26px 14px;
+  }
+  .panel-tools,
+  .panel-status {
+    padding-inline: 26px;
+  }
+  .panel-scroll {
+    padding-inline: 18px;
+  }
+}
+
 footer {
   padding-bottom: 40px;
   color: var(--muted);
@@ -1075,6 +1400,93 @@ footer {
   .quality-parts {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  /* A phone gets each flight as a stacked card, three to a row: route and
+     CO2e, then date, flight and cabin, then the labelled measures. The
+     headings go, so a select does their sorting. */
+  .panel-sort {
+    display: block;
+    flex: 0 0 auto;
+    max-width: 44%;
+  }
+  .panel-sort select {
+    padding-inline: 10px 4px;
+    font-size: 0.875rem;
+  }
+  .flight-table thead {
+    display: none;
+  }
+  .flight-table,
+  .flight-table tbody {
+    display: block;
+  }
+  .flight-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px 10px;
+    padding: 12px 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .flight-row td {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+  .flight-row .cell-route {
+    grid-column: 1 / 3;
+    grid-row: 1;
+  }
+  .flight-row .cell-kg {
+    grid-column: 3;
+    grid-row: 1;
+    font-weight: 500;
+  }
+  .flight-row .cell-kg::after {
+    content: " kg";
+  }
+  .flight-row .cell-date,
+  .flight-row .cell-flight,
+  .flight-row .cell-cabin {
+    grid-row: 2;
+    color: var(--muted);
+  }
+  .flight-row .cell-intensity,
+  .flight-row .cell-duration,
+  .flight-row .cell-source {
+    grid-row: 3;
+    text-align: left;
+  }
+  .flight-row .cell-intensity::before,
+  .flight-row .cell-duration::before,
+  .flight-row .cell-source::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+  .flight-row .cell-intensity,
+  .flight-row .cell-date {
+    grid-column: 1;
+  }
+  .flight-row .cell-duration,
+  .flight-row .cell-flight {
+    grid-column: 2;
+  }
+  .flight-row .cell-source,
+  .flight-row .cell-cabin {
+    grid-column: 3;
+  }
+  .flight-detail {
+    display: block;
+  }
+  .flight-detail td {
+    display: block;
+    padding: 6px 8px 16px;
+  }
+  .flight-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* The widest controls, "Total CO2e / Avg / km / Avg / hr" and the headline
@@ -1101,8 +1513,17 @@ footer {
 @media (pointer: coarse) {
   .see-all,
   .metric-tabs button,
-  .pattern-tabs button {
+  .pattern-tabs button,
+  .legend-button,
+  .composition-row,
+  .ranking-row,
+  .panel-search input,
+  .panel-sort select {
     min-height: 44px;
+  }
+  .flight-panel .dialog-close {
+    width: 44px;
+    height: 44px;
   }
   .see-all {
     padding-inline: 14px;

@@ -162,6 +162,28 @@ Passport.charts = (() => {
   });
   document.addEventListener("pointerleave", hideTooltip);
 
+  // What a click on a chart opens: main.js hands in its panel opener, which
+  // takes a filter key and the element to return focus to.
+  let select = () => {};
+  const onSelect = (handler) => {
+    select = handler;
+  };
+  const panelKey = (kind, value) => `${kind}:${value}`;
+
+  // A click handler for a bar chart along `axis`, the axis its categories
+  // sit on. The category is read from the pointer's position on that axis,
+  // not from the bar under it, so a click on a short bar's row or on its
+  // label counts too. `pick(index)` does the rest.
+  function clickAlong(axis, pick) {
+    return (event, _elements, chart) => {
+      const scale = chart.scales[axis];
+      const index = Math.round(scale.getValueForPixel(axis === "y" ? event.y : event.x));
+      if (!(index >= 0 && index < chart.data.labels.length)) return;
+      hideTooltip();
+      pick(index, chart);
+    };
+  }
+
   // Below this width a period chart shortens its axis: month initials, and
   // value labels a size smaller.
   const narrow = (chart) => chart.width < 420;
@@ -426,7 +448,8 @@ Passport.charts = (() => {
       .details.map((detail) => `${detail.label} ${detail.value}`)
       .join(", ");
 
-  function ranking(id, entries, breakdown, metric, periodKg = 0) {
+  // `kind` is the flight panel filter an entry's bar opens, on entry.value.
+  function ranking(id, entries, breakdown, metric, periodKg, kind) {
     const theme = chartTheme();
     const totals = entries.map((entry) => rankingMetricValue(entry, metric));
     const maximum = Math.max(1, ...totals);
@@ -482,6 +505,9 @@ Passport.charts = (() => {
         maintainAspectRatio: false,
         indexAxis: "y",
         interaction: { mode: "index", axis: "y", intersect: false },
+        onClick: clickAlong("y", (index, chart) =>
+          select(panelKey(kind, entries[index].value), chart.canvas),
+        ),
         layout: { padding: { right: metric === "total" ? 58 : 88 } },
         plugins: {
           legend: { display: false },
@@ -528,7 +554,9 @@ Passport.charts = (() => {
   // and a bar sized in CSS, split by category when a breakdown is chosen.
   // HTML rather than a canvas because a canvas tall enough for every flight
   // in a long log passes iOS Safari's canvas size limit and draws blank.
-  function rankingList(id, entries, breakdown, metric, periodKg = 0) {
+  // Each row is a button that opens the flight panel for its entry, so the
+  // dialog is also the keyboard's way into a ranking drawn on a canvas.
+  function rankingList(id, entries, breakdown, metric, periodKg, kind) {
     const list = $(id);
     const totals = entries.map((entry) => rankingMetricValue(entry, metric));
     const maximum = Math.max(0, ...totals);
@@ -558,8 +586,12 @@ Passport.charts = (() => {
     list.replaceChildren(
       ...entries.map((entry, index) => {
         const total = totals[index];
-        const row = document.createElement("li");
+        const item = document.createElement("li");
+        const row = document.createElement("button");
+        row.type = "button";
         row.className = "ranking-row";
+        row.dataset.openPanel = panelKey(kind, entry.value);
+        item.append(row);
         const bar = span("ranking-bar");
         bar.setAttribute("aria-hidden", "true");
         const fill = span("ranking-fill");
@@ -603,7 +635,7 @@ Passport.charts = (() => {
         }
         // What a hover shows on the chart, visible here, where no hover is.
         row.append(span("ranking-details", rankingDetailsText(entry, breakdown, metric, periodKg)));
-        return row;
+        return item;
       }),
     );
   }
@@ -643,6 +675,17 @@ Passport.charts = (() => {
         responsive: true,
         maintainAspectRatio: false,
         indexAxis: "y",
+        onClick(event, _elements, chart) {
+          const [hit] = chart.getElementsAtEventForMode(
+            event,
+            "nearest",
+            { intersect: true, axis: "x" },
+            false,
+          );
+          if (!hit) return;
+          hideTooltip();
+          select(panelKey(kind, entries[hit.datasetIndex][0]), chart.canvas);
+        },
         plugins: {
           legend: { display: false },
           tooltip: tooltipOptions(([item]) => ({
@@ -667,8 +710,10 @@ Passport.charts = (() => {
     legend.replaceChildren();
     entries.forEach(([label, kg]) => {
       const percentage = total ? (kg / total) * 100 : 0;
-      const row = document.createElement("div");
+      const row = document.createElement("button");
+      row.type = "button";
       row.className = "composition-row";
+      row.dataset.openPanel = panelKey(kind, label);
       const swatch = document.createElement("span");
       swatch.className = "composition-swatch";
       swatch.style.background = categoryColor(kind, label);
@@ -697,28 +742,40 @@ Passport.charts = (() => {
       list.replaceChildren();
       return;
     }
-    const item = (swatch, ...content) => {
+    // Each entry is a button that opens the flight panel for its category.
+    const item = (key, swatch, ...content) => {
       const element = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "legend-button";
+      button.dataset.openPanel = key;
       swatch.className = `legend-swatch${swatch.className ? ` ${swatch.className}` : ""}`;
       swatch.setAttribute("aria-hidden", "true");
-      element.append(swatch, ...content);
+      button.append(swatch, ...content);
+      element.append(button);
       return element;
     };
     const items = categories.map((category) => {
       const swatch = document.createElement("span");
       swatch.style.background = categoryColor(breakdown, category);
-      return item(swatch, categoryIcon(breakdown, category), category);
+      return item(
+        panelKey(breakdown, category),
+        swatch,
+        categoryIcon(breakdown, category),
+        category,
+      );
     });
     if (upcoming) {
       const hatch = document.createElement("span");
       hatch.className = "upcoming";
-      items.push(item(hatch, "Upcoming"));
+      items.push(item(panelKey("upcoming", ""), hatch, "Upcoming"));
     }
     list.replaceChildren(...items);
   }
 
-  // `buckets` is what Passport.aggregate.patternBuckets returns.
-  function pattern(buckets, breakdown) {
+  // `buckets` is what Passport.aggregate.patternBuckets returns, and `kind`
+  // the pattern, month or weekday, a column opens the flight panel for.
+  function pattern(buckets, breakdown, kind) {
     const { labels, categories, values, totals } = buckets;
     const maximum = Math.max(0, ...totals);
     const theme = chartTheme();
@@ -755,6 +812,9 @@ Passport.charts = (() => {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
+        onClick: clickAlong("x", (index, chart) =>
+          select(panelKey(kind, labels[index]), chart.canvas),
+        ),
         layout: { padding: { top: 28 } },
         plugins: {
           legend: { display: false },
@@ -885,5 +945,5 @@ Passport.charts = (() => {
     });
   }
 
-  return { ranking, rankingList, composition, legend, pattern, trend };
+  return { onSelect, ranking, rankingList, composition, legend, pattern, trend };
 })();
