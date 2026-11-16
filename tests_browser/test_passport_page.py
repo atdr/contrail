@@ -1174,6 +1174,15 @@ def test_the_panel_fits_a_320px_phone(open_passport, page):
     assert scroll.evaluate("el => el.scrollWidth <= el.clientWidth")
     box = page.locator("#flight-panel").bounding_box()
     assert box["x"] >= 0 and box["x"] + box["width"] <= VIEWPORTS["narrow"]["width"]
+    # The heading's parts wrap whole, and no wrapped line opens with the
+    # dot between them: each dot ends the part before.
+    parts = page.locator(".panel-summary span:not([hidden])").evaluate_all(
+        """els => els.map(el => [el.getBoundingClientRect().top,
+          getComputedStyle(el, '::before').content, getComputedStyle(el, '::after').content])"""
+    )
+    assert len({round(top) for top, _, _ in parts}) > 1  # it does wrap at 320px
+    assert [before for _, before, _ in parts] == ["none"] * len(parts)
+    assert [after for _, _, after in parts] == ['" ·"'] * (len(parts) - 1) + ["none"]
     # Stacked rows, not a table with headings.
     expect(page.locator("#flight-panel-head")).to_be_hidden()
     expect(page.locator("#flight-panel-sort")).to_be_visible()

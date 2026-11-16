@@ -1114,16 +1114,20 @@ h3 {
   font-weight: 500;
   overflow-wrap: anywhere;
 }
+/* Each part wraps whole, and the dot rides at the end of the part before
+   the next shown one, so a wrapped line never starts with a separator. */
 .panel-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 0;
+  gap: 2px 0.45em;
   margin: 6px 0 0;
   color: var(--muted);
 }
-.panel-summary span + span::before {
-  content: "·";
-  padding-inline: 0.45em;
+.panel-summary span {
+  white-space: nowrap;
+}
+.panel-summary span:has(+ span:not([hidden]))::after {
+  content: " ·";
 }
 .panel-summary [hidden] {
   display: none;
