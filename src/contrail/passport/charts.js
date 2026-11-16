@@ -557,7 +557,9 @@ Passport.charts = (() => {
   // in a long log passes iOS Safari's canvas size limit and draws blank.
   // Each row is a button that opens the flight panel for its entry, so the
   // dialog is also the keyboard's way into a ranking drawn on a canvas.
-  function rankingList(id, entries, breakdown, metric, periodKg, kind) {
+  // `numbered` false leaves the rank column blank, for a list in its own
+  // order, such as months in calendar order, where a rank would mislead.
+  function rankingList(id, entries, breakdown, metric, periodKg, kind, numbered = true) {
     const list = $(id);
     const totals = entries.map((entry) => rankingMetricValue(entry, metric));
     const maximum = Math.max(0, ...totals);
@@ -614,7 +616,7 @@ Passport.charts = (() => {
         });
         bar.append(fill);
         row.append(
-          span("ranking-rank", String(index + 1)),
+          span("ranking-rank", numbered ? String(index + 1) : ""),
           rankingLabel(entry.label, entry.flag),
           span("ranking-value", formatRankingValue(total, metric)),
           bar,

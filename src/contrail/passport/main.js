@@ -10,6 +10,12 @@
     formatKg,
     formatMassText,
     formatDate,
+    MONTHS,
+    WEEKDAYS,
+    monthOf,
+    weekdayOf,
+    monthName,
+    weekdayName,
     countryName,
     countryFlag,
     routeName,
@@ -206,6 +212,37 @@
     const buckets = patternBuckets(rows, state.pattern, state.patternBreakdown);
     charts.pattern(buckets, state.patternBreakdown, state.pattern);
     charts.legend("pattern-legend", state.patternBreakdown, buckets.categories);
+    const periodKg = sum(pricedCompleted(rows), "kg");
+
+    // The chart's columns as a list of buttons in calendar order, behind a
+    // See all as the rankings have: the canvas cannot take focus, so this
+    // is the keyboard's way to a month's or a weekday's flights.
+    const months = state.pattern === "month";
+    const periodOf = months ? monthOf : weekdayOf;
+    const byPeriod = new Map(
+      aggregateBy(rows, (flight) => [flight.date ? periodOf(flight.date) : null]).map((entry) => [
+        entry.value,
+        entry,
+      ]),
+    );
+    const periodEntries = (months ? MONTHS : WEEKDAYS)
+      .filter((label) => byPeriod.has(label))
+      .map((label) => ({
+        ...byPeriod.get(label),
+        label: (months ? monthName : weekdayName)(label),
+      }));
+    rankingData.set("pattern", {
+      title: months ? "All months" : "All weekdays",
+      entries: periodEntries,
+      breakdown: state.patternBreakdown,
+      metric: "total",
+      periodKg,
+      kind: state.pattern,
+      numbered: false,
+    });
+    const periodsButton = document.querySelector('[data-ranking="pattern"]');
+    periodsButton.hidden = periodEntries.length === 0;
+    periodsButton.setAttribute("aria-label", months ? "See all months" : "See all weekdays");
 
     const airportEntries = aggregateBy(rows, (flight) => [flight.origin, flight.destination]);
     const countryEntries = aggregateBy(rows, (flight) => [
@@ -222,7 +259,6 @@
     // The connection rankings sort by their own measure: a control beside
     // them, as each chart's controls are, rather than the drivers' one a
     // section further down that would change them out of sight.
-    const periodKg = sum(pricedCompleted(rows), "kg");
     showRanking(
       "airports",
       "All airport connections",
@@ -498,6 +534,7 @@
       metric,
       ranking.periodKg,
       ranking.kind,
+      ranking.numbered !== false,
     );
     $("ranking-dialog").showModal();
     $("ranking-dialog-list").parentElement.scrollTop = 0;

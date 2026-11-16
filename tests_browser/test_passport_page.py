@@ -740,8 +740,8 @@ def test_touch_screens_get_44px_tap_targets(browser, tmp_path):
         page.goto(output.as_uri())
         page.locator("#hero-value").filter(has_text="CO").wait_for()
         sizes = tap_target_sizes(page)
-        # Six See all, the headline measure, six segmented controls, zoom.
-        assert len(sizes) == 6 + 3 + 17 + 2, sizes
+        # Seven See all, the headline measure, six segmented controls, zoom.
+        assert len(sizes) == 7 + 3 + 17 + 2, sizes
         assert [size for size in sizes if size[2] < 44] == []
         zoom = [size for size in sizes if "leaflet-control-zoom" in size[0]]
         assert len(zoom) == 2 and all(width >= 44 for _, width, _ in zoom)
@@ -863,6 +863,39 @@ def test_a_see_all_row_opens_its_flights_and_escape_returns_to_it(open_passport)
     close_panel(page)
     expect(page.locator("#ranking-dialog")).to_be_visible()
     expect(first).to_be_focused()
+
+
+def test_the_keyboard_reaches_each_month_and_weekday(open_passport, page):
+    """The pattern chart's columns opened their flights only to a pointer:
+    the canvas cannot take focus, and its key opens cabins and reasons, not
+    periods. A See all under it lists the periods with flights, in calendar
+    order and unranked, each a button that opens its flights."""
+    page.set_viewport_size(VIEWPORTS["narrow"])
+    page = open_passport()
+    see_all = page.locator("[data-ranking=pattern]")
+    expect(see_all).to_have_accessible_name("See all months")
+    see_all.focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#ranking-dialog-title")).to_have_text("All months · total CO₂e")
+    rows_shown = page.locator("#ranking-dialog-list > li")
+    expect(rows_shown.locator(".ranking-label")).to_have_text(["March", "May", "June"])
+    expect(rows_shown.first.locator(".ranking-rank")).to_have_text("")
+    page.keyboard.press("Tab")
+    page.keyboard.press("Tab")  # past March to May
+    page.keyboard.press("Enter")
+    panel_says(page, "May", "1 flight")
+    close_panel(page)
+    page.keyboard.press("Escape")
+    assert sideways_scroll(page) <= 0
+
+    page.locator("#pattern-tabs [data-value=weekday]").click()
+    expect(see_all).to_have_accessible_name("See all weekdays")
+    see_all.click()
+    labels = page.locator("#ranking-dialog-list .ranking-label").all_inner_texts()
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    assert labels == [day for day in weekdays if day in labels]
+    rows_shown.first.locator("button").click()
+    expect(page.locator("#flight-panel-kind")).to_have_text("Weekday")
 
 
 def test_a_key_entry_and_a_composition_row_open_their_category(open_passport):
