@@ -40,11 +40,8 @@
   const $ = (id) => document.getElementById(id);
   const data = JSON.parse($("passport-data").textContent);
   const world = JSON.parse($("world-data").textContent);
-  // A flight's id is its place in the payload: what a flight panel filter,
-  // and so a link to one flight, names it by.
-  data.flights.forEach((flight, index) => {
-    flight.id = index;
-  });
+  Passport.aggregate.assignIds(data.flights);
+  const flightsById = new Map(data.flights.map((flight) => [flight.id, flight]));
 
   // Each key but `panel` is a segmented control: a button with
   // data-control="<key>" and data-value="<value>" sets it. `year` is null
@@ -312,8 +309,8 @@
         "flights",
         "All flights by impact",
         "flight",
-        (row) => String(row.id),
-        (id) => flightLabel(data.flights[Number(id)]),
+        (row) => row.id,
+        (id) => flightLabel(flightsById.get(id)),
       ],
     ].forEach(([key, title, kind, keyer, name]) => {
       const entries = rankAll(rows, keyer).map((entry) =>
@@ -390,7 +387,10 @@
   function writeHash() {
     const params = new URLSearchParams();
     Object.keys(DEFAULTS).forEach((key) => {
-      if (state[key] !== DEFAULTS[key]) params.set(key, String(state[key]));
+      if (state[key] === DEFAULTS[key]) return;
+      // A flight with no stable identity opens here but is not linked to.
+      if (key === "panel" && !panel.linkable(state.panel)) return;
+      params.set(key, String(state[key]));
     });
     const hash = params.toString();
     try {
@@ -520,11 +520,13 @@
   // A hash edited by hand, or a link followed within the page, applies too.
   window.addEventListener("hashchange", () => setState({ ...DEFAULTS, ...readHash() }));
 
-  Object.assign(state, readHash());
-  buildPeriods();
   charts.onSelect(openPanel);
   map.setup(world, openPanel);
   panel.setup({ flights: data.flights, onClose: () => setState({ panel: null }) });
+  // After the panel knows the flights, which a flight filter is checked
+  // against, and before the year buttons are drawn pressed.
+  Object.assign(state, readHash());
+  buildPeriods();
   $("generated").textContent =
     `Generated ${new Date(data.meta.generatedAt).toLocaleString()} with contrail ${data.meta.contrailVersion}. Keep this file private.`;
   render();

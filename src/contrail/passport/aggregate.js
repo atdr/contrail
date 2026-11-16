@@ -206,7 +206,28 @@ Passport.aggregate = (() => {
     "reason:missing": { label: "Reason missing", test: (f) => !hasReason(f) },
   };
 
+  // Give each flight an `id`: what a flight panel filter, and so a link to
+  // one flight, names it by. It is the repo's flight identity, date and
+  // route ("2026-03-04.LHR-JFK"), never the flight number, so a link keeps
+  // naming the same flight after a sync adds or drops others. A second
+  // flight with the same identity, which resync would normally have merged,
+  // gets "~2" and so on in payload order. A flight missing its date or an
+  // airport has no identity: it gets "n<index>", good for opening it from
+  // this page, and `linkable` false so the URL never carries it.
+  function assignIds(flights) {
+    const seen = new Map();
+    flights.forEach((flight, index) => {
+      const linkable = Boolean(flight.date && flight.origin && flight.destination);
+      const base = linkable ? `${flight.date}.${flight.origin}-${flight.destination}` : `n${index}`;
+      const count = (seen.get(base) || 0) + 1;
+      seen.set(base, count);
+      flight.id = count > 1 ? `${base}~${count}` : base;
+      flight.linkable = linkable;
+    });
+  }
+
   return {
+    assignIds,
     QUALITY,
     sum,
     withEmissions,

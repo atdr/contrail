@@ -1084,6 +1084,31 @@ def test_the_view_survives_a_reload_through_the_hash(open_passport):
     assert "#" not in page.evaluate("location.href")  # the default view needs no hash
 
 
+def test_a_link_to_a_flight_survives_a_regeneration(open_passport):
+    """A flight is named in the hash by date and route, the repo's flight
+    identity, not by its place in the payload, so a sync that adds a flight
+    ahead of it leaves the link pointing at the same one."""
+    page = open_passport()
+    page.locator("#heaviest-total").click()
+    panel_says(page, "BA1 · LHR → JFK · 10 May 2025", "1 flight")
+    link = page.evaluate("location.href")
+    assert "panel=flight%3A2025-05-10.LHR-JFK" in link
+
+    earlier = row(
+        flight_date="2024-01-02", origin="LHR", destination="AMS", emissions_kg_actual="90"
+    )
+    page = open_passport([earlier, *fixture_rows()], name="later.html")
+    page.goto(link.replace("passport.html", "later.html"), wait_until="networkidle")
+    page.reload(wait_until="networkidle")
+    panel_says(page, "BA1 · LHR → JFK · 10 May 2025", "1 flight")
+
+    # The undated flight has no identity: openable here, never linked to.
+    assert page.evaluate(
+        "['flight:n6', 'flight:2025-05-10.LHR-JFK'].map(key =>"
+        " [Passport.panel.describe(key) !== null, Passport.panel.linkable(key)])"
+    ) == [[True, False], [True, True]]
+
+
 def test_a_malformed_hash_is_ignored(open_passport, problems):
     page = open_passport()
     base = page.url.split("#")[0]

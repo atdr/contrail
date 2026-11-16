@@ -26,6 +26,7 @@ Passport.panel = (() => {
   const $ = (id) => document.getElementById(id);
 
   let flights = [];
+  let byId = new Map();
   let onClose = () => {};
 
   const carrierLabel = (code) => {
@@ -34,7 +35,7 @@ Passport.panel = (() => {
   };
   const flightLabel = (flight) =>
     `${flight.flight || "Flight"} · ${routeName(flight)} · ${flight.date ? formatDate(flight.date) : "date unknown"}`;
-  const flightAt = (value) => (/^\d{1,7}$/.test(value) ? flights[Number(value)] : undefined);
+  const flightAt = (value) => byId.get(value);
 
   // What each kind of filter is called, which flights it draws from, and
   // which of those it keeps. `pool` is "completed" unless stated, the flights
@@ -386,7 +387,7 @@ Passport.panel = (() => {
 
   // A flight's row, and its detail row beneath when it is open.
   function flightRows(flight) {
-    const id = String(flight.id);
+    const id = flight.id;
     const row = role(element("tr", "flight-row"), "row");
     row.dataset.flight = id;
     const open = view.expanded.has(id);
@@ -478,9 +479,7 @@ Passport.panel = (() => {
       view.key = key;
       view.year = year;
       view.list = matching(filter, rows);
-      view.expanded = new Set(
-        view.list.length === 1 ? view.list.map((flight) => String(flight.id)) : [],
-      );
+      view.expanded = new Set(view.list.length === 1 ? view.list.map((flight) => flight.id) : []);
       drawHead(filter, year);
       drawRows();
     }
@@ -513,13 +512,14 @@ Passport.panel = (() => {
     else view.expanded.add(id);
     const next = row.nextElementSibling;
     if (next?.classList.contains("flight-detail")) next.remove();
-    const replacement = flightRows(flights[Number(id)]);
+    const replacement = flightRows(byId.get(id));
     row.replaceWith(...replacement);
     replacement[0].querySelector(".flight-toggle").focus();
   }
 
   function setup(options) {
     flights = options.flights;
+    byId = new Map(flights.map((flight) => [flight.id, flight]));
     onClose = options.onClose;
     buildHead();
     const dialog = $("flight-panel");
@@ -557,5 +557,12 @@ Passport.panel = (() => {
     });
   }
 
-  return { setup, describe, show, hide };
+  // Whether `key` may go in the URL: everything but a flight that has no
+  // stable identity, whose id would name another flight after a sync.
+  function linkable(key) {
+    const filter = describe(key);
+    return filter !== null && (filter.kind !== "flight" || flightAt(filter.value).linkable);
+  }
+
+  return { setup, describe, show, hide, linkable };
 })();
