@@ -15,7 +15,7 @@ import pytest
 from conftest import NOW, fixture_rows, row
 from playwright.sync_api import Page, expect
 
-from contrail.passport import render
+from contrail.passport import great_circle_km, render
 
 VIEWPORTS = {
     "desktop": {"width": 1280, "height": 800},
@@ -513,8 +513,21 @@ def test_country_charts_name_countries_without_flags(open_passport):
     assert first.locator(".ranking-flag").get_attribute("aria-hidden") == "true"
 
 
-def test_a_short_ranking_has_no_see_all(open_passport):
+def test_a_short_ranking_still_has_see_all_for_the_keyboard(open_passport):
+    """The canvas cannot take focus, so See all, whose rows are buttons, is
+    the keyboard's way to a ranking's flights however short it is. Only a
+    ranking with nothing in it has none."""
     page = open_passport()
+    see_all = page.locator("[data-ranking=routes]")
+    expect(see_all).to_be_visible()
+    see_all.focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#ranking-dialog-list > li")).to_have_count(2)
+    page.keyboard.press("Tab")  # from the close button to the first row
+    page.keyboard.press("Enter")
+    panel_says(page, "JFK ↔ LHR", "2 flights")
+
+    page = open_passport([], name="empty.html")
     expect(page.locator("[data-ranking=routes]")).to_be_hidden()
 
 
@@ -727,8 +740,8 @@ def test_touch_screens_get_44px_tap_targets(browser, tmp_path):
         page.goto(output.as_uri())
         page.locator("#hero-value").filter(has_text="CO").wait_for()
         sizes = tap_target_sizes(page)
-        # Six See all, the headline measure, five segmented controls, zoom.
-        assert len(sizes) == 6 + 3 + 14 + 2, sizes
+        # Seven See all, the headline measure, six segmented controls, zoom.
+        assert len(sizes) == 7 + 3 + 17 + 2, sizes
         assert [size for size in sizes if size[2] < 44] == []
         zoom = [size for size in sizes if "leaflet-control-zoom" in size[0]]
         assert len(zoom) == 2 and all(width >= 44 for _, width, _ in zoom)
@@ -768,6 +781,580 @@ def test_the_trend_note_sits_level_with_the_chart(open_passport, page):
     note = page.locator(".trend-note").bounding_box()
     chart = page.locator(".trend-chart").bounding_box()
     assert abs(note["y"] - chart["y"]) < 1
+
+
+# -- drill-down ---------------------------------------------------------------
+
+
+def panel_says(page: Page, title: str, count: str) -> None:
+    expect(page.locator("#flight-panel")).to_be_visible()
+    expect(page.locator("#flight-panel-title")).to_have_text(title)
+    expect(page.locator("#flight-panel-count")).to_have_text(count)
+
+
+def close_panel(page: Page) -> None:
+    page.keyboard.press("Escape")
+    expect(page.locator("#flight-panel")).to_be_hidden()
+
+
+def click_bar(page: Page, canvas: str, index: int) -> None:
+    """Click the middle of bar `index`, or its row's label on a ranking."""
+    page.locator(f"#{canvas}").scroll_into_view_if_needed()
+    x, y = page.evaluate(
+        """([id, index]) => {
+          const chart = Chart.getChart(id);
+          const box = chart.canvas.getBoundingClientRect();
+          const bar = chart.getDatasetMeta(0).data[index];
+          const across = chart.options.indexAxis === 'y';
+          return [box.left + (across ? chart.chartArea.left + 4 : bar.x),
+                  box.top + (across ? bar.y : chart.chartArea.bottom - 2)];
+        }""",
+        [canvas, index],
+    )
+    page.mouse.click(x, y)
+
+
+def test_a_chart_bar_opens_the_flights_behind_it(open_passport, page):
+    """Nothing on the page could be clicked for detail. Every chart now
+    opens the flight panel for what was clicked: a ranking row, a month and
+    a cabin's share of the composition bar."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+
+    click_bar(page, "routes", 0)
+    panel_says(page, "JFK ↔ LHR", "2 flights")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Route")
+    expect(page.locator("#flight-panel-total")).to_have_text("1.8 t CO₂e")
+    close_panel(page)
+
+    click_bar(page, "pattern-chart", 4)  # May
+    panel_says(page, "May", "1 flight")
+    close_panel(page)
+
+    page.get_by_role("button", name="2026", exact=True).click()
+    click_bar(page, "carriers", 0)
+    panel_says(page, "British Airways (BA)", "3 flights")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Operating airline · 2026")
+    # An unpriced flight is listed, and the heading says it has no figure.
+    expect(page.locator("#flight-panel-note")).to_have_text("1 without an estimate")
+
+
+def test_a_see_all_row_opens_its_flights_and_escape_returns_to_it(open_passport):
+    """The dialog's rows are buttons, the keyboard's way into a ranking that
+    is otherwise drawn on a canvas. The panel opens over the dialog, and
+    Escape closes only the panel and puts focus back on the row."""
+    destinations = ["JFK", "CDG", "SIN", "AMS", "DXB", "HND", "SYD", "LAX"]
+    rows = [
+        row(
+            flight_date=f"2026-0{month}-01",
+            origin="LHR",
+            destination=destination,
+            emissions_kg_actual=str(100 * month),
+        )
+        for month, destination in enumerate(destinations, start=1)
+    ]
+    page = open_passport(rows)
+    page.locator("[data-ranking=routes]").click()
+    first = page.locator("#ranking-dialog-list > li button").first
+    first.focus()
+    page.keyboard.press("Enter")
+    panel_says(page, "LAX ↔ LHR", "1 flight")
+
+    close_panel(page)
+    expect(page.locator("#ranking-dialog")).to_be_visible()
+    expect(first).to_be_focused()
+
+
+def test_the_keyboard_reaches_each_month_and_weekday(open_passport, page):
+    """The pattern chart's columns opened their flights only to a pointer:
+    the canvas cannot take focus, and its key opens cabins and reasons, not
+    periods. A See all under it lists the periods with flights, in calendar
+    order and unranked, each a button that opens its flights."""
+    page.set_viewport_size(VIEWPORTS["narrow"])
+    page = open_passport()
+    see_all = page.locator("[data-ranking=pattern]")
+    expect(see_all).to_have_accessible_name("See all months")
+    see_all.focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#ranking-dialog-title")).to_have_text("All months · total CO₂e")
+    rows_shown = page.locator("#ranking-dialog-list > li")
+    expect(rows_shown.locator(".ranking-label")).to_have_text(["March", "May", "June"])
+    expect(rows_shown.first.locator(".ranking-rank")).to_have_text("")
+    page.keyboard.press("Tab")
+    page.keyboard.press("Tab")  # past March to May
+    page.keyboard.press("Enter")
+    panel_says(page, "May", "1 flight")
+    close_panel(page)
+    page.keyboard.press("Escape")
+    assert sideways_scroll(page) <= 0
+
+    page.locator("#pattern-tabs [data-value=weekday]").click()
+    expect(see_all).to_have_accessible_name("See all weekdays")
+    see_all.click()
+    labels = page.locator("#ranking-dialog-list .ranking-label").all_inner_texts()
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    assert labels == [day for day in weekdays if day in labels]
+    rows_shown.first.locator("button").click()
+    expect(page.locator("#flight-panel-kind")).to_have_text("Weekday")
+
+
+def test_a_key_entry_and_a_composition_row_open_their_category(open_passport):
+    page = open_passport()
+    page.locator("#trend-breakdown-tabs [data-value=cabin]").click()
+    page.locator("#trend-legend button", has_text="Business").click()
+    panel_says(page, "Business", "1 flight")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Cabin · all years, flown and booked")
+    close_panel(page)
+
+    page.locator("#trend-legend button", has_text="Upcoming").click()
+    panel_says(page, "Upcoming flights", "1 flight")
+    close_panel(page)
+
+    page.locator("#reasons-legend button", has_text="Leisure").click()
+    panel_says(page, "Leisure", "1 flight")
+
+
+def test_the_trend_key_opens_the_trend_s_own_scope(open_passport):
+    """The trend charts every year, flown and booked, but its key opened the
+    chosen year's completed flights: a category with only bookings read 0
+    flights, and with a year chosen the key opened that year alone. Its key
+    now opens every dated flight in the category, and says so; every other
+    chart's key keeps the chosen period."""
+    rows = [
+        row(
+            flight_date="2025-05-10",
+            origin="LHR",
+            destination="JFK",
+            cabin_class_known="business",
+            flight_reason="business",
+            emissions_kg_actual="1500",
+        ),
+        row(
+            flight_date="2026-03-04",
+            origin="JFK",
+            destination="LHR",
+            cabin_class_known="business",
+            flight_reason="business",
+            emissions_kg_actual="1400",
+        ),
+        row(
+            flight_date="2026-09-01",
+            origin="LHR",
+            destination="SIN",
+            flight_reason="leisure",
+            emissions_kg_actual="900",
+        ),
+    ]
+    page = open_passport(rows)
+    page.locator("#trend-breakdown-tabs [data-value=reason]").click()
+    page.locator("#trend-legend button", has_text="Leisure").click()
+    panel_says(page, "Leisure", "1 flight")  # booked only: it read 0 before
+    expect(page.locator("#flight-panel-kind")).to_have_text("Reason · all years, flown and booked")
+    expect(page.locator("#flight-panel-total")).to_have_text("900 kg CO₂e")
+    close_panel(page)
+
+    page.get_by_role("button", name="2025", exact=True).click()
+    page.locator("#trend-legend button", has_text="Business").click()
+    panel_says(page, "Business", "2 flights")  # both years, not 2025 alone
+    assert "panel=trend.reason%3ABusiness" in page.evaluate("location.href")
+    page.reload(wait_until="networkidle")
+    panel_says(page, "Business", "2 flights")
+    close_panel(page)
+
+    # The drivers' key still opens the chosen year.
+    page.locator("#reasons-legend button", has_text="Business").click()
+    panel_says(page, "Business", "1 flight")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Reason · 2025")
+    close_panel(page)
+
+    # Only the kinds the trend key holds take the prefix.
+    assert page.evaluate(
+        "['trend.cabin:Economy', 'trend.upcoming:', 'trend.route:JFK ↔ LHR', 'trend.flight:x']"
+        ".map(key => Passport.panel.describe(key) !== null)"
+    ) == [True, True, False, False]
+
+
+def test_a_card_opens_its_flight_with_the_detail_shown(open_passport):
+    page = open_passport()
+    page.locator("#heaviest-total").click()
+    panel_says(page, "BA1 · LHR → JFK · 10 May 2025", "1 flight")
+    expect(page.locator(".flight-detail")).to_contain_text("Business")
+    # A list of one needs no search.
+    expect(page.locator("#flight-panel-tools")).to_be_hidden()
+
+
+def test_a_quality_count_opens_its_bucket(open_passport):
+    page = open_passport()
+    expect(page.locator("#missing-count")).to_have_text("1 · 25%")
+    page.locator("#missing-count").click()
+    panel_says(page, "No emissions estimate", "1 flight")
+    expect(page.locator("#flight-panel-total")).to_have_text("0 kg CO₂e")
+    expect(page.locator("#flight-panel-rows .cell-route")).to_have_text("▸ CDG → XXX".lstrip("▸ "))
+    close_panel(page)
+
+    page.locator("#cabin-assumed").click()
+    panel_says(page, "Cabin assumed economy", "3 flights")
+
+
+def test_the_hero_stats_open_completed_and_upcoming_flights(open_passport):
+    page = open_passport()
+    page.locator("#flight-count").click()
+    panel_says(page, "All flights", f"{text(page, '#flight-count')} flights")
+    close_panel(page)
+    expect(page.locator("button:has(#flight-count)")).to_be_focused()
+
+    page.locator("#planned-total").click()
+    panel_says(page, "Upcoming flights", "1 flight")
+    expect(page.locator("#flight-panel-total")).to_have_text("900 kg CO₂e")
+
+
+def test_a_map_airport_opens_its_flights(open_passport):
+    page = open_passport()
+    page.locator(".leaflet-airports-pane path").last.click(force=True)  # LHR, the heaviest
+    panel_says(page, "LHR", "3 flights")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Airport")
+    close_panel(page)
+
+    # A route's middle can sit under an airport, so the click goes to the line.
+    page.locator(".leaflet-routes-pane path").first.dispatch_event("click")
+    expect(page.locator("#flight-panel-kind")).to_have_text("Route")
+
+
+def test_the_flight_list_sorts_and_searches(open_passport):
+    destinations = ["JFK", "CDG", "SIN", "AMS", "DXB", "HND", "SYD", "LAX"]
+    rows = [
+        row(
+            flight_date=f"2026-0{month}-01",
+            origin="LHR",
+            destination=destination,
+            operating_carrier_code="QF" if destination == "SYD" else "",
+            emissions_kg_actual=str(100 * ((month * 3) % 8 + 1)),
+        )
+        for month, destination in enumerate(destinations, start=1)
+    ]
+    page = open_passport(rows)
+    page.locator("#flight-count").click()
+    kg = page.locator("#flight-panel-rows .cell-kg")
+    header = page.locator("#flight-panel-head th[data-sort=kg]")
+    date_header = page.locator("#flight-panel-head th[data-sort=date]")
+
+    # Newest first by default.
+    expect(date_header).to_have_attribute("aria-sort", "descending")
+    expect(page.locator("#flight-panel-rows .cell-date").first).to_have_text("1 Aug 2026")
+
+    header.locator("button").click()
+    expect(header).to_have_attribute("aria-sort", "descending")
+    expect(date_header).not_to_have_attribute("aria-sort", re.compile("."))
+    expect(kg.first).to_have_text("800.0")
+    header.locator("button").click()
+    expect(header).to_have_attribute("aria-sort", "ascending")
+    expect(kg.first).to_have_text("100.0")
+
+    page.locator("#flight-panel-search").fill("qf")  # the operating airline's code
+    expect(page.locator("#flight-panel-rows tr")).to_have_count(1)
+    expect(page.locator("#flight-panel-rows .cell-route")).to_have_text("LHR → SYD")
+    expect(page.locator("#flight-panel-status")).to_have_text("Showing 1 of 8")
+    page.locator("#flight-panel-search").fill("lhr hnd")
+    expect(page.locator("#flight-panel-rows tr")).to_have_count(1)
+    page.locator("#flight-panel-search").fill("zzz")
+    expect(page.locator("#flight-panel-empty")).to_have_text("No flights match that search.")
+
+
+def test_the_phone_sort_select_offers_every_header_order(open_passport, page):
+    """The phone's select offered seven orders, missing Flight, Cabin and
+    Estimate and most reverse directions, so after a header sort on a wide
+    screen and a resize it showed one order while the rows had another.
+    It is built from the columns now: every column, both directions, and
+    it follows a header sort."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    page.locator("#flight-count").click()
+    select = page.locator("#flight-panel-sort")
+    values = select.locator("option").evaluate_all("els => els.map(el => el.value)")
+    columns = page.locator("#flight-panel-head th").evaluate_all(
+        "els => els.map(el => el.dataset.sort)"
+    )
+    assert sorted(values) == sorted(
+        f"{column}:{direction}" for column in columns for direction in ("ascending", "descending")
+    )
+
+    cabin = page.locator("#flight-panel-head th[data-sort=cabin]")
+    cabin.locator("button").click()
+    cabin.locator("button").click()
+    expect(cabin).to_have_attribute("aria-sort", "descending")
+    page.set_viewport_size(VIEWPORTS["mobile"])
+    expect(select).to_be_visible()
+    expect(select).to_have_value("cabin:descending")
+
+    select.select_option("source:ascending")
+    expect(page.locator("#flight-panel-head th[data-sort=source]")).to_have_attribute(
+        "aria-sort", "ascending"
+    )
+    expect(page.locator("#flight-panel-rows .cell-source").first).to_have_text("Exact")
+
+
+def test_flight_detail_shows_every_cabin_and_the_contrail_impact(open_passport):
+    page = open_passport(
+        [
+            row(
+                flight_date="2026-03-04",
+                origin="JFK",
+                destination="LHR",
+                flight_number="112",
+                departure_time="2026-03-04T20:30:00-05:00",
+                arrival_time="2026-03-05T08:15:00+00:00",
+                cabin_class_known="business",
+                emissions_kg_actual="716.4",
+                emissions_kg_economy="247",
+                emissions_kg_business="716.4",
+                emissions_kg_first="1004.5",
+                contrails_impact="moderate",
+                model_version="3.0.0+20260814",
+            ),
+            row(
+                flight_date="2026-04-01", origin="LHR", destination="CDG", emissions_kg_actual="60"
+            ),
+        ]
+    )
+    page.locator("#flight-count").click()
+    page.locator("#flight-panel").get_by_role("button", name="JFK → LHR").click()
+    detail = page.locator(".flight-detail")
+    expect(detail).to_be_visible()
+    expect(page.locator("#flight-panel").get_by_role("button", name="JFK → LHR")).to_have_attribute(
+        "aria-expanded", "true"
+    )
+    figures = detail.locator(".cabin-figures li").all_inner_texts()
+    assert figures == [
+        "In economy this flight would have been 247 kg CO₂e.",
+        "In first this flight would have been 1,004.5 kg CO₂e.",
+    ]
+    facts = dict(
+        zip(
+            detail.locator("dt").all_inner_texts(),
+            detail.locator("dd").all_inner_texts(),
+            strict=True,
+        )
+    )
+    assert facts["Contrail impact"] == "Moderate"
+    assert facts["Model version"] == "TIM 3.0.0+20260814"
+    assert facts["Estimate"] == "Exact TIM estimate"
+    assert facts["Scheduled departure"] == "20:30 · 4 Mar 2026 (UTC−05:00)"
+    assert facts["Scheduled arrival"] == "08:15 · 5 Mar 2026 (UTC+00:00)"
+    assert facts["Block time"] == "6 h 45 min"
+
+    page.locator("#flight-panel").get_by_role("button", name="JFK → LHR").click()
+    expect(detail).to_have_count(0)
+
+
+def test_a_trend_bar_chooses_its_year_and_stands_out(open_passport, page):
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    click_bar(page, "trend-chart", 0)
+    pressed(page, "#periods button:text-is('2025')")
+    assert text(page, "#hero-value") == "1.5 t CO₂e"
+    fills = page.evaluate("Chart.getChart('trend-chart').data.datasets[0].backgroundColor")
+    assert fills[0] == "#0b8071"
+    assert fills[1].startswith("#0b8071") and fills[1] != fills[0]  # dimmed
+
+    click_bar(page, "trend-chart", 0)  # the chosen year again: back to all time
+    pressed(page, "#periods button:text-is('All time')")
+    fills = page.evaluate("Chart.getChart('trend-chart').data.datasets[0].backgroundColor")
+    assert fills == ["#0b8071", "#0b8071"]
+
+
+def test_connection_rankings_have_a_per_km_and_per_hour_measure(open_passport):
+    """The airport and country rankings were always total CO2e. They have
+    their own measure control now, beside them."""
+    page = open_passport()
+    page.locator("#network-metric-tabs [data-value=distance]").click()
+    pressed(page, "#network-metric-tabs [data-value=distance]")
+    labels = page.evaluate("Chart.getChart('airports').data.labels")
+    values = page.evaluate("Chart.getChart('airports').data.datasets[0].data")
+    by_airport = dict(zip(labels, values, strict=True))
+    jfk_km = great_circle_km("JFK", "LHR")
+    assert by_airport["JFK"] == pytest.approx(1750 * 1000 / (2 * jfk_km))
+    # Ranked by that measure: CDG's short hop is the most per km.
+    assert labels[0] == "CDG"
+    page.locator("#network-metric-tabs [data-value=duration]").click()
+    # Only the two JFK flights have both times.
+    assert sorted(page.evaluate("Chart.getChart('airports').data.labels")) == ["JFK", "LHR"]
+    # The drivers' measure is its own.
+    pressed(page, "#driver-metric-tabs [data-value=total]")
+
+
+def test_a_chosen_year_says_how_it_compares_with_the_one_before(open_passport):
+    page = open_passport()
+    assert " vs " not in text(page, "#hero-context")
+    page.get_by_role("button", name="2026", exact=True).click()
+    assert re.fullmatch(
+        r"Passenger emissions across 3 completed flights · [-−]79% vs 2025 to date",
+        text(page, "#hero-context"),
+    )
+    page.get_by_role("button", name="2025", exact=True).click()
+    assert " vs " not in text(page, "#hero-context")  # 2024 has no flights
+
+
+def test_the_year_in_progress_is_compared_to_date(open_passport):
+    """2026 is the year the page was generated in (14 August), so its total
+    so far is set against 2025 up to 14 August, not against all of 2025,
+    which would make any year in progress look like a fall. A rate is
+    still compared whole year with part year."""
+    rows = [
+        row(flight_date="2025-03-01", origin="LHR", destination="CDG", emissions_kg_actual="100"),
+        row(flight_date="2025-10-01", origin="LHR", destination="CDG", emissions_kg_actual="900"),
+        row(flight_date="2026-03-01", origin="LHR", destination="CDG", emissions_kg_actual="150"),
+    ]
+    page = open_passport(rows)
+    page.get_by_role("button", name="2026", exact=True).click()
+    assert text(page, "#hero-context").endswith("· +50% vs 2025 to date")
+    page.locator("#metric-tabs [data-value=distance]").click()
+    # 150 kg over the same distance as 1000 kg over two of them: -70%.
+    assert re.search(r"· [-−]70% vs 2025$", text(page, "#hero-context"))
+
+
+def test_the_view_survives_a_reload_through_the_hash(open_passport):
+    page = open_passport()
+    page.get_by_role("button", name="2026", exact=True).click()
+    page.locator("#metric-tabs [data-value=distance]").click()
+    page.locator("#trend-breakdown-tabs [data-value=cabin]").click()
+    page.locator("#pattern-tabs [data-value=weekday]").click()
+    click_bar(page, "routes", 0)
+    panel_says(page, "JFK ↔ LHR", "1 flight")
+    shared = page.evaluate("location.href")
+    assert "year=2026" in shared and "panel=route" in shared
+
+    page.reload(wait_until="networkidle")
+    panel_says(page, "JFK ↔ LHR", "1 flight")
+    pressed(page, "#periods button:text-is('2026')")
+    pressed(page, "#metric-tabs [data-value=distance]")
+    pressed(page, "#trend-breakdown-tabs [data-value=cabin]")
+    pressed(page, "#pattern-tabs [data-value=weekday]")
+
+    close_panel(page)
+    # The dialog hides at once but fires "close" a task later, and only then
+    # is the hash rewritten. Read it from the page: page.url lags too.
+    page.wait_for_function("!location.href.includes('panel=')")
+    page.get_by_role("button", name="All time").click()
+    page.locator("#metric-tabs [data-value=total]").click()
+    page.locator("#trend-breakdown-tabs [data-value=total]").click()
+    page.locator("#pattern-tabs [data-value=month]").click()
+    assert "#" not in page.evaluate("location.href")  # the default view needs no hash
+
+
+def test_a_link_to_a_flight_survives_a_regeneration(open_passport):
+    """A flight is named in the hash by date and route, the repo's flight
+    identity, not by its place in the payload, so a sync that adds a flight
+    ahead of it leaves the link pointing at the same one."""
+    page = open_passport()
+    page.locator("#heaviest-total").click()
+    panel_says(page, "BA1 · LHR → JFK · 10 May 2025", "1 flight")
+    link = page.evaluate("location.href")
+    assert "panel=flight%3A2025-05-10.LHR-JFK" in link
+
+    earlier = row(
+        flight_date="2024-01-02", origin="LHR", destination="AMS", emissions_kg_actual="90"
+    )
+    page = open_passport([earlier, *fixture_rows()], name="later.html")
+    page.goto(link.replace("passport.html", "later.html"), wait_until="networkidle")
+    page.reload(wait_until="networkidle")
+    panel_says(page, "BA1 · LHR → JFK · 10 May 2025", "1 flight")
+
+    # The undated flight has no identity: openable here, never linked to.
+    assert page.evaluate(
+        "['flight:n6', 'flight:2025-05-10.LHR-JFK'].map(key =>"
+        " [Passport.panel.describe(key) !== null, Passport.panel.linkable(key)])"
+    ) == [[True, False], [True, True]]
+
+
+def test_a_malformed_hash_is_ignored(open_passport, problems):
+    page = open_passport()
+    base = page.url.split("#")[0]
+    page.goto(
+        f"{base}#year=abc&metric=%3Cb%3E&panel=route%3A%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E"
+        "&pattern=weekday",
+        wait_until="networkidle",
+    )
+    page.reload(wait_until="networkidle")
+    pressed(page, "#pattern-tabs [data-value=weekday]")  # the good part still applies
+    pressed(page, "#periods button:text-is('All time')")
+    pressed(page, "#metric-tabs [data-value=total]")
+    # A route no flight has opens an empty list, its name shown as text.
+    expect(page.locator("#flight-panel-title")).to_have_text("<img src=x onerror=alert(1)>")
+    assert page.locator("#flight-panel img").count() == 0
+
+    page.goto(f"{base}#panel=flight%3A999&panel=nonsense", wait_until="networkidle")
+    page.reload(wait_until="networkidle")
+    expect(page.locator("#flight-panel")).to_be_hidden()
+    assert problems == []
+
+
+def test_the_panel_fits_a_320px_phone(open_passport, page):
+    page.set_viewport_size(VIEWPORTS["narrow"])
+    page = open_passport()
+    page.locator("#flight-count").click()
+    expect(page.locator("#flight-panel")).to_be_visible()
+    page.locator(".flight-toggle").first.click()
+    expect(page.locator(".flight-detail")).to_be_visible()
+    assert sideways_scroll(page) <= 0
+    scroll = page.locator(".panel-scroll")
+    assert scroll.evaluate("el => el.scrollWidth <= el.clientWidth")
+    box = page.locator("#flight-panel").bounding_box()
+    assert box["x"] >= 0 and box["x"] + box["width"] <= VIEWPORTS["narrow"]["width"]
+    # The heading's parts wrap whole, and no wrapped line opens with the
+    # dot between them: each dot ends the part before.
+    parts = page.locator(".panel-summary span:not([hidden])").evaluate_all(
+        """els => els.map(el => [el.getBoundingClientRect().top,
+          getComputedStyle(el, '::before').content, getComputedStyle(el, '::after').content])"""
+    )
+    assert len({round(top) for top, _, _ in parts}) > 1  # it does wrap at 320px
+    assert [before for _, before, _ in parts] == ["none"] * len(parts)
+    assert [after for _, _, after in parts] == ['" ·"'] * (len(parts) - 1) + ["none"]
+    # Stacked rows, not a table with headings.
+    expect(page.locator("#flight-panel-head")).to_be_hidden()
+    expect(page.locator("#flight-panel-sort")).to_be_visible()
+
+
+def test_the_panel_is_a_side_sheet_on_a_desktop(open_passport, page):
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    page.locator("#flight-count").click()
+    box = page.locator("#flight-panel").bounding_box()
+    assert box["x"] + box["width"] == pytest.approx(VIEWPORTS["desktop"]["width"], abs=1)
+    assert box["height"] == pytest.approx(VIEWPORTS["desktop"]["height"], abs=1)
+    expect(page.locator("#flight-panel-sort")).to_be_hidden()
+    page.mouse.click(10, 400)  # the backdrop
+    expect(page.locator("#flight-panel")).to_be_hidden()
+
+
+def test_a_long_log_opens_quickly(open_passport):
+    """1000 flights open in one click. The list opens in about 50 ms on a
+    developer laptop, and took 120 to 250 ms before rows skipped layout
+    off screen. The bound is loose on purpose: shared CI runners are
+    slower and noisy, so it guards against an order-of-magnitude
+    regression, such as laying out every row or rebuilding a formatter
+    per cell, not against small drifts."""
+    rows = [
+        row(
+            flight_date=f"{2000 + index // 50}-{1 + index % 12:02d}-{1 + index % 28:02d}",
+            origin="LHR",
+            destination=["JFK", "CDG", "SIN", "SYD"][index % 4],
+            flight_number=str(index),
+            source_id=str(index),
+            emissions_kg_actual=str(100 + index),
+        )
+        for index in range(1000)
+    ]
+    page = open_passport(rows)
+    elapsed = page.evaluate(
+        """() => {
+          const start = performance.now();
+          document.getElementById('flight-count').click();
+          document.body.offsetHeight;  // include layout
+          return performance.now() - start;
+        }"""
+    )
+    expect(page.locator("#flight-panel-rows tr")).to_have_count(1000)
+    assert elapsed < 1000, elapsed
 
 
 # -- regressions from shipped fixes -------------------------------------------

@@ -157,6 +157,47 @@ def test_a_flight_is_departed_against_the_clock_it_is_given():
     assert only([row()], datetime(2026, 3, 1, 12, 0, tzinfo=UTC))["departed"] is False
 
 
+def test_a_flight_carries_what_its_detail_view_shows():
+    """The flight panel shows TIM's figure for every cabin, the contrail
+    impact, the model version and the scheduled times, all from the row."""
+    flight = only(
+        [
+            row(
+                emissions_kg_business="716.4",
+                emissions_kg_first="",
+                contrails_impact="Moderate",
+                model_version="3.0.0+20260814",
+            )
+        ]
+    )
+    assert flight["cabinKg"] == {
+        "economy": 247.027,
+        "premiumEconomy": None,
+        "business": 716.4,
+        "first": None,
+    }
+    assert flight["contrailsImpact"] == "moderate"
+    assert flight["modelVersion"] == "3.0.0+20260814"
+    # Local wall time with its offset, so the page prints it unconverted.
+    assert flight["departure"] == "2026-03-04T20:30-05:00"
+    assert flight["arrival"] == "2026-03-05T08:15+00:00"
+
+
+def test_facts_a_flight_lacks_are_left_out_of_the_payload():
+    """Every flight is embedded, so a key that would only say null costs
+    bytes on every one of them. The page reads a missing key as unknown."""
+    flight = only([row(emissions_kg_economy="", emissions_kg_actual="", arrival_time="not-a-time")])
+    for key in ("cabinKg", "contrailsImpact", "modelVersion", "arrival"):
+        assert key not in flight, key
+    assert flight["departure"] == "2026-03-04T20:30-05:00"
+
+
+def test_tim_distance_is_not_embedded():
+    """Passport measures every flight one way; TIM's own distance was
+    embedded but never read."""
+    assert "timDistanceKm" not in only([row(distance_km="5555")])
+
+
 def test_years_are_newest_first_and_only_of_dated_flights():
     rows = [row(flight_date="2024-01-01"), row(), row(flight_date="")]
     assert build_data(rows, NOW)["years"] == [2026, 2024]

@@ -97,6 +97,38 @@ def scheduled_hours(row: dict) -> float | None:
     return round(hours, 3)
 
 
+# TIM's figure for each cabin, under the payload's own names. A flight priced
+# before TIM answered per cabin, or not priced at all, has none of them.
+_CABIN_FIGURES = (
+    ("economy", "emissions_kg_economy"),
+    ("premiumEconomy", "emissions_kg_premium_economy"),
+    ("business", "emissions_kg_business"),
+    ("first", "emissions_kg_first"),
+)
+
+
+def _cabin_kg(row: dict) -> dict | None:
+    figures = {name: _number(row.get(field)) for name, field in _CABIN_FIGURES}
+    if all(value is None for value in figures.values()):
+        return None
+    return {name: round(value, 3) if value is not None else None for name, value in figures.items()}
+
+
+def _scheduled(value) -> str | None:
+    """A stored instant as the page shows it: local wall time to the minute
+    with its offset, so the page can print it without converting zones."""
+    instant = _instant(value)
+    return instant.isoformat(timespec="minutes") if instant else None
+
+
+def _optional(flight: dict, **values) -> dict:
+    """Add each value that is known. The payload carries every flight, so a
+    key that would only ever say null is left out, and the page reads a
+    missing key as null."""
+    flight.update({key: value for key, value in values.items() if value is not None})
+    return flight
+
+
 def _flight(row: dict, now: datetime) -> dict | None:
     if is_cancelled(row):
         return None
@@ -117,7 +149,7 @@ def _flight(row: dict, now: datetime) -> dict | None:
         or "Unknown"
     )
 
-    return {
+    flight = {
         "date": day.isoformat() if day else None,
         "year": day.year if day else None,
         "origin": origin or None,
@@ -142,10 +174,17 @@ def _flight(row: dict, now: datetime) -> dict | None:
         "distanceKm": distance,
         "durationHours": scheduled_hours(row),
         "departed": departed is True,
-        "timDistanceKm": _number(row.get("distance_km")),
         "start": start,
         "end": end,
     }
+    return _optional(
+        flight,
+        departure=_scheduled(row.get("departure_time")),
+        arrival=_scheduled(row.get("arrival_time")),
+        cabinKg=_cabin_kg(row),
+        contrailsImpact=(row.get("contrails_impact") or "").strip().lower() or None,
+        modelVersion=(row.get("model_version") or "").strip() or None,
+    )
 
 
 def build_data(rows: list[dict], now: datetime | None = None) -> dict:

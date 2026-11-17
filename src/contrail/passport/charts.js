@@ -162,6 +162,28 @@ Passport.charts = (() => {
   });
   document.addEventListener("pointerleave", hideTooltip);
 
+  // What a click on a chart opens: main.js hands in its panel opener, which
+  // takes a filter key and the element to return focus to.
+  let select = () => {};
+  const onSelect = (handler) => {
+    select = handler;
+  };
+  const panelKey = (kind, value) => `${kind}:${value}`;
+
+  // A click handler for a bar chart along `axis`, the axis its categories
+  // sit on. The category is read from the pointer's position on that axis,
+  // not from the bar under it, so a click on a short bar's row or on its
+  // label counts too. `pick(index)` does the rest.
+  function clickAlong(axis, pick) {
+    return (event, _elements, chart) => {
+      const scale = chart.scales[axis];
+      const index = Math.round(scale.getValueForPixel(axis === "y" ? event.y : event.x));
+      if (!(index >= 0 && index < chart.data.labels.length)) return;
+      hideTooltip();
+      pick(index, chart);
+    };
+  }
+
   // Below this width a period chart shortens its axis: month initials, and
   // value labels a size smaller.
   const narrow = (chart) => chart.width < 420;
@@ -305,11 +327,12 @@ Passport.charts = (() => {
     },
   };
 
-  function hatchPattern(canvas, color) {
+  function hatchPattern(canvas, color, alpha = 1) {
     const hatch = document.createElement("canvas");
     hatch.width = 9;
     hatch.height = 9;
     const context = hatch.getContext("2d");
+    context.globalAlpha = alpha;
     context.fillStyle = `${color}42`;
     context.fillRect(0, 0, 9, 9);
     context.strokeStyle = color;
@@ -426,7 +449,8 @@ Passport.charts = (() => {
       .details.map((detail) => `${detail.label} ${detail.value}`)
       .join(", ");
 
-  function ranking(id, entries, breakdown, metric, periodKg = 0) {
+  // `kind` is the flight panel filter an entry's bar opens, on entry.value.
+  function ranking(id, entries, breakdown, metric, periodKg, kind) {
     const theme = chartTheme();
     const totals = entries.map((entry) => rankingMetricValue(entry, metric));
     const maximum = Math.max(1, ...totals);
@@ -482,6 +506,9 @@ Passport.charts = (() => {
         maintainAspectRatio: false,
         indexAxis: "y",
         interaction: { mode: "index", axis: "y", intersect: false },
+        onClick: clickAlong("y", (index, chart) =>
+          select(panelKey(kind, entries[index].value), chart.canvas),
+        ),
         layout: { padding: { right: metric === "total" ? 58 : 88 } },
         plugins: {
           legend: { display: false },
@@ -528,7 +555,11 @@ Passport.charts = (() => {
   // and a bar sized in CSS, split by category when a breakdown is chosen.
   // HTML rather than a canvas because a canvas tall enough for every flight
   // in a long log passes iOS Safari's canvas size limit and draws blank.
-  function rankingList(id, entries, breakdown, metric, periodKg = 0) {
+  // Each row is a button that opens the flight panel for its entry, so the
+  // dialog is also the keyboard's way into a ranking drawn on a canvas.
+  // `numbered` false leaves the rank column blank, for a list in its own
+  // order, such as months in calendar order, where a rank would mislead.
+  function rankingList(id, entries, breakdown, metric, periodKg, kind, numbered = true) {
     const list = $(id);
     const totals = entries.map((entry) => rankingMetricValue(entry, metric));
     const maximum = Math.max(0, ...totals);
@@ -558,8 +589,12 @@ Passport.charts = (() => {
     list.replaceChildren(
       ...entries.map((entry, index) => {
         const total = totals[index];
-        const row = document.createElement("li");
+        const item = document.createElement("li");
+        const row = document.createElement("button");
+        row.type = "button";
         row.className = "ranking-row";
+        row.dataset.openPanel = panelKey(kind, entry.value);
+        item.append(row);
         const bar = span("ranking-bar");
         bar.setAttribute("aria-hidden", "true");
         const fill = span("ranking-fill");
@@ -581,7 +616,7 @@ Passport.charts = (() => {
         });
         bar.append(fill);
         row.append(
-          span("ranking-rank", String(index + 1)),
+          span("ranking-rank", numbered ? String(index + 1) : ""),
           rankingLabel(entry.label, entry.flag),
           span("ranking-value", formatRankingValue(total, metric)),
           bar,
@@ -603,7 +638,7 @@ Passport.charts = (() => {
         }
         // What a hover shows on the chart, visible here, where no hover is.
         row.append(span("ranking-details", rankingDetailsText(entry, breakdown, metric, periodKg)));
-        return row;
+        return item;
       }),
     );
   }
@@ -643,6 +678,17 @@ Passport.charts = (() => {
         responsive: true,
         maintainAspectRatio: false,
         indexAxis: "y",
+        onClick(event, _elements, chart) {
+          const [hit] = chart.getElementsAtEventForMode(
+            event,
+            "nearest",
+            { intersect: true, axis: "x" },
+            false,
+          );
+          if (!hit) return;
+          hideTooltip();
+          select(panelKey(kind, entries[hit.datasetIndex][0]), chart.canvas);
+        },
         plugins: {
           legend: { display: false },
           tooltip: tooltipOptions(([item]) => ({
@@ -667,8 +713,10 @@ Passport.charts = (() => {
     legend.replaceChildren();
     entries.forEach(([label, kg]) => {
       const percentage = total ? (kg / total) * 100 : 0;
-      const row = document.createElement("div");
+      const row = document.createElement("button");
+      row.type = "button";
       row.className = "composition-row";
+      row.dataset.openPanel = panelKey(kind, label);
       const swatch = document.createElement("span");
       swatch.className = "composition-swatch";
       swatch.style.background = categoryColor(kind, label);
@@ -690,35 +738,49 @@ Passport.charts = (() => {
   // a swatch, badge and name per category, in the order the chart stacks
   // them, and the upcoming hatch where the chart draws one. Hidden for the
   // total, which is one colour and needs no key.
-  function legend(id, breakdown, categories, { upcoming = false } = {}) {
+  // `scope` prefixes each entry's filter kind, as "trend." does for the
+  // annual trajectory, whose key covers every year, flown and booked.
+  function legend(id, breakdown, categories, { upcoming = false, scope = "" } = {}) {
     const list = $(id);
     list.hidden = breakdown === "total" || !categories.length;
     if (list.hidden) {
       list.replaceChildren();
       return;
     }
-    const item = (swatch, ...content) => {
+    // Each entry is a button that opens the flight panel for its category.
+    const item = (key, swatch, ...content) => {
       const element = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "legend-button";
+      button.dataset.openPanel = key;
       swatch.className = `legend-swatch${swatch.className ? ` ${swatch.className}` : ""}`;
       swatch.setAttribute("aria-hidden", "true");
-      element.append(swatch, ...content);
+      button.append(swatch, ...content);
+      element.append(button);
       return element;
     };
     const items = categories.map((category) => {
       const swatch = document.createElement("span");
       swatch.style.background = categoryColor(breakdown, category);
-      return item(swatch, categoryIcon(breakdown, category), category);
+      return item(
+        panelKey(`${scope}${breakdown}`, category),
+        swatch,
+        categoryIcon(breakdown, category),
+        category,
+      );
     });
     if (upcoming) {
       const hatch = document.createElement("span");
       hatch.className = "upcoming";
-      items.push(item(hatch, "Upcoming"));
+      items.push(item(panelKey(`${scope}upcoming`, ""), hatch, "Upcoming"));
     }
     list.replaceChildren(...items);
   }
 
-  // `buckets` is what Passport.aggregate.patternBuckets returns.
-  function pattern(buckets, breakdown) {
+  // `buckets` is what Passport.aggregate.patternBuckets returns, and `kind`
+  // the pattern, month or weekday, a column opens the flight panel for.
+  function pattern(buckets, breakdown, kind) {
     const { labels, categories, values, totals } = buckets;
     const maximum = Math.max(0, ...totals);
     const theme = chartTheme();
@@ -755,6 +817,9 @@ Passport.charts = (() => {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
+        onClick: clickAlong("x", (index, chart) =>
+          select(panelKey(kind, labels[index]), chart.canvas),
+        ),
         layout: { padding: { top: 28 } },
         plugins: {
           legend: { display: false },
@@ -780,9 +845,23 @@ Passport.charts = (() => {
     });
   }
 
+  // How strongly a year that is not the chosen one is drawn.
+  const DIMMED = 0.3;
+  const dim = (color) => {
+    const hex = /^#[0-9a-f]{6}$/i.test(color) ? color : null;
+    return hex
+      ? `${hex}${Math.round(DIMMED * 255)
+          .toString(16)
+          .padStart(2, "0")}`
+      : color;
+  };
+
   // `series` is what Passport.aggregate.yearSeries returns; `categories` the
-  // breakdown's categories across every flight.
-  function trend(series, categories, breakdown) {
+  // breakdown's categories across every flight. With a year chosen, its bars
+  // keep their colour and every other year's are dimmed. A click on a year
+  // calls `onYear(year)`.
+  function trend(series, categories, breakdown, selectedYear, onYear) {
+    const chosen = (item) => selectedYear === null || item.year === selectedYear;
     const maximum = Math.max(0, ...series.map((item) => item.completed + item.planned));
     const totals = series.map((item) => item.completed + item.planned);
     const theme = chartTheme();
@@ -810,7 +889,10 @@ Passport.charts = (() => {
     );
     const datasets = categories.flatMap((category) => {
       const color = breakdownColor(breakdown, category);
-      const upcomingPattern = hatchPattern($("trend-chart"), color);
+      const fill = series.map((item) => (chosen(item) ? color : dim(color)));
+      const full = hatchPattern($("trend-chart"), color);
+      const faint = hatchPattern($("trend-chart"), color, DIMMED);
+      const upcomingPattern = series.map((item) => (chosen(item) ? full : faint));
       const filterCategory = (row) =>
         breakdown === "total" || visualCategory(row, breakdown) === category;
       return [
@@ -822,8 +904,8 @@ Passport.charts = (() => {
               "kg",
             ),
           ),
-          backgroundColor: color,
-          hoverBackgroundColor: color,
+          backgroundColor: fill,
+          hoverBackgroundColor: fill,
           borderSkipped: false,
           borderRadius: stackedBorderRadius("x"),
           barPercentage: 0.72,
@@ -840,7 +922,7 @@ Passport.charts = (() => {
           hoverBackgroundColor: upcomingPattern,
           swatch: color,
           hatched: true,
-          borderColor: color,
+          borderColor: fill,
           borderWidth: 1,
           borderSkipped: false,
           borderRadius: stackedBorderRadius("x"),
@@ -861,6 +943,7 @@ Passport.charts = (() => {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
+        onClick: clickAlong("x", (index) => onYear(series[index].year)),
         layout: { padding: { top: 28 } },
         plugins: {
           legend: { display: false },
@@ -885,5 +968,5 @@ Passport.charts = (() => {
     });
   }
 
-  return { ranking, rankingList, composition, legend, pattern, trend };
+  return { onSelect, ranking, rankingList, composition, legend, pattern, trend };
 })();

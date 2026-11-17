@@ -43,7 +43,9 @@ Passport.aggregate = (() => {
   }
 
   // Every priced, completed flight counted once under each distinct label
-  // `labelsFor` gives it, with its flight count, a metric bucket for the
+  // `labelsFor` gives it. `value` keeps that label, which is what the flight
+  // panel filters on, for callers that relabel an entry for display. Each
+  // entry has its flight count, a metric bucket for the
   // whole entry and one per cabin and per reason. Heaviest first, with Unknown last.
   function aggregateBy(rows, labelsFor) {
     const values = new Map();
@@ -51,6 +53,7 @@ Passport.aggregate = (() => {
       [...new Set(labelsFor(flight).filter(Boolean))].forEach((label) => {
         const entry = values.get(label) || {
           label,
+          value: label,
           total: 0,
           flights: 0,
           metrics: emptyMetricBucket(),
@@ -179,7 +182,53 @@ Passport.aggregate = (() => {
     };
   }
 
+  const hasReason = (flight) => Boolean(flight.reason) && flight.reason.toLowerCase() !== "unknown";
+  const isExact = (flight) => flight.emissionsSource === "exact";
+  const isTypical = (flight) => flight.emissionsSource === "typical_route_average";
+
+  // The partitions Estimate quality counts completed flights into, keyed as
+  // the flight panel names them. One table, so a count and the list it opens
+  // can never disagree.
+  const QUALITY = {
+    "emissions:exact": { label: "Exact TIM estimate", test: isExact },
+    "emissions:typical": { label: "Route average estimate", test: isTypical },
+    "emissions:missing": {
+      label: "No emissions estimate",
+      test: (flight) => !isExact(flight) && !isTypical(flight),
+    },
+    "distance:available": { label: "Distance available", test: (f) => f.distanceKm !== null },
+    "distance:missing": { label: "Distance missing", test: (f) => f.distanceKm === null },
+    "duration:available": { label: "Block time available", test: (f) => f.durationHours !== null },
+    "duration:missing": { label: "Block time missing", test: (f) => f.durationHours === null },
+    "cabin:known": { label: "Cabin known", test: (f) => f.cabinKnown },
+    "cabin:assumed": { label: "Cabin assumed economy", test: (f) => !f.cabinKnown },
+    "reason:known": { label: "Reason known", test: hasReason },
+    "reason:missing": { label: "Reason missing", test: (f) => !hasReason(f) },
+  };
+
+  // Give each flight an `id`: what a flight panel filter, and so a link to
+  // one flight, names it by. It is the repo's flight identity, date and
+  // route ("2026-03-04.LHR-JFK"), never the flight number, so a link keeps
+  // naming the same flight after a sync adds or drops others. A second
+  // flight with the same identity, which resync would normally have merged,
+  // gets "~2" and so on in payload order. A flight missing its date or an
+  // airport has no identity: it gets "n<index>", good for opening it from
+  // this page, and `linkable` false so the URL never carries it.
+  function assignIds(flights) {
+    const seen = new Map();
+    flights.forEach((flight, index) => {
+      const linkable = Boolean(flight.date && flight.origin && flight.destination);
+      const base = linkable ? `${flight.date}.${flight.origin}-${flight.destination}` : `n${index}`;
+      const count = (seen.get(base) || 0) + 1;
+      seen.set(base, count);
+      flight.id = count > 1 ? `${base}~${count}` : base;
+      flight.linkable = linkable;
+    });
+  }
+
   return {
+    assignIds,
+    QUALITY,
     sum,
     withEmissions,
     completed,

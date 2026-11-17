@@ -5,16 +5,25 @@
 
   const {
     formatNumber,
+    formatChange,
     pct,
     formatKg,
     formatMassText,
     formatDate,
+    MONTHS,
+    WEEKDAYS,
+    monthOf,
+    weekdayOf,
+    monthName,
+    weekdayName,
+    countryName,
     countryFlag,
     routeName,
     flightTags,
     visualCategory,
   } = Passport.format;
   const {
+    QUALITY,
     sum,
     withEmissions,
     completed,
@@ -32,14 +41,18 @@
   } = Passport.aggregate;
   const charts = Passport.charts;
   const map = Passport.map;
+  const panel = Passport.panel;
 
   const $ = (id) => document.getElementById(id);
   const data = JSON.parse($("passport-data").textContent);
   const world = JSON.parse($("world-data").textContent);
+  Passport.aggregate.assignIds(data.flights);
+  const flightsById = new Map(data.flights.map((flight) => [flight.id, flight]));
 
-  // Each key is a segmented control: a button with data-control="<key>" and
-  // data-value="<value>" sets it. `year` is null for all time.
-  const state = {
+  // Each key but `panel` is a segmented control: a button with
+  // data-control="<key>" and data-value="<value>" sets it. `year` is null
+  // for all time. `panel` is the open flight panel's filter key, or null.
+  const DEFAULTS = {
     year: null,
     metric: "total",
     pattern: "month",
@@ -47,12 +60,68 @@
     patternBreakdown: "total",
     driverBreakdown: "total",
     driverMetric: "total",
+    networkMetric: "total",
+    panel: null,
   };
+  const state = { ...DEFAULTS };
   const parseValue = { year: (value) => (value === "all" ? null : Number(value)) };
   const controlValue = (value) => (value === null ? "all" : String(value));
 
+  // What each state key may hold, for reading the URL hash: a hash is typed
+  // or pasted by hand, so anything else in it is ignored.
+  const MEASURES = ["total", "distance", "duration"];
+  const BREAKDOWNS = ["total", "cabin", "reason"];
+  const ALLOWED = {
+    year: (value) => data.years.includes(Number(value)),
+    metric: (value) => MEASURES.includes(value),
+    pattern: (value) => ["month", "weekday"].includes(value),
+    trendBreakdown: (value) => BREAKDOWNS.includes(value),
+    patternBreakdown: (value) => BREAKDOWNS.includes(value),
+    driverBreakdown: (value) => BREAKDOWNS.includes(value),
+    driverMetric: (value) => MEASURES.includes(value),
+    networkMetric: (value) => MEASURES.includes(value),
+    panel: (value) => panel.describe(value) !== null,
+  };
+
   // The data behind each ranking's "See all" dialog, as last drawn.
   const rankingData = new Map();
+
+  // The headline figure for `metric` over `rows`: total kg, g per km or kg
+  // per hour, or null where no flight carries what it needs.
+  function headline(rows, metric) {
+    if (metric === "distance") {
+      const measured = metricRows(rows, "distanceKm");
+      const km = sum(measured, "distanceKm");
+      return km ? (sum(measured, "kg") * 1000) / km : null;
+    }
+    if (metric === "duration") {
+      const measured = metricRows(rows, "durationHours");
+      const hours = sum(measured, "durationHours");
+      return hours ? sum(measured, "kg") / hours : null;
+    }
+    const priced = pricedCompleted(rows);
+    return priced.length ? sum(priced, "kg") : null;
+  }
+
+  // "+12% vs 2024" for the chosen year against the one before, or "" when
+  // no year is chosen or either year lacks the figure. The year the page
+  // was generated in is still in progress, so its total is compared with
+  // the previous year up to the same day ("vs 2025 to date"): against a
+  // whole year, every year in progress would read as a fall. Per km and
+  // per hour are rates, fair to compare whole year with part year.
+  function yearOnYear(rows) {
+    if (state.year === null) return "";
+    const previous = state.year - 1;
+    const generated = data.meta.generatedAt.slice(0, 10);
+    const toDate = state.metric === "total" && Number(generated.slice(0, 4)) === state.year;
+    const earlier = scoped(data.flights, previous).filter(
+      (flight) => !toDate || flight.date.slice(5) <= generated.slice(5),
+    );
+    const before = headline(earlier, state.metric);
+    const now = headline(rows, state.metric);
+    if (!before || now === null) return "";
+    return ` · ${formatChange((now - before) / before)} vs ${previous}${toDate ? " to date" : ""}`;
+  }
 
   function renderHero(rows) {
     const completedRows = completed(rows);
@@ -84,7 +153,7 @@
     }
 
     $("hero-value").innerHTML = value;
-    $("hero-context").textContent = context;
+    $("hero-context").textContent = `${context}${yearOnYear(rows)}`;
     $("flight-count").textContent = formatNumber(completedRows.length);
     $("distance-total").textContent = allDistanceRows.length
       ? `${formatNumber(sum(allDistanceRows, "distanceKm"))} km`
@@ -98,9 +167,14 @@
   function renderTrend() {
     const series = yearSeries(data.flights, data.years);
     const categories = breakdownCategories(withEmissions(data.flights), state.trendBreakdown);
-    charts.trend(series, categories, state.trendBreakdown);
+    // A click on a year chooses it; a click on the chosen year goes back to
+    // all time.
+    charts.trend(series, categories, state.trendBreakdown, state.year, (year) =>
+      setState({ year: state.year === year ? null : year }),
+    );
     charts.legend("trend-legend", state.trendBreakdown, categories, {
       upcoming: series.some((item) => item.planned),
+      scope: "trend.",
     });
 
     // With no year chosen, the tile reads the newest year anything was flown
@@ -126,22 +200,51 @@
 
   // Draw a ranking's top six and keep the whole list for its dialog.
   // `periodKg` is the period's completed CO2e, what each entry's share in
-  // its tooltip is of.
-  function showRanking(key, title, entries, breakdown, metric, periodKg) {
-    rankingData.set(key, { title, entries, breakdown, metric, periodKg });
-    charts.ranking(key, entries.slice(0, 6), breakdown, metric, periodKg);
-    document.querySelector(`[data-ranking="${key}"]`).hidden = entries.length <= 6;
+  // its tooltip is of. `kind` is the flight panel filter an entry opens.
+  function showRanking(key, title, entries, breakdown, metric, periodKg, kind) {
+    rankingData.set(key, { title, entries, breakdown, metric, periodKg, kind });
+    charts.ranking(key, entries.slice(0, 6), breakdown, metric, periodKg, kind);
+    // Shown for a short ranking too: the canvas cannot take focus, so the
+    // dialog's list of buttons is the keyboard's only way to its flights.
+    document.querySelector(`[data-ranking="${key}"]`).hidden = entries.length === 0;
   }
 
   function renderPatterns(rows) {
     const buckets = patternBuckets(rows, state.pattern, state.patternBreakdown);
-    charts.pattern(buckets, state.patternBreakdown);
+    charts.pattern(buckets, state.patternBreakdown, state.pattern);
     charts.legend("pattern-legend", state.patternBreakdown, buckets.categories);
+    const periodKg = sum(pricedCompleted(rows), "kg");
 
-    const countryDisplay =
-      typeof Intl.DisplayNames === "function"
-        ? new Intl.DisplayNames(undefined, { type: "region" })
-        : null;
+    // The chart's columns as a list of buttons in calendar order, behind a
+    // See all as the rankings have: the canvas cannot take focus, so this
+    // is the keyboard's way to a month's or a weekday's flights.
+    const months = state.pattern === "month";
+    const periodOf = months ? monthOf : weekdayOf;
+    const byPeriod = new Map(
+      aggregateBy(rows, (flight) => [flight.date ? periodOf(flight.date) : null]).map((entry) => [
+        entry.value,
+        entry,
+      ]),
+    );
+    const periodEntries = (months ? MONTHS : WEEKDAYS)
+      .filter((label) => byPeriod.has(label))
+      .map((label) => ({
+        ...byPeriod.get(label),
+        label: (months ? monthName : weekdayName)(label),
+      }));
+    rankingData.set("pattern", {
+      title: months ? "All months" : "All weekdays",
+      entries: periodEntries,
+      breakdown: state.patternBreakdown,
+      metric: "total",
+      periodKg,
+      kind: state.pattern,
+      numbered: false,
+    });
+    const periodsButton = document.querySelector('[data-ranking="pattern"]');
+    periodsButton.hidden = periodEntries.length === 0;
+    periodsButton.setAttribute("aria-label", months ? "See all months" : "See all weekdays");
+
     const airportEntries = aggregateBy(rows, (flight) => [flight.origin, flight.destination]);
     const countryEntries = aggregateBy(rows, (flight) => [
       flight.start?.country,
@@ -151,24 +254,29 @@
       // The chart draws the name alone: Windows has no flag emoji and shows
       // two letters instead. The flag rides along for the HTML list, which
       // also shows the name, so a missing glyph costs nothing there.
-      label: countryDisplay ? countryDisplay.of(entry.label) || entry.label : entry.label,
+      label: countryName(entry.label),
       flag: countryFlag(entry.label),
     }));
+    // The connection rankings sort by their own measure: a control beside
+    // them, as each chart's controls are, rather than the drivers' one a
+    // section further down that would change them out of sight.
     showRanking(
       "airports",
       "All airport connections",
-      airportEntries,
+      rankForMetric(airportEntries, state.networkMetric),
       state.patternBreakdown,
-      "total",
-      sum(pricedCompleted(rows), "kg"),
+      state.networkMetric,
+      periodKg,
+      "airport",
     );
     showRanking(
       "countries",
       "All country connections",
-      countryEntries,
+      rankForMetric(countryEntries, state.networkMetric),
       state.patternBreakdown,
-      "total",
-      sum(pricedCompleted(rows), "kg"),
+      state.networkMetric,
+      periodKg,
+      "country",
     );
   }
 
@@ -185,8 +293,15 @@
       return;
     }
     const [flight, value] = item;
+    // The route is a button stretched over the whole card, so the card opens
+    // the flight while its content stays text a card can hold.
     const route = document.createElement("strong");
-    route.textContent = routeName(flight);
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "card-open";
+    open.dataset.openPanel = `flight:${flight.id}`;
+    open.textContent = routeName(flight);
+    route.append(open);
     const detail = document.createElement("p");
     detail.textContent = `${formatter(value)} · ${flight.flight || "Flight unknown"} · ${flight.date ? formatDate(flight.date) : "Date unknown"}`;
     target.append(route, detail, flightTags(flight));
@@ -211,6 +326,9 @@
       groupAll(rows, (row) => visualCategory(row, "cabin")),
       "cabin",
     );
+    const carrierNames = new Map(
+      rows.filter((row) => row.carrierName).map((row) => [row.carrier, row.carrierName]),
+    );
     charts.composition(
       "reasons",
       groupAll(rows, (row) => row.reason),
@@ -221,68 +339,61 @@
       state.driverBreakdown,
       breakdownCategories(pricedCompleted(rows), state.driverBreakdown),
     );
+    // Each ranking groups by the value its panel filter matches, then names
+    // the entry for display.
+    const flightLabel = (row) =>
+      `${row.flight || "Unknown"} · ${row.origin || "?"}–${row.destination || "?"} · ${row.date ? formatDate(row.date) : "date unknown"}`;
     [
-      ["routes", "All routes", (row) => row.route],
+      ["routes", "All routes", "route", (row) => row.route],
       [
         "carriers",
         "All operating airlines",
-        (row) => (row.carrierName ? `${row.carrierName} (${row.carrier})` : row.carrier),
+        "carrier",
+        (row) => row.carrier,
+        (code) => (carrierNames.has(code) ? `${carrierNames.get(code)} (${code})` : code),
       ],
-      ["aircraft", "All aircraft", (row) => row.aircraft],
+      ["aircraft", "All aircraft", "aircraft", (row) => row.aircraft],
       [
         "flights",
         "All flights by impact",
-        (row) =>
-          `${row.flight || "Unknown"} · ${row.origin || "?"}–${row.destination || "?"} · ${row.date ? formatDate(row.date) : "date unknown"}`,
+        "flight",
+        (row) => row.id,
+        (id) => flightLabel(flightsById.get(id)),
       ],
-    ].forEach(([key, title, labeler]) => {
-      const ranked = rankForMetric(rankAll(rows, labeler), state.driverMetric);
+    ].forEach(([key, title, kind, keyer, name]) => {
+      const entries = rankAll(rows, keyer).map((entry) =>
+        name ? { ...entry, label: name(entry.value) } : entry,
+      );
       showRanking(
         key,
         title,
-        ranked,
+        rankForMetric(entries, state.driverMetric),
         state.driverBreakdown,
         state.driverMetric,
         sum(pricedCompleted(rows), "kg"),
+        kind,
       );
     });
   }
 
   function renderQuality(rows) {
     const done = completed(rows);
-    const exact = done.filter((flight) => flight.emissionsSource === "exact").length;
-    const typical = done.filter(
-      (flight) => flight.emissionsSource === "typical_route_average",
-    ).length;
-    const missing = done.length - exact - typical;
-    const cabinKnown = done.filter((flight) => flight.cabinKnown).length;
-    const reasonKnown = done.filter(
-      (flight) => flight.reason && flight.reason.toLowerCase() !== "unknown",
-    ).length;
-    const distance = done.filter((flight) => flight.distanceKm !== null).length;
-    const duration = done.filter((flight) => flight.durationHours !== null).length;
+    const count = (key) => done.filter(QUALITY[key].test).length;
     const airports = new Set(
       done.flatMap((flight) => [flight.origin, flight.destination]).filter(Boolean),
     );
     const countries = new Set(
       done.flatMap((flight) => [flight.start?.country, flight.end?.country]).filter(Boolean),
     );
-    const partition = (count) => `${count} · ${pct(count, done.length)}%`;
     $("quality-total").textContent = formatNumber(done.length);
-    $("exact-count").textContent = partition(exact);
-    $("typical-count").textContent = partition(typical);
-    $("missing-count").textContent = partition(missing);
-    $("distance-available").textContent = partition(distance);
-    $("distance-missing").textContent = partition(done.length - distance);
-    $("duration-available").textContent = partition(duration);
-    $("duration-missing").textContent = partition(done.length - duration);
-    $("cabin-known").textContent = partition(cabinKnown);
-    $("cabin-assumed").textContent = partition(done.length - cabinKnown);
-    $("reason-known").textContent = partition(reasonKnown);
-    $("reason-missing").textContent = partition(done.length - reasonKnown);
+    // Each count is a button opening its bucket, from the same table.
+    document.querySelectorAll("[data-open-panel^='quality:']").forEach((button) => {
+      const value = count(button.dataset.openPanel.slice("quality:".length));
+      button.querySelector("strong").textContent = `${value} · ${pct(value, done.length)}%`;
+    });
     $("airport-count").textContent = String(airports.size);
     $("country-count").textContent = String(countries.size);
-    const assumed = done.length - cabinKnown;
+    const assumed = count("cabin:assumed");
     $("methodology").textContent =
       `Impact figures are per passenger. Distance intensity uses ${data.meta.distanceMethod}. Time intensity uses ${data.meta.durationMethod}. ${assumed ? `${assumed} flight${assumed === 1 ? "" : "s"} without cabin data ${assumed === 1 ? "is" : "are"} shown as Economy in charts.` : "Every flight has cabin data."} Missing values are never extrapolated.`;
   }
@@ -293,11 +404,65 @@
     { draw: renderHero, reads: ["year", "metric"] },
     { draw: map.render, reads: ["year"] },
     { draw: renderTrend, reads: ["year", "trendBreakdown"] },
-    { draw: renderPatterns, reads: ["year", "pattern", "patternBreakdown"] },
+    { draw: renderPatterns, reads: ["year", "pattern", "patternBreakdown", "networkMetric"] },
     { draw: renderExtremes, reads: ["year"] },
     { draw: renderRankings, reads: ["year", "driverBreakdown", "driverMetric"] },
     { draw: renderQuality, reads: ["year"] },
+    { draw: renderPanel, reads: ["year", "panel"] },
   ];
+
+  // The element a panel was opened from, which gets focus back on close.
+  let panelOpener = null;
+
+  function renderPanel(rows) {
+    if (state.panel === null) {
+      panel.hide();
+      return;
+    }
+    // A key that names nothing in this file closes rather than shows empty.
+    if (!panel.show(state.panel, rows, state.year, panelOpener)) state.panel = null;
+    panelOpener = null;
+  }
+
+  function openPanel(key, opener = null) {
+    panelOpener = opener;
+    setState({ panel: key });
+  }
+
+  // The view in the URL hash, so a reload or a shared link keeps it. Only
+  // what differs from the default is written; replaceState, so the back
+  // button leaves the page rather than stepping through every click.
+  function writeHash() {
+    const params = new URLSearchParams();
+    Object.keys(DEFAULTS).forEach((key) => {
+      if (state[key] === DEFAULTS[key]) return;
+      // A flight with no stable identity opens here but is not linked to.
+      if (key === "panel" && !panel.linkable(state.panel)) return;
+      params.set(key, String(state[key]));
+    });
+    const hash = params.toString();
+    try {
+      history.replaceState(null, "", hash ? `#${hash}` : `${location.pathname}${location.search}`);
+    } catch {
+      // A sandboxed frame may refuse; the view simply is not kept.
+    }
+  }
+
+  function readHash() {
+    const patch = {};
+    let params;
+    try {
+      params = new URLSearchParams(location.hash.slice(1));
+    } catch {
+      return patch;
+    }
+    Object.keys(DEFAULTS).forEach((key) => {
+      const value = params.get(key);
+      if (value === null || !ALLOWED[key](value)) return;
+      patch[key] = key === "year" ? Number(value) : value;
+    });
+    return patch;
+  }
 
   function syncControls() {
     document.querySelectorAll("button[data-control]").forEach((button) => {
@@ -317,7 +482,9 @@
   function setState(patch) {
     const changed = new Set(Object.keys(patch).filter((key) => state[key] !== patch[key]));
     Object.assign(state, patch);
-    if (changed.size) render(changed);
+    if (!changed.size) return;
+    render(changed);
+    writeHash();
   }
 
   function buildPeriods() {
@@ -361,17 +528,30 @@
           : "total CO₂e";
     const breakdownLabel = breakdown === "total" ? "" : ` by ${breakdown}`;
     $("ranking-dialog-title").textContent = `${ranking.title} · ${metricLabel}${breakdownLabel}`;
-    charts.rankingList("ranking-dialog-list", ranking.entries, breakdown, metric, ranking.periodKg);
+    charts.rankingList(
+      "ranking-dialog-list",
+      ranking.entries,
+      breakdown,
+      metric,
+      ranking.periodKg,
+      ranking.kind,
+      ranking.numbered !== false,
+    );
     $("ranking-dialog").showModal();
     $("ranking-dialog-list").parentElement.scrollTop = 0;
   }
 
-  // One listener for every segmented control, the year buttons included.
+  // One listener for every segmented control, the year buttons included,
+  // and one for everything that opens the flight panel.
   document.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-control]");
     if (!button) return;
     const { control, value } = button.dataset;
     setState({ [control]: (parseValue[control] || String)(value) });
+  });
+  document.addEventListener("click", (event) => {
+    const opener = event.target.closest("[data-open-panel]");
+    if (opener) openPanel(opener.dataset.openPanel, opener);
   });
 
   document.querySelectorAll("[data-ranking]").forEach((button) => {
@@ -386,8 +566,16 @@
   // is open redraws every section rather than leaving last scheme's ink.
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render());
 
+  // A hash edited by hand, or a link followed within the page, applies too.
+  window.addEventListener("hashchange", () => setState({ ...DEFAULTS, ...readHash() }));
+
+  charts.onSelect(openPanel);
+  map.setup(world, openPanel);
+  panel.setup({ flights: data.flights, onClose: () => setState({ panel: null }) });
+  // After the panel knows the flights, which a flight filter is checked
+  // against, and before the year buttons are drawn pressed.
+  Object.assign(state, readHash());
   buildPeriods();
-  map.setup(world);
   $("generated").textContent =
     `Generated ${new Date(data.meta.generatedAt).toLocaleString()} with contrail ${data.meta.contrailVersion}. Keep this file private.`;
   render();

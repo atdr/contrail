@@ -1,5 +1,7 @@
 // The route map: a Leaflet map over the bundled world outline, with no tiles,
-// one great-circle line per route and one marker per airport.
+// one great-circle line per route and one marker per airport. A route or an
+// airport opens the flight panel through `select`, the one hook the rest of
+// the page needs from whatever draws the map.
 Passport.map = (() => {
   "use strict";
 
@@ -9,8 +11,10 @@ Passport.map = (() => {
   let routeMap;
   let routeLayer;
   let airportLayer;
+  let select = () => {};
 
-  function setup(world) {
+  function setup(world, onSelect) {
+    select = onSelect;
     routeMap = L.map("route-map", {
       attributionControl: false,
       minZoom: 1,
@@ -120,6 +124,7 @@ Passport.map = (() => {
               }),
             { opacity: 1 },
           )
+          .on("click", () => select(`route:${label}`))
           .addTo(routeLayer);
       });
       [route.start, route.end].forEach((airport) => {
@@ -154,6 +159,7 @@ Passport.map = (() => {
               }),
             { direction: "top", offset: [0, -4], opacity: 1 },
           )
+          .on("click", () => select(`airport:${airport.iata}`))
           .addTo(airportLayer);
       });
     const caption = document.querySelector(".map-caption span");
