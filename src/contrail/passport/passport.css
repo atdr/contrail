@@ -28,9 +28,9 @@
   --tag-dark-base: #17211b;
   /* The route map. Airport dots are mixed between the two airport ends by
      how much CO2e each connects, in CSS, so they follow a scheme change. */
-  --map-sea: light-dark(#dcebe4, #0b1813);
-  --map-land: light-dark(#fbfdfc, #263f34);
-  --map-border: light-dark(#cfe1d8, #0b1813);
+  --map-sea: light-dark(#eaf3ef, #0b1813);
+  --map-land: light-dark(#c8dbd1, #263f34);
+  --map-border: light-dark(#eaf3ef, #0b1813);
   --map-route: light-dark(#0b6e61, #7fdcc8);
   --map-airport-low: light-dark(#f4c24f, #ffd47e);
   --map-airport-high: light-dark(#b9360c, #ff6a3c);
