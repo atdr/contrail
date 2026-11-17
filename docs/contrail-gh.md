@@ -30,7 +30,7 @@ whether an instance's TIM key still works.
 | contrail gains or loses an importer or emissions-provider id     | Caught mechanically by the surface-diff check (`surface-check.yml`, called from both `check-template.yml` and `check-instance.yml`) — it fails the pin-bump PR until `contrail-surface.json` is regenerated. Default posture: scaffold it, don't just acknowledge it — an env var in `sync.yml` and `check-instance.yml` at minimum, plus a directory, a `.gitignore` entry, and a `check-template.yml` guard if it reads a file (`flighty_csv`/`flighty/` is the pattern). Never requires configuring or testing the new source itself, since an importer nothing in config references is never invoked (see `config.py`'s `lookup_type`) |
 | contrail gains or loses a storage or raw-log id                  | Caught the same way. Wire it (an env var) if contrail exposes a way to select it, but unlike importers this doesn't need repo-tree scaffolding by default — a non-local storage or raw log doesn't write into the template. Exception: a raw log that turns out to be file-based, the way `jsonl` is, needs the same treatment as a file-reading importer                                                                                                                                                                                                                                                                                  |
 | contrail gains or loses a CLI subcommand                         | Caught the same way, but with no default action — this is a judgment call every time. Read what the new command actually does (its own `--help`, the CHANGELOG entry for the release) before deciding whether instance owners should be actively shown how to use it (Passport is the worked example: built and committed by the sync, kept out of the template, documented) or whether it's internal or diagnostic tooling that needs no template reaction. Don't assume either answer just because a subcommand changed                                                                                                                  |
-| `sync --passport`'s exit codes or Passport's default path change | `sync.yml`'s Sync step reads exit 3 as "log saved, page failed" and still commits; any other non-zero stops it before the commit. So every failure after the save must stay 3, or a page bug costs that run's figures. `sync.yml`'s `file_pattern` and `publish-passport.yml` both expect `passport.html`. Change either and update the template in the same pin bump                                                                                                                                                                                                                                                                      |
+| `sync --passport`'s exit codes or Passport's default path change | `sync.yml`'s Sync step reads exit 3 as "log saved, page failed" and still commits; any other non-zero stops it before the commit. So every failure after the save must stay 3, or a page bug costs that run's figures. `sync.yml`'s `file_pattern` and `publish-passport.yml` both expect `passport.html`, or the `passport/` folder where an instance sets `passport.format` to `site`. Change either and update the template in the same pin bump                                                                                                                                                                                        |
 | A release is cut                                                 | Dependabot opens the version-bump PR automatically — that's the trigger, not the whole story. Check whether the release also hit one of the rows above (or below) before merging it                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `requires-python` rises above the workflow's version             | Raise `python-version` in `sync.yml`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
@@ -80,6 +80,26 @@ copy in history every day. `check-instance.yml` builds one too, so a release tha
 breaks Passport fails the pin-bump PR. The template itself must never hold one.
 An instance can also opt in to publishing it behind Cloudflare Access with
 `publish-passport.yml`, which deploys whatever `passport.html` is on `main`.
+
+`passport.format: site` (or `PASSPORT_FORMAT=site`) writes the same page as a
+folder instead, `passport/` by default: `index.html`, `data.json` holding the
+itinerary, and the scripts, styles and map under `assets/`. It suits the
+published copy better, since a browser caches the assets and only the data
+moves day to day. Taking it up obliges three changes in the template, made
+after the release that ships it and before any instance sets the format:
+
+- `sync.yml`'s `file_pattern` must cover the folder (`passport/`) when the
+  format is `site`. A site removes assets a newer contrail no longer ships, and
+  `git add` on a folder stages those removals with everything else.
+- `publish-passport.yml` copies the folder into `_publish/site` rather than
+  copying `passport.html` to `_publish/site/index.html`, and its `paths`
+  trigger names `passport/**`. The page fetches `data.json` and its assets from
+  its own origin, which the Worker already serves same-origin, and its policy
+  allows nothing else.
+- `check-template.yml` rejects the Passport folder as a whole, in the tree and
+  in history, not only HTML files. `data.json` is the whole itinerary and is
+  not HTML, so a guard that matches `.html` alone catches `index.html` and lets
+  the data through.
 
 Regenerating the header, from a checkout of contrail:
 
@@ -172,7 +192,9 @@ hold no CSV. All three are guarded by CI in that repo.
 
 Passport adds a fourth sensitive artifact: `passport.html` must not exist in the
 public template either. `check-template.yml` rejects any HTML file in the tree
-or in history, since `--output` can give it any name.
+or in history, since `--output` can give it any name. A site's `data.json` is
+not HTML, which is why the site format needs that guard widened to the whole
+folder (see above).
 
 `flighty/` is the sharpest of the three: a Flighty export is someone's entire
 flight history in one file, and unlike the log it is a file a user puts there by

@@ -32,6 +32,7 @@ storage:
     enabled: true
 
 passport:
+  format: standalone
   output_path: passport.html
 ```
 
@@ -44,7 +45,7 @@ configuration in both formats, and a test asserts they stay that way.
 
 Highest priority first:
 
-1. CLI flags: `--csv-path`, `--output`
+1. CLI flags: `--csv-path`, `--output`, `--format`
 2. Environment variables
 3. `config.json` / `config.yaml` / `config.yml`, first found, in that order
 4. Built-in defaults
@@ -64,6 +65,7 @@ arrive that way, and none of them wants to write a file first.
 | `RAW_LOG`              | `storage.raw_log.enabled`                        |
 | `RAW_PATH`             | `storage.raw_log.path`                           |
 | `PASSPORT_OUTPUT`      | `passport.output_path`                           |
+| `PASSPORT_FORMAT`      | `passport.format`                                |
 
 `EMISSIONS_PROVIDER` sets a key now called `type`. The name is kept because
 these variables are the contract with the Actions template and every repository
@@ -117,13 +119,39 @@ ask, which is why `contrail passport` needs no API key, no feed and no network.
 
 `contrail sync --passport` does not change that. It renders the same view once
 the log is saved, so a failed page can never cost a figure already fetched, and
-it reads `passport.output_path` like `contrail passport` does. It is a flag on
-the command, not a third output of the pipeline.
+it reads `passport.output_path` and `passport.format` like `contrail passport`
+does. It is a flag on the command, not a third output of the pipeline.
 
 A `type` there would be an invented choice: there is no protocol and no registry
 behind it. The rule the file follows is that a section naming a seam carries a
 type because something resolves it, and a section naming a package with one
 implementation carries only that implementation's options.
+
+## `passport.format`
+
+The same page in one of two shapes. `standalone`, the default, is one HTML file
+with everything inline, which opens from disk and is what `--open` shows.
+`site` is a folder for a server: `index.html`, `data.json` with the flights,
+and each script, style and the map's land as a file of its own under
+`assets/`, fetched from the page's own origin. A browser caches those across
+days, so a daily rebuild costs a visitor only the data, and a version control
+history only the files that changed. A site cannot open from disk, because
+browsers refuse to fetch a `file:` URL; serve the folder, even if only with
+`python3 -m http.server --bind 127.0.0.1 -d passport`.
+
+Each format has its own default `output_path`: `passport.html` for a file,
+`passport` for a folder. A path that plainly names the other shape is refused
+rather than written: a site at a path ending `.html`, or a standalone page at
+one ending `/`. Both are checked only when Passport is built, never as the file
+loads, so a mistake there can fail the page but never a sync.
+
+A site owns its folder. It removes the assets an earlier version shipped and
+this one does not, so it refuses a folder holding anything it did not write,
+and writes nothing there. Hidden files such as `.gitkeep` are left alone. Point
+it at a new or empty folder, never at a directory that holds anything else.
+
+Both formats carry a Content-Security-Policy that loads nothing from anywhere
+else, and a `noindex` robots tag.
 
 ## What contrail does not check
 
@@ -141,8 +169,8 @@ and the implementation reports the field it wanted as missing.
 names, the `storage` roles, and the keys under `passport`. `passport` is in that
 list precisely because it has no `type`, so nothing behind it owns the
 leftovers. It is also where a typo hides best, since the flag is spelled
-`--output` and `output:` is the natural thing to write, so `output_path` is
-named rather than ignored.
+`--output` and `output:` is the natural thing to write, so `output_path` and
+`format` are named rather than ignored.
 
 A shape that cannot mean anything is refused outright rather than warned about:
 `importers` as a mapping, `storage` or one of its roles as anything but a

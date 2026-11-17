@@ -44,10 +44,10 @@
   const panel = Passport.panel;
 
   const $ = (id) => document.getElementById(id);
-  const data = JSON.parse($("passport-data").textContent);
-  const world = JSON.parse($("world-data").textContent);
-  Passport.aggregate.assignIds(data.flights);
-  const flightsById = new Map(data.flights.map((flight) => [flight.id, flight]));
+  // The payload and the land, set by start() once both are read.
+  let data;
+  let world;
+  let flightsById;
 
   // Each key but `panel` is a segmented control: a button with
   // data-control="<key>" and data-value="<value>" sets it. `year` is null
@@ -562,42 +562,76 @@
     openRanking("map");
   }
 
-  // One listener for every segmented control, the year buttons included,
-  // and one for everything that opens the flight panel.
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-control]");
-    if (!button) return;
-    const { control, value } = button.dataset;
-    setState({ [control]: (parseValue[control] || String)(value) });
-  });
-  document.addEventListener("click", (event) => {
-    const opener = event.target.closest("[data-open-panel]");
-    if (opener) openPanel(opener.dataset.openPanel, opener);
-  });
+  // Draw the page from what read() returned, and only then wire the controls,
+  // so nothing can redraw before there is anything to draw.
+  function start([payload, land]) {
+    data = payload;
+    world = land;
+    Passport.aggregate.assignIds(data.flights);
+    flightsById = new Map(data.flights.map((flight) => [flight.id, flight]));
 
-  document.querySelectorAll("[data-ranking]").forEach((button) => {
-    button.addEventListener("click", () => openRanking(button.dataset.ranking));
+    // One listener for every segmented control, the year buttons included,
+    // and one for everything that opens the flight panel.
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-control]");
+      if (!button) return;
+      const { control, value } = button.dataset;
+      setState({ [control]: (parseValue[control] || String)(value) });
+    });
+    document.addEventListener("click", (event) => {
+      const opener = event.target.closest("[data-open-panel]");
+      if (opener) openPanel(opener.dataset.openPanel, opener);
+    });
+
+    document.querySelectorAll("[data-ranking]").forEach((button) => {
+      button.addEventListener("click", () => openRanking(button.dataset.ranking));
+    });
+    $("ranking-dialog-close").addEventListener("click", () => $("ranking-dialog").close());
+    $("ranking-dialog").addEventListener("click", (event) => {
+      if (event.target === $("ranking-dialog")) $("ranking-dialog").close();
+    });
+
+    // Charts read their colours when drawn, so a scheme change while the page
+    // is open redraws every section rather than leaving last scheme's ink.
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render());
+
+    // A hash edited by hand, or a link followed within the page, applies too.
+    window.addEventListener("hashchange", () => setState({ ...DEFAULTS, ...readHash() }));
+
+    charts.onSelect(openPanel);
+    map.setup(world, openPanel, openMapRoutes);
+    panel.setup({ flights: data.flights, onClose: () => setState({ panel: null }) });
+    // After the panel knows the flights, which a flight filter is checked
+    // against, and before the year buttons are drawn pressed.
+    Object.assign(state, readHash());
+    buildPeriods();
+    $("generated").textContent =
+      `Generated ${new Date(data.meta.generatedAt).toLocaleString()} with contrail ${data.meta.contrailVersion}. It holds your flight history: keep it private.`;
+    render();
+  }
+
+  // A standalone page holds its JSON inline. A site's elements are empty and
+  // name the file beside the page that holds it instead, fetched over the
+  // page's own origin. The data is revalidated on every load, since its URL
+  // stays the same when it changes; the land's URL carries its version.
+  function read(id) {
+    const element = $(id);
+    const source = element.dataset.src;
+    if (!source) return Promise.resolve(JSON.parse(element.textContent));
+    return fetch(source, { cache: id === "passport-data" ? "no-cache" : "default" }).then(
+      (response) => {
+        if (!response.ok) throw new Error(`${source}: HTTP ${response.status}`);
+        return response.json();
+      },
+    );
+  }
+
+  // One path for both: a standalone page settles at once, a site after its
+  // fetches. A site opened from disk cannot fetch at all, so say why the
+  // page is empty rather than leave it blank.
+  Promise.all([read("passport-data"), read("world-data")]).then(start, (error) => {
+    $("generated").textContent =
+      `Passport could not load its data (${error.message}). A Passport site has to be served over HTTP; to open one from disk, build the standalone format instead.`;
+    throw error;
   });
-  $("ranking-dialog-close").addEventListener("click", () => $("ranking-dialog").close());
-  $("ranking-dialog").addEventListener("click", (event) => {
-    if (event.target === $("ranking-dialog")) $("ranking-dialog").close();
-  });
-
-  // Charts read their colours when drawn, so a scheme change while the page
-  // is open redraws every section rather than leaving last scheme's ink.
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render());
-
-  // A hash edited by hand, or a link followed within the page, applies too.
-  window.addEventListener("hashchange", () => setState({ ...DEFAULTS, ...readHash() }));
-
-  charts.onSelect(openPanel);
-  map.setup(world, openPanel, openMapRoutes);
-  panel.setup({ flights: data.flights, onClose: () => setState({ panel: null }) });
-  // After the panel knows the flights, which a flight filter is checked
-  // against, and before the year buttons are drawn pressed.
-  Object.assign(state, readHash());
-  buildPeriods();
-  $("generated").textContent =
-    `Generated ${new Date(data.meta.generatedAt).toLocaleString()} with contrail ${data.meta.contrailVersion}. Keep this file private.`;
-  render();
 })();

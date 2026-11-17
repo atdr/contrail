@@ -848,6 +848,108 @@ def test_importers_command_flags_a_type_it_has_never_heard_of(tmp_path, monkeypa
     assert "CONFIGURED BUT UNKNOWN" in capsys.readouterr().out
 
 
+def test_passport_writes_a_site_folder_with_format_site(env, capsys):
+    run_sync(["sync"])
+    capsys.readouterr()
+
+    assert main(["passport", "--format", "site"]) == 0
+
+    assert (env / "passport" / "index.html").is_file()
+    assert '"origin":"JFK"' in (env / "passport" / "data.json").read_text(encoding="utf-8")
+    assert "Keep the folder private" in capsys.readouterr().out
+    assert not (env / "passport.html").exists()
+
+
+def test_passport_format_comes_from_the_environment_too(env, monkeypatch):
+    run_sync(["sync"])
+    monkeypatch.setenv("PASSPORT_FORMAT", "site")
+
+    assert main(["passport", "--output", "public"]) == 0
+    assert (env / "public" / "data.json").is_file()
+
+    assert main(["passport", "--format", "standalone", "--output", "page.html"]) == 0
+    assert (env / "page.html").is_file()
+
+
+def test_passport_refuses_a_site_named_like_a_file(env, capsys):
+    run_sync(["sync"])
+    assert main(["passport", "--format", "site", "--output", "passport.html"]) == 1
+    assert "names an HTML file" in capsys.readouterr().err
+    assert not (env / "passport.html").exists()
+
+
+def test_passport_refuses_a_site_in_a_folder_that_is_not_its_own(env, capsys):
+    """The working directory holds the log, so a site there would own it."""
+    run_sync(["sync"])
+    before = read_csv(env / "flight_emissions.csv")
+
+    assert main(["passport", "--format", "site", "--output", "."]) == 1
+
+    assert "holds the flight log" in capsys.readouterr().err
+    assert read_csv(env / "flight_emissions.csv") == before
+
+
+@pytest.mark.parametrize("inside", ["data.json", "assets/flight_emissions.csv"])
+def test_passport_refuses_a_site_folder_that_holds_the_log(env, capsys, inside):
+    """A site overwrites data.json and removes stale files from assets/, so a
+    log at either place would be lost. Refused before anything is written."""
+    run_sync(["sync"])
+    log = env / "public" / inside
+    log.parent.mkdir(parents=True)
+    log.write_bytes((env / "flight_emissions.csv").read_bytes())
+    before = read_csv(log)
+
+    args = ["passport", "--format", "site", "--output", "public", "--csv-path", str(log)]
+    assert main(args) == 1
+
+    assert "holds the flight log" in capsys.readouterr().err
+    assert read_csv(log) == before
+    assert not (env / "public" / "index.html").exists()
+
+
+def test_passport_rejects_an_unknown_format_flag(env, capsys):
+    with pytest.raises(SystemExit):
+        main(["passport", "--format", "zip"])
+    assert "invalid choice" in capsys.readouterr().err
+
+
+def test_passport_open_explains_that_a_site_must_be_served(env, capsys):
+    run_sync(["sync"])
+    capsys.readouterr()
+
+    with patch("contrail.cli.webbrowser.open") as opener:
+        assert main(["passport", "--format", "site", "--open"]) == 0
+
+    opener.assert_not_called()
+    assert "http.server" in capsys.readouterr().err
+
+
+def test_sync_passport_with_a_bad_format_still_keeps_the_log(env, monkeypatch, capsys):
+    """The page fails, exit 3, and the figures this run fetched are saved."""
+    monkeypatch.setenv("PASSPORT_FORMAT", "zip")
+
+    assert run_sync(["sync", "--passport"]) == 3
+
+    assert "Passport not built: passport.format" in capsys.readouterr().err
+    assert read_csv(env / "flight_emissions.csv")
+
+
+def test_sync_passport_site_writes_nothing_when_only_the_clock_moved(env, monkeypatch, capsys):
+    monkeypatch.setenv("PASSPORT_FORMAT", "site")
+    run_sync(["sync", "--passport"])
+    folder = env / "passport"
+    before = {path: path.stat().st_mtime_ns for path in folder.rglob("*") if path.is_file()}
+    monkeypatch.setattr("contrail.cli._now", lambda: FROZEN_NOW.replace(hour=13))
+    capsys.readouterr()
+
+    assert run_sync(["sync", "--passport"]) == 0
+
+    assert "Passport unchanged apart from its timestamp" in capsys.readouterr().out
+    assert {path: path.stat().st_mtime_ns for path in folder.rglob("*") if path.is_file()} == (
+        before
+    )
+
+
 def test_passport_says_so_when_it_cannot_open_a_browser(env, capsys):
     """A headless box has no browser to open. The path is still on disk, so say
     where rather than failing the command."""

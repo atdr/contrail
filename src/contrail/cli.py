@@ -13,7 +13,14 @@ from pathlib import Path
 import requests
 
 from contrail import __version__, resync
-from contrail.config import DEFAULT_CSV_PATH, Config, ConfigError, load_config
+from contrail.config import (
+    DEFAULT_CSV_PATH,
+    DEFAULT_PASSPORT_SITE,
+    PASSPORT_FORMATS,
+    Config,
+    ConfigError,
+    load_config,
+)
 from contrail.emissions import get_provider
 from contrail.importers import IMPORTERS, get_importer
 from contrail.models import FlightRecord, UnparsedEvent
@@ -797,7 +804,7 @@ def cmd_sync(args) -> int:
         return status
     try:
         _write_passport(config, skip_empty=True)
-    except (ValueError, OSError) as exc:
+    except (ConfigError, ValueError, OSError) as exc:
         print(f"Passport not built: {exc}", file=sys.stderr)
         return EXIT_PASSPORT_FAILED
     except Exception:
@@ -957,10 +964,20 @@ def cmd_sources(args) -> int:
 def cmd_passport(args) -> int:
     """Generate one private, offline HTML dashboard from the stored CSV."""
     config = load_config(
-        config_path=args.config, csv_path=args.csv_path, passport_output=args.output
+        config_path=args.config,
+        csv_path=args.csv_path,
+        passport_output=args.output,
+        passport_format=args.format,
     )
     output = _write_passport(config)
-    if args.open and not webbrowser.open(output.as_uri()):
+    if args.open and config.passport_format == "site":
+        # fetch() refuses file: URLs, so a site opened from disk draws nothing.
+        print(
+            "  A Passport site has to be served to open: "
+            f"python3 -m http.server --bind 127.0.0.1 -d {output}",
+            file=sys.stderr,
+        )
+    elif args.open and not webbrowser.open(output.as_uri()):
         print(f"  Could not open a browser automatically. Open {output} by hand.", file=sys.stderr)
     return 0
 
@@ -980,14 +997,20 @@ def _write_passport(config: Config, skip_empty: bool = False) -> Path | None:
             return None
         raise ValueError(f"Flight log is empty: {csv_path}")
 
+    mode = config.passport_format
     output_path = Path(config.passport_output)
     if output_path.resolve() == csv_path.resolve():
         raise ValueError("Passport output must not overwrite the flight log")
+    # A site owns its whole folder: it overwrites data.json and removes what
+    # it no longer ships from assets/, either of which could be the log.
+    if mode == "site" and csv_path.resolve().is_relative_to(output_path.resolve()):
+        raise ValueError("Passport output must not be a folder that holds the flight log")
 
-    output, written = render_passport(rows, output_path, now=_now())
+    output, written = render_passport(rows, output_path, now=_now(), mode=mode)
     if written:
         print(f"Wrote {output}.")
-        print("  Passport embeds your flight history. Keep the HTML private.")
+        kept = "folder" if mode == "site" else "HTML"
+        print(f"  Passport embeds your flight history. Keep the {kept} private.")
     else:
         print(f"Passport unchanged apart from its timestamp: {output}.")
     return output
@@ -1095,7 +1118,17 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         # No argparse default: the flag has to be distinguishable from an
         # unset one, or it would beat `passport.output_path` in every run.
-        help=f"HTML file to write (default: ./{DEFAULT_OUTPUT_PATH})",
+        help=(
+            f"HTML file to write (default: ./{DEFAULT_OUTPUT_PATH}), "
+            f"or folder for --format site (default: ./{DEFAULT_PASSPORT_SITE}/)"
+        ),
+    )
+    passport.add_argument(
+        "--format",
+        choices=PASSPORT_FORMATS,
+        # No default, for the reason --output has none.
+        help="standalone: one file that opens from disk (default); "
+        "site: a folder of linked files for a server",
     )
     passport.add_argument(
         "--open",

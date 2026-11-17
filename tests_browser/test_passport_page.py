@@ -13,7 +13,7 @@ import re
 from datetime import timedelta
 
 import pytest
-from conftest import NOW, fixture_rows, row
+from conftest import CSP_REPORT, NOW, fixture_rows, row
 from playwright.sync_api import Page, expect
 
 from contrail.passport import great_circle_km, render
@@ -56,16 +56,75 @@ def pressed(page: Page, selector: str):
 # -- loading ------------------------------------------------------------------
 
 
+@pytest.mark.both_formats
 def test_the_page_loads_without_errors_or_requests(open_passport, problems):
     """`problems` fails the test on any page error, console error, or request
     that is not the file itself. Asserted here, not only at teardown, so this
     test names the guarantee."""
     page = open_passport()
-    expect(page.locator("#generated")).to_contain_text("Keep this file private")
+    expect(page.locator("#generated")).to_contain_text("keep it private")
     assert page.evaluate("typeof d3.geoEqualEarth") == "function"
     assert problems == []
 
 
+@pytest.mark.both_formats
+def test_the_policy_refuses_a_script_the_page_did_not_bring(open_passport, problems):
+    """The page runs under its own Content-Security-Policy, and `problems`
+    reports each violation. Both halves are proved here: the bundles and
+    charts ran without one, and a script added afterwards is refused."""
+    page = open_passport()
+    assert problems == []
+    refused = page.evaluate(
+        """() => new Promise((resolve) => {
+          document.addEventListener("securitypolicyviolation",
+            (event) => resolve(event.effectiveDirective), { once: true });
+          const script = document.createElement("script");
+          script.textContent = "window.injected = true";
+          document.body.append(script);
+        })"""
+    )
+    assert refused == "script-src-elem"
+    assert page.evaluate("window.injected") is None
+    expect(page.locator("meta[name=robots]")).to_have_attribute("content", "noindex")
+    assert any(found.startswith(CSP_REPORT) for found in problems)
+    problems.clear()  # the refusal this test caused, and Chrome's console line for it
+
+
+@pytest.mark.parametrize("passport_format", ["site"])
+def test_a_site_fetches_its_own_files_and_nothing_else(open_passport, page, site_origin):
+    """The page, its data and each asset once, all from the page's own origin.
+    `problems` aborts and reports anything else."""
+    requests = []
+    page.on("request", lambda request: requests.append(request.url))
+    page = open_passport()
+    fetched = sorted(url.removeprefix(f"{site_origin}/passport/").split("?")[0] for url in requests)
+    assert fetched == [
+        "",
+        "assets/chart.umd.min.js",
+        "assets/countries-110m.json",
+        "assets/d3-array.min.js",
+        "assets/d3-geo.min.js",
+        "assets/passport.css",
+        "assets/passport.js",
+        "assets/topojson-client.min.js",
+        "data.json",
+    ]
+    assert page.evaluate("typeof d3.geoEqualEarth") == "function"
+    assert page.locator("#route-map .map-land").get_attribute("d")
+
+
+def test_a_site_opened_from_disk_says_it_must_be_served(browser, tmp_path):
+    """fetch() refuses file: URLs, so the page explains rather than staying blank."""
+    folder = render(fixture_rows(), tmp_path / "passport", NOW, mode="site")
+    page = browser.new_page()
+    try:
+        page.goto((folder / "index.html").as_uri())
+        expect(page.locator("#generated")).to_contain_text("has to be served over HTTP")
+    finally:
+        page.close()
+
+
+@pytest.mark.both_formats
 def test_the_hero_and_summary_match_the_fixture(open_passport):
     page = open_passport()
 
@@ -81,6 +140,7 @@ def test_the_hero_and_summary_match_the_fixture(open_passport):
 # -- controls -----------------------------------------------------------------
 
 
+@pytest.mark.both_formats
 def test_choosing_a_year_rescopes_the_totals_and_charts(open_passport):
     page = open_passport()
     assert page.locator("#periods button").all_inner_texts() == ["All time", "2026", "2025"]
@@ -210,6 +270,7 @@ def tooltip_lines(page: Page) -> list[str]:
     ]
 
 
+@pytest.mark.both_formats
 def test_chart_tooltips_are_one_html_element_without_zero_rows(open_passport, page):
     """Chart.js drew its own black box, unlike the map's, and in Cabin mode
     the trend listed every category twice, half of them "upcoming: 0 kg",
@@ -300,6 +361,7 @@ def test_a_tooltip_stays_above_the_bottom_of_the_viewport(open_passport, page):
     assert box["y"] + box["height"] <= 500 - 8
 
 
+@pytest.mark.both_formats
 def test_the_ranking_dialog_opens_and_closes(open_passport):
     destinations = ["JFK", "CDG", "SIN", "AMS", "DXB", "HND", "SYD", "LAX"]
     rows = [
@@ -534,6 +596,7 @@ def test_a_short_ranking_still_has_see_all_for_the_keyboard(open_passport):
     expect(page.locator("[data-ranking=routes]")).to_be_hidden()
 
 
+@pytest.mark.both_formats
 def test_charts_follow_a_scheme_change_while_open(open_passport, page):
     """Chart colours were fixed hex picked once, so switching the OS between
     light and dark left the charts in the old scheme's ink."""
@@ -545,7 +608,7 @@ def test_charts_follow_a_scheme_change_while_open(open_passport, page):
 
     page.emulate_media(color_scheme="dark")
     page.wait_for_function(
-        "Chart.getChart('trend-chart').options.scales.x.ticks.color === 'rgb(165, 178, 170)'"
+        "() => Chart.getChart('trend-chart').options.scales.x.ticks.color === 'rgb(165, 178, 170)'"
     )
     assert page.evaluate(tick, "pattern-chart") == "rgb(165, 178, 170)"
     assert page.evaluate("Chart.getChart('routes').options.scales.y.ticks.color") == (
@@ -642,6 +705,7 @@ def test_a_period_without_durations_says_so(open_passport):
     assert text(page, "#duration-total") == "Needs arrival times"
 
 
+@pytest.mark.both_formats
 def test_an_empty_log_renders_without_error(open_passport):
     page = open_passport([])
     assert text(page, "#hero-value") == "0 kg CO₂e"
@@ -651,6 +715,7 @@ def test_an_empty_log_renders_without_error(open_passport):
 # -- layout -------------------------------------------------------------------
 
 
+@pytest.mark.both_formats
 @pytest.mark.parametrize("viewport", VIEWPORTS.values(), ids=VIEWPORTS.keys())
 def test_core_interactions_fit_the_viewport(open_passport, page, viewport):
     page.set_viewport_size(viewport)
@@ -1048,6 +1113,7 @@ def airport_gap(page: Page, first: str, second: str) -> float:
     return math.hypot(x2 - x1, y2 - y1)
 
 
+@pytest.mark.both_formats
 def test_a_map_airport_focuses_first_and_opens_its_flights_second(open_passport):
     """The panel is a modal sheet, so the first click on an airport fits the
     map to its routes rather than covering the map at once; a second click,
@@ -1078,6 +1144,7 @@ def test_a_map_route_opens_its_flights(open_passport):
     expect(page.locator("#flight-panel-kind")).to_have_text("Route")
 
 
+@pytest.mark.both_formats
 def test_hovering_a_route_lights_it_and_dims_the_rest(open_passport, page):
     page.set_viewport_size(VIEWPORTS["desktop"])
     page = open_passport()
@@ -1368,6 +1435,7 @@ def test_a_pacific_crossing_is_drawn_whole(open_passport, page):
     assert bounds["left"] > 0 and bounds["right"] < bounds["width"]
 
 
+@pytest.mark.both_formats
 def test_the_flight_list_sorts_and_searches(open_passport):
     destinations = ["JFK", "CDG", "SIN", "AMS", "DXB", "HND", "SYD", "LAX"]
     rows = [
@@ -1560,6 +1628,7 @@ def test_the_year_in_progress_is_compared_to_date(open_passport):
     assert re.search(r"· [-−]70% vs 2025$", text(page, "#hero-context"))
 
 
+@pytest.mark.both_formats
 def test_the_view_survives_a_reload_through_the_hash(open_passport):
     page = open_passport()
     page.get_by_role("button", name="2026", exact=True).click()
@@ -1581,7 +1650,7 @@ def test_the_view_survives_a_reload_through_the_hash(open_passport):
     close_panel(page)
     # The dialog hides at once but fires "close" a task later, and only then
     # is the hash rewritten. Read it from the page: page.url lags too.
-    page.wait_for_function("!location.href.includes('panel=')")
+    page.wait_for_function("() => !location.href.includes('panel=')")
     page.get_by_role("button", name="All time").click()
     page.locator("#metric-tabs [data-value=total]").click()
     page.locator("#trend-breakdown-tabs [data-value=total]").click()
@@ -1589,6 +1658,7 @@ def test_the_view_survives_a_reload_through_the_hash(open_passport):
     assert "#" not in page.evaluate("location.href")  # the default view needs no hash
 
 
+@pytest.mark.both_formats
 def test_a_link_to_a_flight_survives_a_regeneration(open_passport):
     """A flight is named in the hash by date and route, the repo's flight
     identity, not by its place in the payload, so a sync that adds a flight
@@ -1603,7 +1673,7 @@ def test_a_link_to_a_flight_survives_a_regeneration(open_passport):
         flight_date="2024-01-02", origin="LHR", destination="AMS", emissions_kg_actual="90"
     )
     page = open_passport([earlier, *fixture_rows()], name="later.html")
-    page.goto(link.replace("passport.html", "later.html"), wait_until="networkidle")
+    page.goto(f"{page.url.split('#')[0]}#{link.split('#', 1)[1]}", wait_until="networkidle")
     page.reload(wait_until="networkidle")
     panel_says(page, "BA1 · LHR → JFK · 10 May 2025", "1 flight")
 
@@ -1614,6 +1684,7 @@ def test_a_link_to_a_flight_survives_a_regeneration(open_passport):
     ) == [[True, False], [True, True]]
 
 
+@pytest.mark.both_formats
 def test_a_malformed_hash_is_ignored(open_passport, problems):
     page = open_passport()
     base = page.url.split("#")[0]
@@ -1636,6 +1707,7 @@ def test_a_malformed_hash_is_ignored(open_passport, problems):
     assert problems == []
 
 
+@pytest.mark.both_formats
 def test_the_panel_fits_a_320px_phone(open_passport, page):
     page.set_viewport_size(VIEWPORTS["narrow"])
     page = open_passport()

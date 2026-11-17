@@ -69,7 +69,7 @@ it hasn't seen before — nothing is ever double-counted or re-priced.
 ```text
 contrail init [--yaml] [--output PATH]
 contrail sync [--config PATH] [--csv-path PATH] [--dry-run | --passport]
-contrail passport [--config PATH] [--csv-path PATH] [--output PATH] [--open]
+contrail passport [--config PATH] [--csv-path PATH] [--output PATH] [--format FORMAT] [--open]
 contrail importers
 ```
 
@@ -110,6 +110,15 @@ in the config file (or `PASSPORT_OUTPUT`), and skips a log with no flights yet.
 It exits 0 when both worked, 1 when the sync failed (no page is attempted), and
 3 when the log was saved but the page could not be built, whatever the reason.
 A workflow can rely on that: on 3, commit the log and fail the run afterwards.
+
+Passport comes in two formats. `standalone`, the default, is the one HTML file
+described below, to open from disk. `--format site` (or `passport.format: site`,
+or `PASSPORT_FORMAT`) writes a folder instead, `./passport/` by default, for a
+server: the page, `data.json` and each asset as its own cacheable file. A site
+has to be served to open, even if only by `python3 -m http.server --bind 127.0.0.1 -d passport`,
+and it owns its folder, so point it at a new or empty one. Both formats carry a
+Content-Security-Policy that loads nothing from anywhere else. See
+[docs/config.md](docs/config.md#passportformat).
 
 The result is one self-contained HTML file. It embeds the flight data and
 styles, Chart.js 4.5.1 for the charts, d3-geo 3.1.1 and topojson-client 3.1.0 for
@@ -182,9 +191,9 @@ a codeshare or a flight several weeks out may not.
 
 Resolution order, highest priority first:
 
-1. CLI flags (`--csv-path`, `--output`, `--config`)
+1. CLI flags (`--csv-path`, `--output`, `--format`, `--config`)
 2. Environment variables (`TRIPIT_ICAL_URL`, `FLIGHTY_CSV_PATH`, `TIM_API_KEY`, `CSV_PATH`,
-   `RAW_LOG`, `RAW_PATH`, `EMISSIONS_PROVIDER`, `PASSPORT_OUTPUT`)
+   `RAW_LOG`, `RAW_PATH`, `EMISSIONS_PROVIDER`, `PASSPORT_OUTPUT`, `PASSPORT_FORMAT`)
 3. `config.json` or `config.yaml` in the current directory
 4. Built-in defaults
 

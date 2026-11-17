@@ -352,6 +352,57 @@ def test_passport_output_falls_back_to_the_default(tmp_path):
     assert load_config(env={}, directory=str(tmp_path)).passport_output == "passport.html"
 
 
+# -- the passport format -----------------------------------------------------
+
+
+def test_passport_format_resolves_through_all_four_layers(tmp_path):
+    where = {"directory": str(tmp_path)}
+    assert load_config(env={}, **where).passport_format == "standalone"
+
+    write_config(tmp_path, {"passport": {"format": "site"}})
+    assert load_config(env={}, **where).passport_format == "site"
+    env = {"PASSPORT_FORMAT": "standalone"}
+    assert load_config(env=env, **where).passport_format == "standalone"
+    assert load_config(env=env, passport_format="site", **where).passport_format == "site"
+
+
+def test_passport_format_is_a_known_key(tmp_path, capsys):
+    write_config(tmp_path, {"passport": {"format": "site", "output_path": "out"}})
+    load_config(env={}, directory=str(tmp_path))
+    assert capsys.readouterr().err == ""
+
+
+def test_a_site_has_a_folder_of_its_own_by_default(tmp_path):
+    config = load_config(env={"PASSPORT_FORMAT": "Site "}, directory=str(tmp_path))
+    assert (config.passport_format, config.passport_output) == ("site", "passport")
+
+
+@pytest.mark.parametrize("value", ["zip", 3, ["site"]])
+def test_an_unknown_passport_format_is_refused_when_passport_asks(tmp_path, value):
+    """Not as the file loads: a sync without --passport must still run."""
+    write_config(tmp_path, {"passport": {"format": value}})
+    config = load_config(env={}, directory=str(tmp_path))
+
+    with pytest.raises(ConfigError, match="passport.format must be one of: standalone, site"):
+        _ = config.passport_format
+
+
+@pytest.mark.parametrize(
+    ("passport", "names"),
+    [
+        ({"format": "site", "output_path": "passport.html"}, "names an HTML file"),
+        ({"format": "site", "output_path": "Passport.HTM"}, "names an HTML file"),
+        ({"output_path": "public/"}, "names a folder"),
+    ],
+)
+def test_an_output_path_of_the_other_shape_is_refused(tmp_path, passport, names):
+    write_config(tmp_path, {"passport": passport})
+    config = load_config(env={}, directory=str(tmp_path))
+
+    with pytest.raises(ConfigError, match=names):
+        _ = config.passport_output
+
+
 # -- the 0.4.x schema, still read ---------------------------------------------
 
 SUPERSEDED = [

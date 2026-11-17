@@ -39,6 +39,13 @@ an installed Chrome instead:
 ./venv/bin/pytest tests_browser --browser-channel chrome
 ```
 
+Every test opens the standalone page. A test marked `both_formats` runs again
+against a site folder served from a loopback `http.server`, since a site cannot
+fetch its data from a `file:` URL. Mark a test that way when it covers loading,
+the policy, or layout, where the two formats could differ; the rest of the page
+is the same script either way, and running everything twice would add a minute
+for nothing.
+
 ## Conventions
 
 Commit style, the PR/issue workflow, architecture, and the gotchas most likely
