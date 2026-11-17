@@ -189,6 +189,11 @@ Two keys, and the difference matters:
   loaded from the CSV. Every row builder must set every column.
 - **TIM cannot be asked twice.** It won't price a departed flight, so anything not
   captured while it was upcoming is gone permanently.
+- **Never print `str()` of a `requests` exception.** It repeats the URL, and a
+  TripIt feed URL is a read credential whose token is its path. A connection
+  error splits host and path, so Actions secret masking misses it. Describe a
+  failure with `request_errors.describe()`, which names only the host, the
+  status and the failure class.
 - **A runtime dependency bump must be `fix(deps):`, not `chore(deps):`.**
   `chore` is hidden from the changelog, and a stretch of hidden types alone
   opens no release PR at all, so a `chore(deps)` bump of a runtime dependency
