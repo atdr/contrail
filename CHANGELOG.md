@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.9.0](https://github.com/atdr/contrail/compare/v0.8.1...v0.9.0) (2026-11-17)
+
+
+### Features
+
+* **passport:** consistent tooltips, legends, names and dark tags ([#101](https://github.com/atdr/contrail/issues/101)) ([4412011](https://github.com/atdr/contrail/commit/44120115aa246abb94d873c5e96d59a7df116bdf))
+* **passport:** drill down from any chart into its flights ([#103](https://github.com/atdr/contrail/issues/103)) ([32749dd](https://github.com/atdr/contrail/commit/32749ddf072c271c8aff0b7e72c9e95a18c85d74))
+* **passport:** replace Leaflet with a d3-geo equal area map ([#111](https://github.com/atdr/contrail/issues/111)) ([f8db612](https://github.com/atdr/contrail/commit/f8db6122d606d17de3a3d5b21416bcda80179286))
+* **passport:** write a linked site folder for publishing ([#113](https://github.com/atdr/contrail/issues/113)) ([5624488](https://github.com/atdr/contrail/commit/56244885f4e5423924ad9e98fdff7e5407171b78))
+
+
+### Bug Fixes
+
+* **passport:** give the route map the wider share of the overview ([#112](https://github.com/atdr/contrail/issues/112)) ([7907187](https://github.com/atdr/contrail/commit/79071872b2b63092536137dec2d765cedee74980))
+* **passport:** keep a focused airport lit and select the dot clicked ([#114](https://github.com/atdr/contrail/issues/114)) ([84c6864](https://github.com/atdr/contrail/commit/84c6864a8f683c1b2da08938ea14ce2d8e655996))
+* **passport:** latest year, mobile layout, labels and theme ([#97](https://github.com/atdr/contrail/issues/97)) ([273d27c](https://github.com/atdr/contrail/commit/273d27c2661fea63c0db693d8e0d31ca3bef48c4))
+* **tripit:** keep the feed URL out of network error messages, see [GHSA-f7wj-vch6-425r](https://github.com/atdr/contrail/security/advisories/GHSA-f7wj-vch6-425r) ([21437b5](https://github.com/atdr/contrail/commit/21437b56506d4bbd23391f6e80b18c2570e0f3de))
+
+
+### Documentation
+
+* **contrail-gh:** note the pin-bump bot in contrail-gh ([#99](https://github.com/atdr/contrail/issues/99)) ([d1e64e6](https://github.com/atdr/contrail/commit/d1e64e6dd09a6813d538ab14cccc059597f243bf))
+* never print str() of a requests exception ([21437b5](https://github.com/atdr/contrail/commit/21437b56506d4bbd23391f6e80b18c2570e0f3de))
+
 ## [0.8.1](https://github.com/atdr/contrail/compare/v0.8.0...v0.8.1) (2026-11-08)
 
 
