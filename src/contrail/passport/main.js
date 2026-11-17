@@ -606,7 +606,7 @@
     Object.assign(state, readHash());
     buildPeriods();
     $("generated").textContent =
-      `Generated ${new Date(data.meta.generatedAt).toLocaleString()} with contrail ${data.meta.contrailVersion}. Keep this file private.`;
+      `Generated ${new Date(data.meta.generatedAt).toLocaleString()} with contrail ${data.meta.contrailVersion}. It holds your flight history: keep it private.`;
     render();
   }
 

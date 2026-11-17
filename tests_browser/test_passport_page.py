@@ -62,7 +62,7 @@ def test_the_page_loads_without_errors_or_requests(open_passport, problems):
     that is not the file itself. Asserted here, not only at teardown, so this
     test names the guarantee."""
     page = open_passport()
-    expect(page.locator("#generated")).to_contain_text("Keep this file private")
+    expect(page.locator("#generated")).to_contain_text("keep it private")
     assert page.evaluate("typeof d3.geoEqualEarth") == "function"
     assert problems == []
 
