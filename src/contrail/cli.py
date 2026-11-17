@@ -973,7 +973,8 @@ def cmd_passport(args) -> int:
     if args.open and config.passport_format == "site":
         # fetch() refuses file: URLs, so a site opened from disk draws nothing.
         print(
-            f"  A Passport site has to be served to open: python3 -m http.server -d {output}",
+            "  A Passport site has to be served to open: "
+            f"python3 -m http.server --bind 127.0.0.1 -d {output}",
             file=sys.stderr,
         )
     elif args.open and not webbrowser.open(output.as_uri()):
@@ -998,10 +999,12 @@ def _write_passport(config: Config, skip_empty: bool = False) -> Path | None:
 
     mode = config.passport_format
     output_path = Path(config.passport_output)
-    # A site cannot land on the log either: it refuses any folder holding a
-    # file it did not write, the log included.
     if output_path.resolve() == csv_path.resolve():
         raise ValueError("Passport output must not overwrite the flight log")
+    # A site owns its whole folder: it overwrites data.json and removes what
+    # it no longer ships from assets/, either of which could be the log.
+    if mode == "site" and csv_path.resolve().is_relative_to(output_path.resolve()):
+        raise ValueError("Passport output must not be a folder that holds the flight log")
 
     output, written = render_passport(rows, output_path, now=_now(), mode=mode)
     if written:

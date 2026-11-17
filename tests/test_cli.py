@@ -885,8 +885,26 @@ def test_passport_refuses_a_site_in_a_folder_that_is_not_its_own(env, capsys):
 
     assert main(["passport", "--format", "site", "--output", "."]) == 1
 
-    assert "did not write" in capsys.readouterr().err
+    assert "holds the flight log" in capsys.readouterr().err
     assert read_csv(env / "flight_emissions.csv") == before
+
+
+@pytest.mark.parametrize("inside", ["data.json", "assets/flight_emissions.csv"])
+def test_passport_refuses_a_site_folder_that_holds_the_log(env, capsys, inside):
+    """A site overwrites data.json and removes stale files from assets/, so a
+    log at either place would be lost. Refused before anything is written."""
+    run_sync(["sync"])
+    log = env / "public" / inside
+    log.parent.mkdir(parents=True)
+    log.write_bytes((env / "flight_emissions.csv").read_bytes())
+    before = read_csv(log)
+
+    args = ["passport", "--format", "site", "--output", "public", "--csv-path", str(log)]
+    assert main(args) == 1
+
+    assert "holds the flight log" in capsys.readouterr().err
+    assert read_csv(log) == before
+    assert not (env / "public" / "index.html").exists()
 
 
 def test_passport_rejects_an_unknown_format_flag(env, capsys):
