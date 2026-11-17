@@ -208,23 +208,33 @@ Passport.map = (() => {
     const projection = d3.geoEqualEarth().rotate([-centralLongitude(shown), 0]);
     projection.fitExtent(extent, land);
     if (!shown.length) return projection;
-    const worldScale = projection.scale();
+    // Measured at the world's scale, which is always finite: fitExtent() on
+    // the routes themselves divides by their size, and a route from an
+    // airport to itself has none.
     const lines = {
       type: "FeatureCollection",
       features: shown.map((route) => ({ type: "Feature", properties: {}, geometry: route.line })),
     };
-    projection.fitExtent(extent, lines);
-    if (projection.scale() > worldScale * MAX_ZOOM) {
-      // Too close: keep the routes' centre in the middle, at the limit.
-      const [[x0, y0], [x1, y1]] = d3.geoPath(projection).bounds(lines);
-      const centre = projection.invert([(x0 + x1) / 2, (y0 + y1) / 2]);
-      projection.scale(worldScale * MAX_ZOOM);
-      const [x, y] = projection(centre);
-      const [tx, ty] = projection.translate();
-      projection.translate([
-        tx + (extent[0][0] + extent[1][0]) / 2 - x,
-        ty + (extent[0][1] + extent[1][1]) / 2 - y,
-      ]);
+    const [[x0, y0], [x1, y1]] = d3.geoPath(projection).bounds(lines);
+    if (![x0, y0, x1, y1].every(Number.isFinite)) return projection;
+    const fit = Math.min(
+      (extent[1][0] - extent[0][0]) / (x1 - x0),
+      (extent[1][1] - extent[0][1]) / (y1 - y0),
+    );
+    // Never past the zoom cap, which is also where a size of zero lands.
+    const zoom = Number.isFinite(fit) ? Math.min(fit, MAX_ZOOM) : MAX_ZOOM;
+    const centre = projection.invert([(x0 + x1) / 2, (y0 + y1) / 2]);
+    if (!centre?.every(Number.isFinite)) return projection;
+    const world = { scale: projection.scale(), translate: projection.translate() };
+    projection.scale(world.scale * zoom);
+    const [x, y] = projection(centre);
+    const [tx, ty] = projection.translate();
+    projection.translate([
+      tx + (extent[0][0] + extent[1][0]) / 2 - x,
+      ty + (extent[0][1] + extent[1][1]) / 2 - y,
+    ]);
+    if (![projection.scale(), ...projection.translate()].every(Number.isFinite)) {
+      projection.scale(world.scale).translate(world.translate);
     }
     return projection;
   }

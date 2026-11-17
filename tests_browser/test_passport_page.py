@@ -1238,6 +1238,25 @@ def test_the_page_carries_its_map_inline(open_passport, page, problems):
     assert problems == []
 
 
+def test_a_route_with_no_length_still_draws_the_map(open_passport, page):
+    """A route from an airport to itself has bounds of no size, and fitting
+    to it divided by zero: an infinite scale, and a map that vanished. The
+    fit stops at the zoom cap, centred on the airport."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport(
+        [row(flight_date="2026-03-01", origin="LHR", destination="LHR", emissions_kg_actual="50")]
+    )
+    expect(airport(page, "LHR")).to_have_count(1)
+    land = page.locator("#route-map .map-land").get_attribute("d")
+    assert land and "NaN" not in land and "Infinity" not in land
+    dot = map_bounds(page, "#route-map .airport-dot")
+    assert 0 < dot["left"] < dot["right"] < dot["width"]
+    assert 0 < dot["top"] < dot["bottom"] < dot["height"]
+    # Centred, give or take the bars drawn over the frame.
+    middle = (dot["left"] + dot["right"]) / 2
+    assert middle == pytest.approx(dot["width"] / 2, abs=2)
+
+
 def test_a_pacific_crossing_is_drawn_whole(open_passport, page):
     """A route across the antimeridian was cut in two and drawn at opposite
     edges. With nothing else to show, the map turns to keep it whole."""
