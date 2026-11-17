@@ -201,7 +201,7 @@ h3 {
 
 .overview {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(330px, 0.85fr);
+  grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.2fr);
   gap: 32px;
 }
 .metric-tabs {
@@ -1453,13 +1453,21 @@ footer {
   text-align: center;
 }
 
+/* The map takes the wider share of the overview, since it has no zoom and
+   a world map fills a wide box better than a square one. Below 1100px that
+   share leaves the stats too narrow, so the map moves beneath them. */
+@media (max-width: 1100px) {
+  .overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* A single column is minmax(0, 1fr), never 1fr: a bare 1fr track is at least
    its content's min-content width, and a canvas reports its own width as
    that, 300px before Chart.js first sizes it. The track then holds the
    canvas at 300px and Chart.js sizes the chart to match, wider than a
    320px phone. */
 @media (max-width: 900px) {
-  .overview,
   .trend-layout,
   .patterns-layout {
     grid-template-columns: minmax(0, 1fr);
