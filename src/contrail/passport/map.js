@@ -471,23 +471,15 @@ Passport.map = (() => {
     return nearest;
   }
 
-  // While an airport is in focus, the pointer lights only what the focus
-  // already lights: one of its routes, or an airport at their far ends.
-  // Anything else under the pointer, which in a fitted view is nearly
-  // everywhere, would otherwise put the focus's own routes out.
+  // While an airport is in focus, the pointer lights only one of its own
+  // routes. Anything else under the pointer, which in a fitted view is
+  // nearly everywhere, would otherwise put the focus's routes out: another
+  // airport, even one at a focus route's far end, lights routes of its own.
   function withinFocus(target) {
     if (!focused) return true;
+    if (target.airport) return target.airport === focused;
     const focus = airports.find((airport) => airport.iata === focused);
-    if (!focus) return true;
-    if (target.airport) {
-      return (
-        target.airport === focused ||
-        focus.routes.some(
-          (route) => route.start.iata === target.airport || route.end.iata === target.airport,
-        )
-      );
-    }
-    return focus.routes.some((route) => route.label === target.route);
+    return !focus || focus.routes.some((route) => route.label === target.route);
   }
 
   function onPointer(event) {

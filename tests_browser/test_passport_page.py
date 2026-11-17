@@ -1250,6 +1250,15 @@ def test_the_pointer_leaves_a_focused_airport_s_routes_lit(open_passport, page):
     )
     expect(route(page, "CDG ↔ NCE")).to_have_class(re.compile("is-lit"))
 
+    # CDG is at the far end of NCE's route, but its other routes stay dark.
+    page.locator("#route-map").dispatch_event("pointerleave")
+    airport(page, "CDG").locator(".airport-dot").dispatch_event(
+        "pointermove", {"clientX": 0, "clientY": 0}
+    )
+    expect(page.locator(".chart-tooltip")).to_contain_text("CDG")
+    expect(route(page, "CDG ↔ NCE")).to_have_class(re.compile("is-lit"))
+    expect(route(page, "CDG ↔ LHR")).not_to_have_class(re.compile("is-lit"))
+
 
 def test_a_click_on_a_dot_selects_it_under_a_heavier_neighbour_s_target(open_passport, page):
     """An airport's target is wider than its dot, and the heaviest is drawn
