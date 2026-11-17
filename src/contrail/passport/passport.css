@@ -510,14 +510,21 @@ h3 {
   gap: 6px;
   font-variant-numeric: tabular-nums;
 }
-.map-legend[hidden] {
+.map-legend[hidden],
+.map-legend [hidden] {
   display: none;
 }
 .map-legend-ramp {
   width: 56px;
   height: 8px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--map-airport-low), var(--map-airport-high));
+  /* In oklab, the space each dot is mixed in, so the ramp's ends and its
+     middle are the colours the dots take. */
+  background: linear-gradient(in oklab 90deg, var(--map-airport-low), var(--map-airport-high));
+}
+.map-legend.is-single .map-legend-ramp {
+  width: 10px;
+  background: var(--map-airport-high);
 }
 
 .section-head {

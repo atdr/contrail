@@ -1257,6 +1257,39 @@ def test_a_route_with_no_length_still_draws_the_map(open_passport, page):
     assert middle == pytest.approx(dot["width"] / 2, abs=2)
 
 
+def dot_mixes(page: Page) -> dict[str, str]:
+    """Each airport's share of the heavy end, as its dot's fill mixes it."""
+    return dict(
+        page.locator("#route-map .airport").evaluate_all(
+            """els => els.map(el => [el.dataset.iata,
+              el.querySelector('.airport-dot').style.fill.match(/(\\d+)%/)[1]])"""
+        )
+    )
+
+
+def test_the_airport_key_labels_the_colours_the_dots_take(open_passport):
+    """The key's light end read as the lightest airport's total, but each
+    dot was mixed by its share of the heaviest, so even the lightest sat
+    part way to the dark end. Both now read one scale over the airports'
+    own minimum and maximum."""
+    page = open_passport()
+    # CDG connects 60 kg, the least; LHR 1.8 t, the most.
+    mixes = dot_mixes(page)
+    assert mixes["CDG"] == "0" and mixes["LHR"] == "100"
+    assert 0 < int(mixes["JFK"]) < 100
+    expect(page.locator("#map-legend-low")).to_have_text("0.1 t")
+    expect(page.locator("#map-legend-high")).to_have_text("1.8 t")
+
+
+def test_an_airport_key_with_one_total_shows_one_colour(open_passport):
+    page = open_passport(
+        [row(flight_date="2026-03-01", origin="LHR", destination="CDG", emissions_kg_actual="60")]
+    )
+    assert set(dot_mixes(page).values()) == {"100"}
+    expect(page.locator("#map-legend-low")).to_be_hidden()
+    expect(page.locator("#map-legend-high")).to_have_text("60 kg")
+
+
 def test_a_pacific_crossing_is_drawn_whole(open_passport, page):
     """A route across the antimeridian was cut in two and drawn at opposite
     edges. With nothing else to show, the map turns to keep it whole."""

@@ -313,11 +313,11 @@ Passport.map = (() => {
       routeElements.set(route.label, group);
     });
 
-    const heaviest = Math.max(0, ...airports.map((airport) => airport.kg));
+    const share = airportScale();
     active = active || focused || airports.at(-1)?.iata || null;
     airports.forEach((airport) => {
       const [x, y] = projection([airport.lon, airport.lat]);
-      const share = heaviest ? Math.sqrt(airport.kg / heaviest) : 0;
+      const t = share(airport.kg);
       const group = element("g", {
         class: "airport",
         role: "button",
@@ -327,10 +327,11 @@ Passport.map = (() => {
       });
       group.dataset.iata = airport.iata;
       if (airport.iata === focused) group.setAttribute("aria-current", "true");
-      const dot = element("circle", { class: "airport-dot", r: (3.5 + 3.5 * share).toFixed(2) });
-      // Mixed in CSS from the scheme's two ends, so a scheme change
-      // recolours every dot with no redraw.
-      dot.style.fill = `color-mix(in oklab, var(--map-airport-high) ${Math.round(share * 100)}%, var(--map-airport-low))`;
+      const dot = element("circle", { class: "airport-dot", r: (3.5 + 3.5 * t).toFixed(2) });
+      // Mixed in CSS from the scheme's two ends, in the space the key's
+      // gradient uses, so a scheme change recolours every dot with no
+      // redraw and the key's ends are the lightest and heaviest dots.
+      dot.style.fill = `color-mix(in oklab, var(--map-airport-high) ${Math.round(t * 100)}%, var(--map-airport-low))`;
       group.append(element("circle", { class: "airport-hit", r: 12 }), dot);
       airportLayer.append(group);
       airportElements.set(airport.iata, group);
@@ -344,6 +345,19 @@ Passport.map = (() => {
     );
     applyHighlight();
     if (hadFocus) airportElements.get(active)?.focus();
+  }
+
+  // Where `kg` sits between the lightest and heaviest airport in scope, from
+  // 0 to 1, on a square-root scale so a home airport does not wash every
+  // other dot out to the light end. The dots and the key both read it: the
+  // key labels its two ends with that same minimum and maximum. Where every
+  // airport connects the same CO2e there is no range, and every dot takes
+  // the heavy end.
+  function airportScale() {
+    const low = Math.sqrt(airports[0]?.kg ?? 0);
+    const high = Math.sqrt(airports.at(-1)?.kg ?? 0);
+    const range = high - low;
+    return (kg) => (range > 0 ? Math.min(1, Math.max(0, (Math.sqrt(kg) - low) / range)) : 1);
   }
 
   // The focus bar, See all, the caption and the colour key.
@@ -368,8 +382,14 @@ Passport.map = (() => {
     $("map-legend").hidden = airports.length === 0;
     if (airports.length) {
       const unit = massUnit([airports.at(-1).kg]);
-      $("map-legend-low").textContent = formatMassText(airports[0].kg, unit);
-      $("map-legend-high").textContent = formatMassText(airports.at(-1).kg, unit);
+      const low = formatMassText(airports[0].kg, unit);
+      const high = formatMassText(airports.at(-1).kg, unit);
+      // One total, one colour: the key shows the heavy end alone, once.
+      const single = airportScale()(airports[0].kg) === 1;
+      $("map-legend").classList.toggle("is-single", single);
+      $("map-legend-low").hidden = single;
+      $("map-legend-low").textContent = low;
+      $("map-legend-high").textContent = high;
     }
   }
 
