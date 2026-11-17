@@ -14,8 +14,11 @@ flight_emissions*.csv
 # The raw provider log holds real itineraries too.
 *.raw.jsonl
 last_checked.txt
-# `contrail passport` embeds the itinerary from the CSV in a standalone page.
+# `contrail passport` embeds the itinerary from the CSV in a standalone page,
+# or in a site folder with --format site. Anchored, or it would match the
+# package's own src/contrail/passport/.
 passport.html
+/passport/
 .env
 .env.*
 

@@ -119,6 +119,10 @@ storage:
 # `contrail passport` builds a private offline dashboard from the log. No
 # `type` here: it is a view over the log rather than a seam with alternatives.
 passport:
+  # standalone: one file that opens from disk. site: a folder of linked files
+  # for a server, written to passport/ unless output_path names another.
+  # Overridden by --format or PASSPORT_FORMAT.
+  format: standalone
   # Overridden by --output or PASSPORT_OUTPUT. The file embeds your itinerary,
   # so it is gitignored by default and a custom path needs the same care.
   output_path: passport.html

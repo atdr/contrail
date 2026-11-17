@@ -33,6 +33,7 @@ DEFAULT_EMISSIONS_PROVIDER = "tim"
 DEFAULT_STORAGE = "local_csv"
 DEFAULT_RAW_LOG = "jsonl"
 DEFAULT_PASSPORT_OUTPUT = "passport.html"
+DEFAULT_PASSPORT_SITE = "passport"
 # The two shapes Passport is written in: one file to open from disk, or a
 # folder of linked files for a server. See passport/__init__.py.
 PASSPORT_FORMATS = ("standalone", "site")
@@ -42,7 +43,7 @@ CONFIG_BASENAMES = ("config.json", "config.yaml", "config.yml")
 # keys `passport:` may carry. Closed sets, each checked in `_check_keys`.
 SECTIONS = ("importers", "emissions", "storage", "passport")
 STORAGE_ROLES = ("flights", "raw_log")
-PASSPORT_KEYS = ("output_path",)
+PASSPORT_KEYS = ("output_path", "format")
 
 
 class ConfigError(Exception):
@@ -108,8 +109,40 @@ class Config:
         return True if enabled is None else bool(enabled)
 
     @property
+    def passport_format(self) -> str:
+        """`standalone` or `site`. Checked here, where Passport asks, rather
+        than as the file loads: a sync must never fail over the page, since
+        TIM will not price a flight again once it has departed."""
+        value = self.passport.get("format") or PASSPORT_FORMATS[0]
+        normalized = value.strip().lower() if isinstance(value, str) else value
+        if normalized not in PASSPORT_FORMATS:
+            raise ConfigError(
+                f"passport.format must be one of: {', '.join(PASSPORT_FORMATS)}. Got {value!r}."
+            )
+        return normalized
+
+    @property
     def passport_output(self) -> str:
-        return self.passport.get("output_path") or DEFAULT_PASSPORT_OUTPUT
+        """The page's path, or the folder's for a site. Each format has a
+        default of its own, and a path that plainly names the other shape is
+        refused rather than written as something it does not look like."""
+        site = self.passport_format == "site"
+        output = self.passport.get("output_path") or (
+            DEFAULT_PASSPORT_SITE if site else DEFAULT_PASSPORT_OUTPUT
+        )
+        if site and output.lower().endswith((".html", ".htm")):
+            raise ConfigError(
+                f"passport.format is site, which writes a folder, but the output path {output} "
+                "names an HTML file. Name a folder, such as passport/, or use the "
+                "standalone format."
+            )
+        if not site and output.endswith(("/", os.sep)):
+            raise ConfigError(
+                f"passport.format is standalone, which writes one HTML file, but the output "
+                f"path {output} names a folder. Name a file, such as passport.html, or use "
+                "the site format."
+            )
+        return output
 
     def require_api_key(self) -> str:
         if not self.api_key:
@@ -308,6 +341,7 @@ def load_config(
     env: dict | None = None,
     directory: str | None = None,
     passport_output: str | None = None,
+    passport_format: str | None = None,
 ) -> Config:
     """Build a Config from flags, environment, and an optional config file."""
     env = os.environ if env is None else env
@@ -359,12 +393,16 @@ def load_config(
         raw_log["enabled"] = env["RAW_LOG"].strip().lower() not in ("0", "false", "no", "off")
     if env.get("PASSPORT_OUTPUT"):
         passport["output_path"] = env["PASSPORT_OUTPUT"]
+    if env.get("PASSPORT_FORMAT"):
+        passport["format"] = env["PASSPORT_FORMAT"]
 
     # Flags last: they are the only layer the person typed just now.
     if csv_path:
         flights["path"] = csv_path
     if passport_output:
         passport["output_path"] = passport_output
+    if passport_format:
+        passport["format"] = passport_format
 
     return Config(
         importers=importers,
