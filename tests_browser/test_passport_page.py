@@ -1290,6 +1290,67 @@ def test_an_airport_key_with_one_total_shows_one_colour(open_passport):
     expect(page.locator("#map-legend-high")).to_have_text("60 kg")
 
 
+def in_frame(page: Page) -> set[str]:
+    """The airports whose dots are drawn inside the map's frame."""
+    return set(
+        page.evaluate(
+            """() => {
+              const frame = document.getElementById("route-map").getBoundingClientRect();
+              return [...document.querySelectorAll("#route-map .airport")]
+                .filter(el => {
+                  const box = el.querySelector(".airport-dot").getBoundingClientRect();
+                  const x = box.left + box.width / 2;
+                  const y = box.top + box.height / 2;
+                  return x >= frame.left && x <= frame.right
+                    && y >= frame.top && y <= frame.bottom;
+                })
+                .map(el => el.dataset.iata);
+            }"""
+        )
+    )
+
+
+def test_arrow_keys_never_step_onto_an_airport_outside_the_frame(open_passport, page):
+    """Focused on Nice, the map shows Paris to Nice and little else: New York
+    and Sydney are drawn far outside the frame. The arrow keys stepped onto
+    them anyway, and the tab stop sat on a dot no one could see."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport(
+        [
+            *fixture_rows(),
+            row(
+                flight_date="2026-05-01",
+                origin="LHR",
+                destination="SYD",
+                emissions_kg_actual="3000",
+            ),
+            row(
+                flight_date="2026-06-02",
+                origin="CDG",
+                destination="NCE",
+                emissions_kg_actual="40",
+            ),
+        ]
+    )
+    airport(page, "NCE").focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#map-focus-label")).to_contain_text("NCE")
+    visible = in_frame(page)
+    assert {"NCE", "CDG"} <= visible and not {"JFK", "SYD"} & visible
+    for iata in ("JFK", "SYD"):
+        expect(airport(page, iata)).to_have_attribute("tabindex", "-1")
+        expect(airport(page, iata)).to_have_attribute("aria-hidden", "true")
+
+    reached = set()
+    for key in ["ArrowUp", "ArrowLeft", "ArrowLeft", "ArrowDown", "ArrowRight"] * 3:
+        page.keyboard.press(key)
+        reached.add(page.evaluate("document.activeElement.dataset.iata"))
+    assert reached and reached <= visible, reached
+    stops = page.locator('#route-map .airport[tabindex="0"]')
+    expect(stops).to_have_count(1)
+    assert stops.get_attribute("data-iata") in visible
+
+
 def test_a_pacific_crossing_is_drawn_whole(open_passport, page):
     """A route across the antimeridian was cut in two and drawn at opposite
     edges. With nothing else to show, the map turns to keep it whole."""

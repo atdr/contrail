@@ -50,6 +50,7 @@ Passport.map = (() => {
   let airports = [];
   const routeElements = new Map();
   const airportElements = new Map();
+  const inFrame = new Set(); // the airports drawn inside the frame
   let focused = null; // the IATA code of the airport in focus, or null
   let active = null; // the airport holding the tab stop
   let hovered = null; // { route } or { airport } under the pointer or keyboard
@@ -314,9 +315,20 @@ Passport.map = (() => {
     });
 
     const share = airportScale();
-    active = active || focused || airports.at(-1)?.iata || null;
-    airports.forEach((airport) => {
+    // A focus fits one airport's routes, which can leave the rest outside
+    // the frame. Those keep their place for the lines that reach them but
+    // leave the keyboard's reach: no tab stop, no arrow step onto them.
+    const placed = airports.map((airport) => {
       const [x, y] = projection([airport.lon, airport.lat]);
+      return { airport, x, y, inFrame: x >= 0 && x <= width && y >= 0 && y <= height };
+    });
+    inFrame.clear();
+    placed.forEach((item) => {
+      if (item.inFrame) inFrame.add(item.airport.iata);
+    });
+    if (!inFrame.has(active)) active = null;
+    active = active || focused || placed.findLast((item) => item.inFrame)?.airport.iata || null;
+    placed.forEach(({ airport, x, y }) => {
       const t = share(airport.kg);
       const group = element("g", {
         class: "airport",
@@ -326,6 +338,7 @@ Passport.map = (() => {
         "aria-label": airportName(airport),
       });
       group.dataset.iata = airport.iata;
+      if (!inFrame.has(airport.iata)) group.setAttribute("aria-hidden", "true");
       if (airport.iata === focused) group.setAttribute("aria-current", "true");
       const dot = element("circle", { class: "airport-dot", r: (3.5 + 3.5 * t).toFixed(2) });
       // Mixed in CSS from the scheme's two ends, in the space the key's
@@ -506,7 +519,7 @@ Passport.map = (() => {
     let best = null;
     let bestScore = Number.POSITIVE_INFINITY;
     airportElements.forEach((group, iata) => {
-      if (iata === from) return;
+      if (iata === from || !inFrame.has(iata)) return;
       const [cx, cy] = centre(group.getBoundingClientRect());
       const along = (cx - ox) * dx + (cy - oy) * dy;
       if (along <= 0) return;
