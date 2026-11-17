@@ -215,9 +215,10 @@ def test_the_meta_block_says_how_the_derived_figures_were_derived():
 
 MARKERS = (
     "PASSPORT_DATA",
-    "WORLD_GEOJSON",
-    "LEAFLET_CSS",
-    "LEAFLET_JS",
+    "WORLD_TOPOJSON",
+    "D3_ARRAY_JS",
+    "D3_GEO_JS",
+    "TOPOJSON_JS",
     "CHARTJS_JS",
     "PASSPORT_CSS",
     "PASSPORT_JS",
@@ -238,7 +239,8 @@ def test_render_writes_one_self_contained_file(tmp_path):
     assert output == (tmp_path / "reports" / "passport.html").resolve()  # made the directory
     for marker in MARKERS:
         assert f"__{marker}__" not in document
-    assert "L.map" in document and "Chart" in document  # the vendored assets landed
+    # The vendored assets landed.
+    assert "geoEqualEarth" in document and "topojson" in document and "Chart" in document
 
 
 def test_the_page_fetches_nothing_when_it_opens(tmp_path):
@@ -246,9 +248,9 @@ def test_the_page_fetches_nothing_when_it_opens(tmp_path):
     history must not announce itself to a CDN or a tile server to render.
 
     The authored sources are what this guards. The vendored bundles carry URLs
-    of their own — Leaflet writes its attribution as an anchor — so scanning the
-    rendered file for a hostname says nothing; scanning it for a map tile
-    server, the one fetch this design could regrow, says plenty.
+    of their own, in licence headers and comments, so scanning the rendered
+    file for a hostname says nothing; scanning it for a map tile server, the
+    one fetch a map could regrow, says plenty.
     """
     fetches = ('href="http', "href='http", 'src="http', "src='http", "url(http", "@import")
     package = files("contrail.passport")
@@ -260,7 +262,6 @@ def test_the_page_fetches_nothing_when_it_opens(tmp_path):
     document = render([row()], tmp_path / "passport.html", NOW).read_text(encoding="utf-8")
     assert "<script src" not in document
     assert "tile.openstreetmap" not in document
-    assert "L.tileLayer" not in document
 
 
 def test_the_authored_styles_hold_nothing_the_inline_escape_would_corrupt():
@@ -293,7 +294,7 @@ def test_itinerary_text_that_spells_a_marker_stays_data(tmp_path, marker):
     document = output.read_text(encoding="utf-8")
     assert payload(document)["flights"][0]["aircraft"] == marker
     assert document.count(marker) == 1  # only the one inside the data
-    assert "L.map" in document and "Chart" in document
+    assert "geoEqualEarth" in document and "Chart" in document
 
 
 @pytest.mark.parametrize("template", ["no marker here", "__A__ and __A__ again"])

@@ -541,6 +541,27 @@
     $("ranking-dialog-list").parentElement.scrollTop = 0;
   }
 
+  // The map's See all: the routes it draws, those of the airport in focus
+  // when there is one, as the buttons the map's lines cannot be.
+  function openMapRoutes(iata) {
+    const rows = scoped(data.flights, state.year);
+    const mapped = rows.filter(
+      (flight) =>
+        flight.start &&
+        flight.end &&
+        (!iata || flight.origin === iata || flight.destination === iata),
+    );
+    rankingData.set("map", {
+      title: iata ? `Routes at ${iata}` : "All routes on the map",
+      entries: rankAll(mapped, (flight) => flight.route),
+      breakdown: "total",
+      metric: "total",
+      periodKg: sum(pricedCompleted(rows), "kg"),
+      kind: "route",
+    });
+    openRanking("map");
+  }
+
   // One listener for every segmented control, the year buttons included,
   // and one for everything that opens the flight panel.
   document.addEventListener("click", (event) => {
@@ -570,7 +591,7 @@
   window.addEventListener("hashchange", () => setState({ ...DEFAULTS, ...readHash() }));
 
   charts.onSelect(openPanel);
-  map.setup(world, openPanel);
+  map.setup(world, openPanel, openMapRoutes);
   panel.setup({ flights: data.flights, onClose: () => setState({ panel: null }) });
   // After the panel knows the flights, which a flight filter is checked
   // against, and before the year buttons are drawn pressed.

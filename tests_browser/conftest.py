@@ -20,7 +20,7 @@ from contrail.storage.local_csv import CSV_FIELDS
 
 NOW = datetime(2026, 8, 14, 12, 0, tzinfo=UTC)
 
-# Schemes a self-contained page may load from. Leaflet and Chart.js build
+# Schemes a self-contained page may load from. Chart.js builds
 # canvases and inline images from data: and blob: URLs.
 LOCAL_SCHEMES = ("file:", "data:", "blob:", "about:")
 

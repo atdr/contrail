@@ -112,9 +112,10 @@ It exits 0 when both worked, 1 when the sync failed (no page is attempted), and
 A workflow can rely on that: on 3, commit the log and fail the run afterwards.
 
 The result is one self-contained HTML file. It embeds the flight data and
-styles, Chart.js 4.5.1 for the charts, Leaflet 1.9.4 for the map, and stripped
-Natural Earth 1:110m country boundaries. It requests no external scripts or map
-tiles, so it works offline and makes no network requests. That also means the
+styles, Chart.js 4.5.1 for the charts, d3-geo 3.1.1 and topojson-client 3.1.0 for
+the map, and Natural Earth 1:110m country boundaries from world-atlas 2.0.2. It
+requests no external scripts or map tiles, so it works offline and makes no
+network requests. That also means the
 HTML contains your itinerary, so keep it as private as the log itself. If you
 commit it, commit it only to a private repo, the way the
 [contrail-gh](https://github.com/atdr/contrail-gh) template does.
@@ -129,9 +130,12 @@ heaviest individual flights are compared by total, per-kilometre and per-hour
 impact. Contributor rankings can use those same three measures and can be broken
 down by cabin or reason. Operating airlines are named from the bundled airline
 table, or shown by their code alone where that code has belonged to more than
-one airline. The offline route map can be panned and zoomed.
+one airline. The route map uses the Equal Earth projection, which keeps areas
+true, and fits itself to the routes of the chosen year. Line area is a route's
+CO2e and each airport is coloured by the CO2e it connects. Choosing an airport
+fits the map to its routes; choosing it again opens its flights.
 
-Every bar, key entry, card, count and map route or airport opens a panel listing
+Every bar, key entry, card, count and map route opens a panel listing
 the flights behind it, which can be sorted and searched, and each flight expands
 to show its scheduled times, TIM's figure for every cabin, the contrail impact
 and the model version. The chosen year, measures, breakdowns and open panel are

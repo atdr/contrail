@@ -8,6 +8,7 @@ own record of each chart's data, rather than pixels.
 
 from __future__ import annotations
 
+import math
 import re
 from datetime import timedelta
 
@@ -61,7 +62,7 @@ def test_the_page_loads_without_errors_or_requests(open_passport, problems):
     test names the guarantee."""
     page = open_passport()
     expect(page.locator("#generated")).to_contain_text("Keep this file private")
-    assert page.evaluate("typeof L.map") == "function"
+    assert page.evaluate("typeof d3.geoEqualEarth") == "function"
     assert problems == []
 
 
@@ -264,8 +265,10 @@ def test_a_ranking_tooltip_gives_the_entry_in_full(open_passport, page):
       return [s.backgroundColor, s.borderRadius, s.fontSize];
     }"""
     chart_style = page.locator(".chart-tooltip").evaluate(style)
-    page.locator(".leaflet-airports-pane path").last.hover(force=True)
-    assert page.locator(".leaflet-tooltip").evaluate(style) == chart_style
+    page.locator("#route-map .airport").last.hover()
+    expect(page.locator(".chart-tooltip")).to_contain_text("CO₂e connected")
+    assert page.locator(".chart-tooltip").count() == 1
+    assert page.locator(".chart-tooltip").evaluate(style) == chart_style
 
 
 def test_a_tooltip_stays_above_the_bottom_of_the_viewport(open_passport, page):
@@ -627,7 +630,7 @@ def test_planned_unpriced_and_incomplete_flights_are_counted_honestly(open_passp
     assert text(page, "#duration-available") == "2 · 50%"
     assert text(page, "#duration-missing") == "2 · 50%"
     assert text(page, "#planned-total") == "900 kg CO₂e"
-    assert page.locator(".leaflet-airports-pane path").count() == 3  # LHR, JFK, CDG
+    assert page.locator("#route-map .airport").count() == 3  # LHR, JFK, CDG
 
 
 def test_a_period_without_durations_says_so(open_passport):
@@ -642,7 +645,7 @@ def test_a_period_without_durations_says_so(open_passport):
 def test_an_empty_log_renders_without_error(open_passport):
     page = open_passport([])
     assert text(page, "#hero-value") == "0 kg CO₂e"
-    expect(page.locator(".map-caption span")).to_have_text("No priced routes in this period")
+    expect(page.locator("#map-caption-text")).to_have_text("No priced routes in this period")
 
 
 # -- layout -------------------------------------------------------------------
@@ -713,12 +716,14 @@ def test_segmented_controls_stay_one_row(open_passport, page, viewport):
     expect(page.get_by_role("group", name="Carbon impact grouping")).to_be_visible()
 
 
-TAP_TARGETS = ".see-all, .metric-tabs button, .pattern-tabs button, .leaflet-control-zoom a"
+TAP_TARGETS = ".see-all, .metric-tabs button, .pattern-tabs button, .map-button"
 
 
 def tap_target_sizes(page: Page) -> list[tuple[str, float, float]]:
-    # See all buttons hide on a short ranking; measure them shown.
+    # See all buttons hide on a short ranking, and the map's focus bar
+    # until an airport is focused; measure them shown.
     page.evaluate("document.querySelectorAll('.see-all').forEach(b => { b.hidden = false; })")
+    page.evaluate("document.getElementById('map-focus').hidden = false")
     return page.locator(TAP_TARGETS).evaluate_all(
         """els => els.map(el => {
           const box = el.getBoundingClientRect();
@@ -728,9 +733,9 @@ def tap_target_sizes(page: Page) -> list[tuple[str, float, float]]:
 
 
 def test_touch_screens_get_44px_tap_targets(browser, tmp_path):
-    """See all was 63x28, segmented buttons 36px tall and the map's zoom
-    buttons 30x30: under a fingertip on a phone. Where the pointer is coarse
-    each is at least 44px tall, and the zoom buttons 44px square."""
+    """See all was 63x28 and segmented buttons 36px tall: under a fingertip
+    on a phone. Where the pointer is coarse each is at least 44px tall, the
+    map's focus bar buttons included."""
     output = render(fixture_rows(), tmp_path / "passport.html", NOW)
     context = browser.new_context(
         viewport=VIEWPORTS["mobile"], has_touch=True, is_mobile=True, locale="en-GB"
@@ -740,11 +745,10 @@ def test_touch_screens_get_44px_tap_targets(browser, tmp_path):
         page.goto(output.as_uri())
         page.locator("#hero-value").filter(has_text="CO").wait_for()
         sizes = tap_target_sizes(page)
-        # Seven See all, the headline measure, six segmented controls, zoom.
-        assert len(sizes) == 7 + 3 + 17 + 2, sizes
+        # Seven See all and the map's, the headline measure, six segmented
+        # controls, the map's two focus buttons.
+        assert len(sizes) == 8 + 3 + 17 + 2, sizes
         assert [size for size in sizes if size[2] < 44] == []
-        zoom = [size for size in sizes if "leaflet-control-zoom" in size[0]]
-        assert len(zoom) == 2 and all(width >= 44 for _, width, _ in zoom)
     finally:
         context.close()
 
@@ -1008,16 +1012,360 @@ def test_the_hero_stats_open_completed_and_upcoming_flights(open_passport):
     expect(page.locator("#flight-panel-total")).to_have_text("900 kg CO₂e")
 
 
-def test_a_map_airport_opens_its_flights(open_passport):
+def airport(page: Page, iata: str):
+    return page.locator(f'#route-map .airport[data-iata="{iata}"]')
+
+
+def route(page: Page, label: str):
+    return page.locator(f'#route-map .route[data-route="{label}"]')
+
+
+def map_bounds(page: Page, selector: str) -> dict:
+    """The box around every element `selector` matches, in the map's own
+    coordinates, and the map's size."""
+    return page.evaluate(
+        """selector => {
+          const frame = document.getElementById("route-map").getBoundingClientRect();
+          const boxes = [...document.querySelectorAll(selector)]
+            .map(el => el.getBoundingClientRect());
+          return {
+            left: Math.min(...boxes.map(b => b.left)) - frame.left,
+            right: Math.max(...boxes.map(b => b.right)) - frame.left,
+            top: Math.min(...boxes.map(b => b.top)) - frame.top,
+            bottom: Math.max(...boxes.map(b => b.bottom)) - frame.top,
+            width: frame.width,
+            height: frame.height,
+          };
+        }""",
+        selector,
+    )
+
+
+def airport_gap(page: Page, first: str, second: str) -> float:
+    """How far apart two airports are drawn, in pixels."""
+    boxes = [airport(page, iata).locator(".airport-dot").bounding_box() for iata in (first, second)]
+    (x1, y1), (x2, y2) = [(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2) for b in boxes]
+    return math.hypot(x2 - x1, y2 - y1)
+
+
+def test_a_map_airport_focuses_first_and_opens_its_flights_second(open_passport):
+    """The panel is a modal sheet, so the first click on an airport fits the
+    map to its routes rather than covering the map at once; a second click,
+    or the focus bar's Flights, opens its flights."""
     page = open_passport()
-    page.locator(".leaflet-airports-pane path").last.click(force=True)  # LHR, the heaviest
+    expect(page.locator("#map-focus")).to_be_hidden()
+    airport(page, "LHR").click()
+    expect(page.locator("#map-focus")).to_be_visible()
+    expect(page.locator("#map-focus-label")).to_have_text("LHR · 1.8 t CO₂e · 2 routes")
+    expect(page.locator("#flight-panel")).not_to_be_visible()
+    expect(airport(page, "LHR")).to_have_attribute("aria-current", "true")
+
+    airport(page, "LHR").click()
     panel_says(page, "LHR", "3 flights")
     expect(page.locator("#flight-panel-kind")).to_have_text("Airport")
     close_panel(page)
+    expect(airport(page, "LHR")).to_be_focused()
 
+    page.locator("#map-focus-flights").click()
+    panel_says(page, "LHR", "3 flights")
+
+
+def test_a_map_route_opens_its_flights(open_passport):
+    page = open_passport()
     # A route's middle can sit under an airport, so the click goes to the line.
-    page.locator(".leaflet-routes-pane path").first.dispatch_event("click")
+    route(page, "JFK ↔ LHR").locator(".route-hit").dispatch_event("click")
+    panel_says(page, "JFK ↔ LHR", "2 flights")
     expect(page.locator("#flight-panel-kind")).to_have_text("Route")
+
+
+def test_hovering_a_route_lights_it_and_dims_the_rest(open_passport, page):
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    route(page, "CDG ↔ LHR").locator(".route-hit").dispatch_event(
+        "pointermove", {"clientX": 0, "clientY": 0}
+    )
+    expect(page.locator("#route-map")).to_have_class(re.compile("has-highlight"))
+    expect(route(page, "CDG ↔ LHR")).to_have_class(re.compile("is-lit"))
+    expect(route(page, "JFK ↔ LHR")).not_to_have_class(re.compile("is-lit"))
+    # Opacity eases, so wait for it to settle rather than read it mid-way.
+    page.wait_for_function(
+        """() => {
+          const opacity = label => Number(getComputedStyle(document.querySelector(
+            `#route-map .route[data-route="${label}"] .route-line`)).opacity);
+          return opacity("JFK ↔ LHR") < 0.2 && opacity("CDG ↔ LHR") === 1;
+        }"""
+    )
+    expect(page.locator(".chart-tooltip")).to_contain_text("CDG ↔ LHR")
+
+
+def test_the_map_fits_the_year_s_routes(open_passport, page):
+    """All time spans London to Sydney; 2025 is London to New York alone.
+    Each choice refits the map to what it draws, so the year's routes fill
+    the frame rather than sitting small in a world view."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport(
+        [
+            *fixture_rows(),
+            row(
+                flight_date="2026-05-01",
+                origin="LHR",
+                destination="SYD",
+                emissions_kg_actual="3000",
+            ),
+        ]
+    )
+
+    def filled():
+        bounds = map_bounds(page, "#route-map .route-line")
+        return max(
+            (bounds["right"] - bounds["left"]) / bounds["width"],
+            (bounds["bottom"] - bounds["top"]) / bounds["height"],
+        )
+
+    assert filled() > 0.6
+    whole = airport_gap(page, "LHR", "JFK")
+    page.locator("#periods [data-value='2025']").click()
+    expect(page.locator("#route-map .route")).to_have_count(1)
+    assert filled() > 0.6
+    assert airport_gap(page, "LHR", "JFK") > 1.5 * whole
+    # Every airport sits inside the frame.
+    dots = map_bounds(page, "#route-map .airport-dot")
+    assert dots["left"] >= 0 and dots["right"] <= dots["width"]
+    assert dots["top"] >= 0 and dots["bottom"] <= dots["height"]
+
+
+def test_focusing_an_airport_fits_its_routes_and_reset_shows_all(open_passport, page):
+    """All time spans London to Sydney, so a hop from Paris to Nice is a
+    few pixels; focusing Nice fits the map to that one hop instead."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    rows = [
+        *fixture_rows(),
+        row(flight_date="2026-05-01", origin="LHR", destination="SYD", emissions_kg_actual="3000"),
+        row(flight_date="2026-06-02", origin="CDG", destination="NCE", emissions_kg_actual="40"),
+    ]
+    page = open_passport(rows)
+    before = airport_gap(page, "CDG", "NCE")
+    airport(page, "NCE").click()
+    expect(page.locator("#map-focus-label")).to_contain_text("NCE")
+    # Zoomed in on the one short hop: CDG and NCE sit far further apart.
+    assert airport_gap(page, "CDG", "NCE") > 3 * before
+    expect(route(page, "CDG ↔ NCE")).to_have_class(re.compile("is-lit"))
+    expect(route(page, "JFK ↔ LHR")).not_to_have_class(re.compile("is-lit"))
+
+    page.locator("#map-reset").click()
+    expect(page.locator("#map-focus")).to_be_hidden()
+    expect(airport(page, "NCE")).to_be_focused()
+    assert airport_gap(page, "CDG", "NCE") == pytest.approx(before, abs=1)
+
+
+def test_the_keyboard_reaches_and_operates_the_map(open_passport, page):
+    """The airports are one tab stop, entered at the heaviest; arrow keys
+    move between them, Enter focuses and then opens, Escape shows all. See
+    all lists the routes as buttons, the keyboard's way to a route."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport()
+    assert page.locator('#route-map .airport[tabindex="0"]').count() == 1
+    airport(page, "LHR").focus()
+    expect(page.locator(".chart-tooltip")).to_contain_text("LHR")
+    page.keyboard.press("ArrowRight")  # CDG is east of LHR
+    expect(airport(page, "CDG")).to_be_focused()
+    expect(airport(page, "CDG")).to_have_attribute("tabindex", "0")
+    expect(airport(page, "LHR")).to_have_attribute("tabindex", "-1")
+    page.keyboard.press("ArrowLeft")
+    page.keyboard.press("ArrowLeft")  # past LHR, across the Atlantic
+    expect(airport(page, "JFK")).to_be_focused()
+
+    page.keyboard.press("Enter")
+    expect(page.locator("#map-focus-label")).to_contain_text("JFK")
+    expect(airport(page, "JFK")).to_be_focused()
+    page.keyboard.press("Escape")
+    expect(page.locator("#map-focus")).to_be_hidden()
+    expect(airport(page, "JFK")).to_be_focused()
+
+    page.keyboard.press("Enter")
+    page.keyboard.press("Enter")
+    panel_says(page, "JFK", "2 flights")
+    close_panel(page)
+    expect(airport(page, "JFK")).to_be_focused()
+
+    # Closing the panel restores focus in a later task; let it land first, or
+    # on a slow runner it can take focus back from See all after we move it.
+    page.evaluate("() => new Promise(r => setTimeout(() => requestAnimationFrame(r)))")
+    page.locator("#map-list").focus()
+    expect(page.locator("#map-list")).to_be_focused()
+    page.keyboard.press("Enter")
+    expect(page.locator("#ranking-dialog-title")).to_contain_text("Routes at JFK")
+    rows = page.locator("#ranking-dialog-list .ranking-row")
+    expect(rows).to_have_count(1)
+    rows.first.focus()
+    page.keyboard.press("Enter")
+    panel_says(page, "JFK ↔ LHR", "2 flights")
+
+
+def test_the_map_has_no_gestures_to_trap_a_scroll(open_passport, page):
+    """Leaflet took every touch on the map for a pan, so a phone could not
+    scroll past it. The SVG claims no gesture, and the page scrolls."""
+    page.set_viewport_size(VIEWPORTS["mobile"])
+    page = open_passport()
+    action = page.locator("#route-map").evaluate("el => getComputedStyle(el).touchAction")
+    assert action == "auto"
+    page.locator("#route-map").hover()
+    page.mouse.wheel(0, 400)
+    page.wait_for_function("() => window.scrollY > 0")
+
+
+def test_the_map_fits_a_320px_phone(open_passport, page):
+    page.set_viewport_size(VIEWPORTS["narrow"])
+    page = open_passport()
+    assert sideways_scroll(page) == 0
+    airport(page, "LHR").click()
+    expect(page.locator("#map-focus")).to_be_visible()
+    assert sideways_scroll(page) == 0
+    frame = page.locator("#route-map-frame").bounding_box()
+    for part in ("#map-focus", "#map-list", "#map-caption"):
+        box = page.locator(part).bounding_box()
+        assert box["x"] >= frame["x"] and box["x"] + box["width"] <= frame["x"] + frame["width"], (
+            part
+        )
+
+
+def test_the_page_carries_its_map_inline(open_passport, page, problems):
+    """Every byte the map draws from is in the file: the land, the
+    projection and the routes. `problems` fails any request beyond it."""
+    requests = []
+    page.on("request", lambda request: requests.append(request.url))
+    page = open_passport()
+    assert page.locator("#route-map .map-land").get_attribute("d")
+    page.locator("#periods [data-value='2025']").click()
+    airport(page, "JFK").click()
+    assert [url for url in requests if not url.startswith("file:")] == []
+    assert problems == []
+
+
+def test_a_route_with_no_length_still_draws_the_map(open_passport, page):
+    """A route from an airport to itself has bounds of no size, and fitting
+    to it divided by zero: an infinite scale, and a map that vanished. The
+    fit stops at the zoom cap, centred on the airport."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport(
+        [row(flight_date="2026-03-01", origin="LHR", destination="LHR", emissions_kg_actual="50")]
+    )
+    expect(airport(page, "LHR")).to_have_count(1)
+    land = page.locator("#route-map .map-land").get_attribute("d")
+    assert land and "NaN" not in land and "Infinity" not in land
+    dot = map_bounds(page, "#route-map .airport-dot")
+    assert 0 < dot["left"] < dot["right"] < dot["width"]
+    assert 0 < dot["top"] < dot["bottom"] < dot["height"]
+    # Centred, give or take the bars drawn over the frame.
+    middle = (dot["left"] + dot["right"]) / 2
+    assert middle == pytest.approx(dot["width"] / 2, abs=2)
+
+
+def dot_mixes(page: Page) -> dict[str, str]:
+    """Each airport's share of the heavy end, as its dot's fill mixes it."""
+    return dict(
+        page.locator("#route-map .airport").evaluate_all(
+            """els => els.map(el => [el.dataset.iata,
+              el.querySelector('.airport-dot').style.fill.match(/(\\d+)%/)[1]])"""
+        )
+    )
+
+
+def test_the_airport_key_labels_the_colours_the_dots_take(open_passport):
+    """The key's light end read as the lightest airport's total, but each
+    dot was mixed by its share of the heaviest, so even the lightest sat
+    part way to the dark end. Both now read one scale over the airports'
+    own minimum and maximum."""
+    page = open_passport()
+    # CDG connects 60 kg, the least; LHR 1.8 t, the most.
+    mixes = dot_mixes(page)
+    assert mixes["CDG"] == "0" and mixes["LHR"] == "100"
+    assert 0 < int(mixes["JFK"]) < 100
+    expect(page.locator("#map-legend-low")).to_have_text("0.1 t")
+    expect(page.locator("#map-legend-high")).to_have_text("1.8 t")
+
+
+def test_an_airport_key_with_one_total_shows_one_colour(open_passport):
+    page = open_passport(
+        [row(flight_date="2026-03-01", origin="LHR", destination="CDG", emissions_kg_actual="60")]
+    )
+    assert set(dot_mixes(page).values()) == {"100"}
+    expect(page.locator("#map-legend-low")).to_be_hidden()
+    expect(page.locator("#map-legend-high")).to_have_text("60 kg")
+
+
+def in_frame(page: Page) -> set[str]:
+    """The airports whose dots are drawn inside the map's frame."""
+    return set(
+        page.evaluate(
+            """() => {
+              const frame = document.getElementById("route-map").getBoundingClientRect();
+              return [...document.querySelectorAll("#route-map .airport")]
+                .filter(el => {
+                  const box = el.querySelector(".airport-dot").getBoundingClientRect();
+                  const x = box.left + box.width / 2;
+                  const y = box.top + box.height / 2;
+                  return x >= frame.left && x <= frame.right
+                    && y >= frame.top && y <= frame.bottom;
+                })
+                .map(el => el.dataset.iata);
+            }"""
+        )
+    )
+
+
+def test_arrow_keys_never_step_onto_an_airport_outside_the_frame(open_passport, page):
+    """Focused on Nice, the map shows Paris to Nice and little else: New York
+    and Sydney are drawn far outside the frame. The arrow keys stepped onto
+    them anyway, and the tab stop sat on a dot no one could see."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport(
+        [
+            *fixture_rows(),
+            row(
+                flight_date="2026-05-01",
+                origin="LHR",
+                destination="SYD",
+                emissions_kg_actual="3000",
+            ),
+            row(
+                flight_date="2026-06-02",
+                origin="CDG",
+                destination="NCE",
+                emissions_kg_actual="40",
+            ),
+        ]
+    )
+    airport(page, "NCE").focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#map-focus-label")).to_contain_text("NCE")
+    visible = in_frame(page)
+    assert {"NCE", "CDG"} <= visible and not {"JFK", "SYD"} & visible
+    for iata in ("JFK", "SYD"):
+        expect(airport(page, iata)).to_have_attribute("tabindex", "-1")
+        expect(airport(page, iata)).to_have_attribute("aria-hidden", "true")
+
+    reached = set()
+    for key in ["ArrowUp", "ArrowLeft", "ArrowLeft", "ArrowDown", "ArrowRight"] * 3:
+        page.keyboard.press(key)
+        reached.add(page.evaluate("document.activeElement.dataset.iata"))
+    assert reached and reached <= visible, reached
+    stops = page.locator('#route-map .airport[tabindex="0"]')
+    expect(stops).to_have_count(1)
+    assert stops.get_attribute("data-iata") in visible
+
+
+def test_a_pacific_crossing_is_drawn_whole(open_passport, page):
+    """A route across the antimeridian was cut in two and drawn at opposite
+    edges. With nothing else to show, the map turns to keep it whole."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    page = open_passport(
+        [row(flight_date="2026-03-01", origin="SYD", destination="LAX", emissions_kg_actual="900")]
+    )
+    d = route(page, "LAX ↔ SYD").locator(".route-line").get_attribute("d")
+    assert d.count("M") == 1  # one unbroken line
+    bounds = map_bounds(page, "#route-map .route-line")
+    assert bounds["left"] > 0 and bounds["right"] < bounds["width"]
 
 
 def test_the_flight_list_sorts_and_searches(open_passport):
@@ -1361,17 +1709,17 @@ def test_a_long_log_opens_quickly(open_passport):
 
 
 def test_the_heaviest_airport_is_drawn_on_top(open_passport):
-    """#67: Leaflet stacks SVG markers in draw order, so they must be drawn
-    lightest first. Lightness falls as CO2e rises, so it may never increase
-    down the document, and the last marker drawn is the heaviest airport."""
+    """#67: SVG stacks in document order, so the airports are drawn
+    lightest first and the heaviest, LHR, sits on top of any neighbour."""
     page = open_passport()
-    markers = page.locator(".leaflet-airports-pane path")
-    fills = markers.evaluate_all("paths => paths.map(path => path.getAttribute('fill'))")
-    lightness = [float(re.search(r"([\d.]+)%\)$", fill).group(1)) for fill in fills]
-    assert lightness == sorted(lightness, reverse=True)
+    order = page.locator("#route-map .airport").evaluate_all(
+        "els => els.map(el => el.dataset.iata)"
+    )
+    assert order[-1] == "LHR"
+    assert sorted(order) == ["CDG", "JFK", "LHR"]
 
-    markers.last.hover(force=True)
-    expect(page.locator(".leaflet-tooltip")).to_contain_text("LHR")
+    page.locator("#route-map .airport").last.hover()
+    expect(page.locator(".chart-tooltip")).to_contain_text("LHR")
 
 
 def test_the_latest_year_tile_skips_a_year_of_bookings_only(open_passport):

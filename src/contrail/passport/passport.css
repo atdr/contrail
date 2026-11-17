@@ -26,6 +26,15 @@
   /* What a flight tag's category colour is mixed into in dark mode: the
      dark card, so a tag reads as a tint of it rather than a pastel sticker. */
   --tag-dark-base: #17211b;
+  /* The route map. Airport dots are mixed between the two airport ends by
+     how much CO2e each connects, in CSS, so they follow a scheme change. */
+  --map-sea: light-dark(#eaf3ef, #0b1813);
+  --map-land: light-dark(#c8dbd1, #263f34);
+  --map-border: light-dark(#eaf3ef, #0b1813);
+  --map-route: light-dark(#0b6e61, #7fdcc8);
+  --map-airport-low: light-dark(#f4c24f, #ffd47e);
+  --map-airport-high: light-dark(#b9360c, #ff6a3c);
+  --map-airport-ring: light-dark(#ffffff, #0b1813);
   --control-active: light-dark(#26322b, #e3ebe6);
   --control-active-text: light-dark(#ffffff, #132019);
   --shadow: light-dark(0 18px 55px rgba(29, 53, 39, 0.12), 0 18px 55px rgba(0, 0, 0, 0.34));
@@ -274,47 +283,128 @@ h3 {
   overflow: hidden;
   position: relative;
   border-radius: 18px;
-  color: #fff;
-  background: #0b554c;
+  color: var(--text);
+  background: var(--map-sea);
 }
 #route-map {
   position: absolute;
   inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
-  background: #0b554c;
 }
-.leaflet-container {
-  font: inherit;
+.map-land {
+  fill: var(--map-land);
 }
-.leaflet-control-zoom a {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(8, 45, 37, 0.88);
+.map-borders {
+  fill: none;
+  stroke: var(--map-border);
+  stroke-width: 0.6;
+  stroke-linejoin: round;
 }
-/* Leaflet greys a disabled button's border with a (0, 2, 1) selector, which
-   outranks the rule above. Match that rather than use !important. */
-.leaflet-control-zoom a.leaflet-disabled {
-  border-color: rgba(255, 255, 255, 0.2);
+.route-line {
+  fill: none;
+  stroke: var(--map-route);
+  stroke-linecap: round;
+  opacity: 0.62;
+  pointer-events: none;
+  transition: opacity 120ms ease;
 }
-.leaflet-control-zoom a:hover {
-  color: #fff;
-  background: rgba(8, 67, 57, 0.96);
+/* A wide invisible stroke under each line, so a thin route can still be
+   hovered and tapped. */
+.route-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 12;
+  stroke-linecap: round;
+  pointer-events: stroke;
+  cursor: pointer;
 }
-.leaflet-control-scale-line {
-  color: #fff;
+.airport {
+  cursor: pointer;
+  outline: none;
+  transition: opacity 120ms ease;
+}
+.airport-hit {
+  fill: transparent;
+}
+.airport-dot {
+  stroke: var(--map-airport-ring);
+  stroke-width: 1.2;
+}
+.airport:focus-visible .airport-hit {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+.airport[aria-current="true"] .airport-dot {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+.has-highlight .route-line {
+  opacity: 0.1;
+}
+.has-highlight .route.is-lit .route-line {
+  opacity: 1;
+}
+.has-highlight .airport:not(.is-lit) {
+  opacity: 0.3;
+}
+.map-toolbar {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 8px;
+  pointer-events: none;
+}
+.map-toolbar > * {
+  pointer-events: auto;
+}
+.map-focus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+  padding: 5px 6px 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 6px 18px light-dark(rgba(19, 32, 25, 0.12), rgba(0, 0, 0, 0.35));
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+.map-focus[hidden] {
+  display: none;
+}
+.map-button {
+  padding: 5px 10px;
   border: 0;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.6);
-  border-radius: 6px 6px 0 0;
-  background: rgba(8, 45, 37, 0.68);
-  box-shadow: none;
-  text-shadow: none;
+  border-radius: 999px;
+  color: var(--teal);
+  background: var(--surface-soft);
+  cursor: pointer;
+  font-size: 0.86rem;
+}
+.map-button:hover {
+  color: #fff;
+  background: var(--teal);
+}
+/* Over the sea, where the soft wash See all wears elsewhere would vanish. */
+.see-all.map-list {
+  flex: none;
+  margin-left: auto;
+  background: var(--surface);
+}
+.see-all.map-list:hover {
+  background: var(--teal);
 }
 /* Every tooltip on the page, the charts' and the map's, is one element
-   style. Leaflet's own rule sets a white box with a pointer; this one, in a
-   later stylesheet at the same specificity, replaces it. */
-.chart-tooltip,
-.leaflet-tooltip {
+   style. */
+.chart-tooltip {
   padding: 9px 11px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -325,9 +415,6 @@ h3 {
   font-size: 0.82rem;
   line-height: 1.35;
   font-variant-numeric: tabular-nums;
-}
-.leaflet-tooltip::before {
-  display: none;
 }
 .chart-tooltip {
   position: fixed;
@@ -391,22 +478,53 @@ h3 {
 }
 .map-caption {
   position: absolute;
-  left: 20px;
-  right: 20px;
-  bottom: 18px;
-  z-index: 500;
+  left: 18px;
+  right: 18px;
+  bottom: 14px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 16px;
+  align-items: end;
+  gap: 6px 16px;
+  font-size: 0.86rem;
   pointer-events: none;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+.map-caption p {
+  margin: 0;
 }
 .map-caption strong {
-  flex: 0 0 auto;
+  margin-right: 8px;
   white-space: nowrap;
 }
+.map-caption span,
+.map-legend {
+  color: var(--muted);
+}
+/* The note wraps as a whole rather than leaving a word on a line alone. */
 .map-caption span {
-  opacity: 0.74;
+  display: inline-block;
+}
+.map-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.map-legend[hidden],
+.map-legend [hidden] {
+  display: none;
+}
+.map-legend-ramp {
+  width: 56px;
+  height: 8px;
+  border-radius: 999px;
+  /* In oklab, the space each dot is mixed in, so the ramp's ends and its
+     middle are the colours the dots take. */
+  background: linear-gradient(in oklab 90deg, var(--map-airport-low), var(--map-airport-high));
+}
+.map-legend.is-single .map-legend-ramp {
+  width: 10px;
+  background: var(--map-airport-high);
 }
 
 .section-head {
@@ -1533,11 +1651,10 @@ footer {
 }
 
 /* A finger needs about 44px. Only where the pointer is one: a mouse is
-   precise, and desktop keeps its compact controls. Leaflet sizes its touch
-   zoom buttons with a (0, 2, 1) selector, matched here so this one, coming
-   later, wins without !important. */
+   precise, and desktop keeps its compact controls. */
 @media (pointer: coarse) {
   .see-all,
+  .map-button,
   .metric-tabs button,
   .pattern-tabs button,
   .legend-button,
@@ -1553,10 +1670,5 @@ footer {
   }
   .see-all {
     padding-inline: 14px;
-  }
-  .leaflet-touch .leaflet-control-zoom a {
-    width: 44px;
-    height: 44px;
-    line-height: 44px;
   }
 }
