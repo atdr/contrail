@@ -376,6 +376,24 @@ def test_the_policy_admits_exactly_the_blocks_the_page_inlines(tmp_path):
     assert "'unsafe-inline'" not in document
 
 
+@pytest.mark.parametrize(
+    "template",
+    [
+        "<html></html>",  # the marker is missing
+        "<script>__PASSPORT_JS__ x</script>",  # something shares its element
+        "<script>__PASSPORT_JS__</script><script>__PASSPORT_JS__</script>",
+    ],
+)
+def test_a_template_that_does_not_hold_a_marker_alone_is_refused(template):
+    """The hash and the link each assume one element holding only its asset.
+    A template that breaks that is a packaging bug, stopped at build time
+    rather than shipped as a page whose policy blocks its own script."""
+    with pytest.raises(ValueError, match="alone in one <script>"):
+        passport._inline_hash(template, "__PASSPORT_JS__", "script", "code")
+    with pytest.raises(ValueError, match="alone in one script element"):
+        passport._link(template, "__PASSPORT_JS__", "script", "assets/passport.js")
+
+
 def test_itinerary_text_never_moves_a_hash(tmp_path):
     """The payload is not hashed, and nothing in it can add a source."""
     plain = render([row()], tmp_path / "a.html", NOW).read_text(encoding="utf-8")
