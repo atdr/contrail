@@ -62,8 +62,8 @@ Passport.charts = (() => {
 
   const charts = new Map();
 
-  // One HTML tooltip for every chart, styled by the stylesheet like the
-  // map's, in place of Chart.js's own canvas box: a black 12px panel that
+  // One HTML tooltip for every chart and the map, styled by the stylesheet
+  // in place of Chart.js's own canvas box: a black 12px panel that
   // matched nothing else on the page. Each chart says what to show with a
   // `build(items)` that returns tooltipContent()'s input, or null for none.
   const tip = document.createElement("div");
@@ -89,14 +89,11 @@ Passport.charts = (() => {
     }
   }
 
-  // Beside the point Chart.js chose, above it where there is room, and
-  // always inside the viewport, which on a phone is narrower than a
-  // tooltip centred on a bar near the edge.
-  function placeTooltip(chart, tooltip) {
-    const canvas = chart.canvas.getBoundingClientRect();
+  // Above (x, y) where there is room, below it where not, and always
+  // inside the viewport, which on a phone is narrower than a tooltip
+  // centred on a bar near the edge.
+  function placeAt(x, y) {
     const margin = 8;
-    const x = canvas.left + tooltip.caretX;
-    const y = canvas.top + tooltip.caretY;
     const { width, height } = tip.getBoundingClientRect();
     const left = Math.min(Math.max(x - width / 2, margin), window.innerWidth - width - margin);
     const above = y - height - 12;
@@ -107,6 +104,21 @@ Passport.charts = (() => {
     const top = Math.min(preferred, window.innerHeight - height - margin);
     tip.style.left = `${Math.round(left)}px`;
     tip.style.top = `${Math.floor(Math.max(top, margin))}px`;
+  }
+
+  // Beside the point Chart.js chose.
+  function placeTooltip(chart, tooltip) {
+    const canvas = chart.canvas.getBoundingClientRect();
+    placeAt(canvas.left + tooltip.caretX, canvas.top + tooltip.caretY);
+  }
+
+  // The same tooltip for something drawn outside Chart.js, the map: the
+  // content tooltipContent() takes, at a point in the viewport.
+  function showTooltipAt(content, x, y) {
+    hideTooltip();
+    tip.replaceChildren(tooltipContent(content));
+    tip.hidden = false;
+    placeAt(x, y);
   }
 
   // A tooltip row's swatch: the bar's own colour, or the dataset's `swatch`
@@ -968,5 +980,15 @@ Passport.charts = (() => {
     });
   }
 
-  return { onSelect, ranking, rankingList, composition, legend, pattern, trend };
+  return {
+    onSelect,
+    ranking,
+    rankingList,
+    composition,
+    legend,
+    pattern,
+    trend,
+    showTooltipAt,
+    hideTooltip,
+  };
 })();
