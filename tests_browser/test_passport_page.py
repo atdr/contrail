@@ -1225,6 +1225,54 @@ def test_focusing_an_airport_fits_its_routes_and_reset_shows_all(open_passport, 
     assert airport_gap(page, "CDG", "NCE") == pytest.approx(before, abs=1)
 
 
+def test_the_pointer_leaves_a_focused_airport_s_routes_lit(open_passport, page):
+    """In a fitted view nearly every point is over some route. Passing over
+    one that is not the focus's own kept lighting it instead, so the focus's
+    routes went out as soon as the pointer moved."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    rows = [
+        *fixture_rows(),
+        row(flight_date="2026-06-02", origin="CDG", destination="NCE", emissions_kg_actual="40"),
+    ]
+    page = open_passport(rows)
+    airport(page, "NCE").click()
+    expect(route(page, "CDG ↔ NCE")).to_have_class(re.compile("is-lit"))
+
+    route(page, "JFK ↔ LHR").locator(".route-hit").dispatch_event(
+        "pointermove", {"clientX": 0, "clientY": 0}
+    )
+    expect(route(page, "CDG ↔ NCE")).to_have_class(re.compile("is-lit"))
+    expect(route(page, "JFK ↔ LHR")).not_to_have_class(re.compile("is-lit"))
+    expect(page.locator(".chart-tooltip")).to_contain_text("JFK ↔ LHR")
+
+    route(page, "CDG ↔ NCE").locator(".route-hit").dispatch_event(
+        "pointermove", {"clientX": 0, "clientY": 0}
+    )
+    expect(route(page, "CDG ↔ NCE")).to_have_class(re.compile("is-lit"))
+
+
+def test_a_click_on_a_dot_selects_it_under_a_heavier_neighbour_s_target(open_passport, page):
+    """An airport's target is wider than its dot, and the heaviest is drawn
+    on top, so London City's dot sat under Heathrow's target: clicking it
+    selected Heathrow. The nearest airport to the click wins."""
+    page.set_viewport_size(VIEWPORTS["desktop"])
+    rows = [
+        row(flight_date="2025-05-01", origin="LHR", destination="SYD", emissions_kg_actual="3000"),
+        row(flight_date="2025-06-01", origin="LCY", destination="EDI", emissions_kg_actual="50"),
+    ]
+    page = open_passport(rows)
+    dot = airport(page, "LCY").locator(".airport-dot").bounding_box()
+    centre = (dot["x"] + dot["width"] / 2, dot["y"] + dot["height"] / 2)
+    hit = page.evaluate(
+        "([x, y]) => document.elementFromPoint(x, y).closest('.airport').dataset.iata", centre
+    )
+    assert hit == "LHR"  # the case this guards: Heathrow's target is on top
+
+    page.mouse.click(*centre)
+    expect(page.locator("#map-focus-label")).to_contain_text("LCY")
+    expect(airport(page, "LCY")).to_have_attribute("aria-current", "true")
+
+
 def test_the_keyboard_reaches_and_operates_the_map(open_passport, page):
     """The airports are one tab stop, entered at the heaviest; arrow keys
     move between them, Enter focuses and then opens, Escape shows all. See

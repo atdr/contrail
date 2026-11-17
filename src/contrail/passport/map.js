@@ -51,10 +51,12 @@ Passport.map = (() => {
   const routeElements = new Map();
   const airportElements = new Map();
   const inFrame = new Set(); // the airports drawn inside the frame
+  const positions = new Map(); // each airport's point in the frame, by IATA code
   let focused = null; // the IATA code of the airport in focus, or null
   let active = null; // the airport holding the tab stop
   let hovered = null; // { route } or { airport } under the pointer or keyboard
   let size = [0, 0];
+  const HIT_RADIUS = 12; // an airport's pointer target, wider than its dot
 
   const element = (name, attributes = {}) => {
     const node = document.createElementNS(SVG, name);
@@ -101,6 +103,12 @@ Passport.map = (() => {
       hideTooltip();
     });
     svg.addEventListener("click", onClick);
+    // A press would focus the element hit, which can be a neighbour's
+    // target rather than the airport the click selects, and a browser that
+    // focuses it shows a ring on the wrong airport. Focus is the keyboard's.
+    svg.addEventListener("mousedown", (event) => {
+      if (event.target.closest(".airport")) event.preventDefault();
+    });
     svg.addEventListener("keydown", onKey);
     svg.addEventListener("focusin", (event) => {
       const airport = event.target.closest(".airport");
@@ -323,7 +331,9 @@ Passport.map = (() => {
       return { airport, x, y, inFrame: x >= 0 && x <= width && y >= 0 && y <= height };
     });
     inFrame.clear();
+    positions.clear();
     placed.forEach((item) => {
+      positions.set(item.airport.iata, [item.x, item.y]);
       if (item.inFrame) inFrame.add(item.airport.iata);
     });
     if (!inFrame.has(active)) active = null;
@@ -345,7 +355,7 @@ Passport.map = (() => {
       // gradient uses, so a scheme change recolours every dot with no
       // redraw and the key's ends are the lightest and heaviest dots.
       dot.style.fill = `color-mix(in oklab, var(--map-airport-high) ${Math.round(t * 100)}%, var(--map-airport-low))`;
-      group.append(element("circle", { class: "airport-hit", r: 12 }), dot);
+      group.append(element("circle", { class: "airport-hit", r: HIT_RADIUS }), dot);
       airportLayer.append(group);
       airportElements.set(airport.iata, group);
     });
@@ -439,15 +449,58 @@ Passport.map = (() => {
     applyHighlight();
   }
 
+  // The airport a pointer event is on: the nearest whose target holds the
+  // pointer. Targets are wider than dots and overlap, and the heaviest is
+  // drawn on top, so the element hit can be a neighbour's target lying over
+  // the dot the pointer is actually on.
+  function airportAt(event) {
+    const hit = event.target.closest(".airport");
+    if (!hit) return null;
+    const box = svg.getBoundingClientRect();
+    const x = event.clientX - box.left;
+    const y = event.clientY - box.top;
+    let nearest = hit.dataset.iata;
+    let best = Infinity;
+    positions.forEach(([px, py], iata) => {
+      const distance = Math.hypot(px - x, py - y);
+      if (distance <= HIT_RADIUS && distance < best) {
+        best = distance;
+        nearest = iata;
+      }
+    });
+    return nearest;
+  }
+
+  // While an airport is in focus, the pointer lights only what the focus
+  // already lights: one of its routes, or an airport at their far ends.
+  // Anything else under the pointer, which in a fitted view is nearly
+  // everywhere, would otherwise put the focus's own routes out.
+  function withinFocus(target) {
+    if (!focused) return true;
+    const focus = airports.find((airport) => airport.iata === focused);
+    if (!focus) return true;
+    if (target.airport) {
+      return (
+        target.airport === focused ||
+        focus.routes.some(
+          (route) => route.start.iata === target.airport || route.end.iata === target.airport,
+        )
+      );
+    }
+    return focus.routes.some((route) => route.label === target.route);
+  }
+
   function onPointer(event) {
-    const airport = event.target.closest(".airport");
-    const route = !airport && event.target.closest(".route");
-    if (airport) {
-      setHover({ airport: airport.dataset.iata });
-      const data = airports.find((item) => item.iata === airport.dataset.iata);
+    const iata = airportAt(event);
+    const route = !iata && event.target.closest(".route");
+    if (iata) {
+      const target = { airport: iata };
+      setHover(withinFocus(target) ? target : null);
+      const data = airports.find((item) => item.iata === iata);
       showTooltip(airportTooltip(data), event.clientX, event.clientY);
     } else if (route) {
-      setHover({ route: route.dataset.route });
+      const target = { route: route.dataset.route };
+      setHover(withinFocus(target) ? target : null);
       const data = routes.find((item) => item.label === route.dataset.route);
       showTooltip(routeTooltip(data), event.clientX, event.clientY);
     } else {
@@ -457,9 +510,9 @@ Passport.map = (() => {
   }
 
   function onClick(event) {
-    const airport = event.target.closest(".airport");
-    if (airport) {
-      activate(airport.dataset.iata);
+    const iata = airportAt(event);
+    if (iata) {
+      activate(iata);
       return;
     }
     const route = event.target.closest(".route");
