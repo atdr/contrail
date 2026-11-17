@@ -10,6 +10,7 @@ import json
 import os
 import re
 from datetime import UTC, datetime, timedelta
+from html.parser import HTMLParser
 from importlib.resources import files
 
 import pytest
@@ -329,14 +330,43 @@ def sha256(text: str) -> str:
     return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode()).digest()).decode() + "'"
 
 
+class _InlineBlocks(HTMLParser):
+    """Each attribute-free <script> and <style> element's text, as a browser
+    reads it: a real HTML parser rather than a regular expression, which
+    would miss what a parser accepts, such as an upper case tag."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.blocks = {"script": [], "style": []}
+        self._open = None
+
+    def handle_starttag(self, tag, attrs):
+        self._open = tag if tag in self.blocks and not attrs else None
+        if self._open:
+            self.blocks[tag].append("")
+
+    def handle_data(self, data):
+        if self._open:
+            self.blocks[self._open][-1] += data
+
+    def handle_endtag(self, tag):
+        self._open = None
+
+
+def inline_blocks(document: str) -> tuple[list[str], list[str]]:
+    parser = _InlineBlocks()
+    parser.feed(document)
+    parser.close()
+    return parser.blocks["script"], parser.blocks["style"]
+
+
 def test_the_policy_admits_exactly_the_blocks_the_page_inlines(tmp_path):
     """Hashes, not 'unsafe-inline': each script and style element the page
     holds is admitted by its own hash, and nothing else is admitted at all."""
     document = render([row()], tmp_path / "passport.html", NOW).read_text(encoding="utf-8")
     directives = policy(document)
 
-    scripts = re.findall(r"<script>(.*?)</script>", document, re.DOTALL)
-    styles = re.findall(r"<style>(.*?)</style>", document, re.DOTALL)
+    scripts, styles = inline_blocks(document)
     assert len(scripts) == [kind for kind, _ in passport._ASSETS.values()].count("script")
     assert directives["script-src"] == [sha256(script) for script in scripts]
     assert directives["style-src"] == [sha256(style) for style in styles]
