@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import math
 import re
@@ -204,12 +206,63 @@ def build_data(rows: list[dict], now: datetime | None = None) -> dict:
     }
 
 
+# The markers whose content the browser runs or applies, by the element that
+# holds it. JSON blocks are data, which no policy governs.
+_INLINE_SCRIPTS = (
+    "__CHARTJS_JS__",
+    "__D3_ARRAY_JS__",
+    "__D3_GEO_JS__",
+    "__TOPOJSON_JS__",
+    "__PASSPORT_JS__",
+)
+_INLINE_STYLES = ("__PASSPORT_CSS__",)
+
+
+def _policy(scripts: str, styles: str, *, connect: str | None = None) -> str:
+    """The Content-Security-Policy every Passport carries.
+
+    Nothing loads from anywhere the policy does not name: no CDN, no tile
+    server, no font host. Chart.js draws its canvases from data: and blob:
+    URLs, and the favicon is an empty data: URL. base-uri and form-action are
+    not covered by default-src, and the page has no use for either. A policy
+    in a meta element cannot set frame-ancestors, so framing is left to
+    whatever serves the page."""
+    directives = [
+        ("default-src", "'none'"),
+        ("script-src", scripts),
+        ("style-src", styles),
+        ("img-src", "data: blob:"),
+        ("connect-src", connect),
+        ("base-uri", "'none'"),
+        ("form-action", "'none'"),
+    ]
+    return "; ".join(f"{name} {sources}" for name, sources in directives if sources)
+
+
+def _escape(asset: str) -> str:
+    """Keep inlined text from closing the element it sits in."""
+    return asset.replace("</", "<\\/")
+
+
+def _inline_hash(template: str, marker: str, tag: str, asset: str) -> str:
+    """The CSP source for one inline block, hashed over exactly the text the
+    browser will see between the tags: the template's own whitespace around
+    the marker, and the asset as `_fill` escapes it.
+
+    Hashed from the template rather than found in the filled page, so the
+    payload, which is user data, can never add or move a hash."""
+    found = re.findall(rf"<{tag}>(\s*){re.escape(marker)}(\s*)</{tag}>", template)
+    if len(found) != 1:
+        raise ValueError(f"Passport template must hold {marker} alone in one <{tag}>")
+    before, after = found[0]
+    digest = hashlib.sha256(f"{before}{_escape(asset)}{after}".encode()).digest()
+    return f"'sha256-{base64.b64encode(digest).decode('ascii')}'"
+
+
 def _document(rows: list[dict], now: datetime | None) -> str:
     package = files(__package__)
     template = package.joinpath("template.html").read_text(encoding="utf-8")
     payload = json.dumps(build_data(rows, now), ensure_ascii=False, separators=(",", ":"))
-    # JSON sits in a script element. Prevent user-entered text from closing it.
-    payload = payload.replace("</", "<\\/")
 
     def vendor(name: str) -> str:
         return package.joinpath("vendor", name).read_text(encoding="utf-8")
@@ -230,6 +283,17 @@ def _document(rows: list[dict], now: datetime | None) -> str:
             package.joinpath(name).read_text(encoding="utf-8") for name in PASSPORT_SCRIPTS
         ),
     }
+    # Hashes rather than 'unsafe-inline': the policy then admits these exact
+    # blocks and nothing else, so text that ever got into the page some other
+    # way still could not run.
+    assets["__PASSPORT_CSP__"] = _policy(
+        " ".join(
+            _inline_hash(template, marker, "script", assets[marker]) for marker in _INLINE_SCRIPTS
+        ),
+        " ".join(
+            _inline_hash(template, marker, "style", assets[marker]) for marker in _INLINE_STYLES
+        ),
+    )
     return _fill(template, assets)
 
 
@@ -244,7 +308,8 @@ def _fill(template: str, assets: dict[str, str]) -> str:
         count = template.count(marker)
         if count != 1:
             raise ValueError(f"Passport template has {count} of {marker}, expected exactly one")
-    escaped = {marker: asset.replace("</", "<\\/") for marker, asset in assets.items()}
+    # JSON sits in a script element too. Prevent user-entered text from closing it.
+    escaped = {marker: _escape(asset) for marker, asset in assets.items()}
     pattern = re.compile("|".join(map(re.escape, assets)))
     return pattern.sub(lambda match: escaped[match.group(0)], template)
 

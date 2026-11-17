@@ -13,7 +13,7 @@ import re
 from datetime import timedelta
 
 import pytest
-from conftest import NOW, fixture_rows, row
+from conftest import CSP_REPORT, NOW, fixture_rows, row
 from playwright.sync_api import Page, expect
 
 from contrail.passport import great_circle_km, render
@@ -64,6 +64,28 @@ def test_the_page_loads_without_errors_or_requests(open_passport, problems):
     expect(page.locator("#generated")).to_contain_text("Keep this file private")
     assert page.evaluate("typeof d3.geoEqualEarth") == "function"
     assert problems == []
+
+
+def test_the_policy_refuses_a_script_the_page_did_not_bring(open_passport, problems):
+    """The page runs under its own Content-Security-Policy, and `problems`
+    reports each violation. Both halves are proved here: the bundles and
+    charts ran without one, and a script added afterwards is refused."""
+    page = open_passport()
+    assert problems == []
+    refused = page.evaluate(
+        """() => new Promise((resolve) => {
+          document.addEventListener("securitypolicyviolation",
+            (event) => resolve(event.effectiveDirective), { once: true });
+          const script = document.createElement("script");
+          script.textContent = "window.injected = true";
+          document.body.append(script);
+        })"""
+    )
+    assert refused == "script-src-elem"
+    assert page.evaluate("window.injected") is None
+    expect(page.locator("meta[name=robots]")).to_have_attribute("content", "noindex")
+    assert any(found.startswith(CSP_REPORT) for found in problems)
+    problems.clear()  # the refusal this test caused, and Chrome's console line for it
 
 
 def test_the_hero_and_summary_match_the_fixture(open_passport):

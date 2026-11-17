@@ -24,6 +24,9 @@ NOW = datetime(2026, 8, 14, 12, 0, tzinfo=UTC)
 # canvases and inline images from data: and blob: URLs.
 LOCAL_SCHEMES = ("file:", "data:", "blob:", "about:")
 
+# How the page reports a Content-Security-Policy violation to `problems`.
+CSP_REPORT = "CSP violation:"
+
 
 def row(**extra) -> dict:
     data = {field: "" for field in CSV_FIELDS}
@@ -135,6 +138,16 @@ def problems(page):
         ),
     )
     page.context.route("http*://**", lambda route: route.abort())
+    # Chrome logs most refusals to the console, but not as errors in every
+    # case. The event is the policy's own report of each one.
+    page.on(
+        "console",
+        lambda message: message.text.startswith(CSP_REPORT) and found.append(message.text),
+    )
+    page.add_init_script(
+        "document.addEventListener('securitypolicyviolation', (event) => console.info("
+        f"'{CSP_REPORT}', event.effectiveDirective, event.blockedURI, event.sample));"
+    )
     yield found
     assert found.unreported() == []
 

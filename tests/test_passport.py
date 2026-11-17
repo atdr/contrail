@@ -4,7 +4,10 @@ Everything here is pure. The template and the vendored assets are read from the
 installed package, which is also what proves they were packaged at all.
 """
 
+import base64
+import hashlib
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from importlib.resources import files
 
@@ -222,6 +225,7 @@ MARKERS = (
     "CHARTJS_JS",
     "PASSPORT_CSS",
     "PASSPORT_JS",
+    "PASSPORT_CSP",
 )
 AUTHORED = ("template.html", "passport.css", *passport.PASSPORT_SCRIPTS)
 
@@ -306,3 +310,52 @@ def test_a_template_without_exactly_one_marker_is_refused(template):
 def test_every_asset_lands_where_its_marker_was():
     filled = passport._fill("<__A__|__B__>", {"__A__": "__B__</x>", "__B__": "b"})
     assert filled == "<__B__<\\/x>|b>"
+
+
+# -- the Content-Security-Policy ----------------------------------------------
+
+
+def policy(document: str) -> dict[str, list[str]]:
+    found = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]*)" />', document)
+    assert found, "no policy in the page"
+    return {
+        name: sources
+        for name, *sources in (directive.split() for directive in found.group(1).split("; "))
+    }
+
+
+def sha256(text: str) -> str:
+    return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode()).digest()).decode() + "'"
+
+
+def test_the_policy_admits_exactly_the_blocks_the_page_inlines(tmp_path):
+    """Hashes, not 'unsafe-inline': each script and style element the page
+    holds is admitted by its own hash, and nothing else is admitted at all."""
+    document = render([row()], tmp_path / "passport.html", NOW).read_text(encoding="utf-8")
+    directives = policy(document)
+
+    scripts = re.findall(r"<script>(.*?)</script>", document, re.DOTALL)
+    styles = re.findall(r"<style>(.*?)</style>", document, re.DOTALL)
+    assert len(scripts) == len(passport._INLINE_SCRIPTS)
+    assert directives["script-src"] == [sha256(script) for script in scripts]
+    assert directives["style-src"] == [sha256(style) for style in styles]
+    assert directives["default-src"] == ["'none'"]
+    assert directives["img-src"] == ["data:", "blob:"]
+    assert "connect-src" not in directives  # a standalone page fetches nothing
+    assert "'unsafe-inline'" not in document
+
+
+def test_itinerary_text_never_moves_a_hash(tmp_path):
+    """The payload is not hashed, and nothing in it can add a source."""
+    plain = render([row()], tmp_path / "a.html", NOW).read_text(encoding="utf-8")
+    hostile = render(
+        [row(aircraft_type="<script>alert(1)</script><style>*{}</style>")], tmp_path / "b.html", NOW
+    ).read_text(encoding="utf-8")
+    assert policy(hostile) == policy(plain)
+
+
+def test_the_page_asks_not_to_be_indexed(tmp_path):
+    document = render([row()], tmp_path / "passport.html", NOW).read_text(encoding="utf-8")
+    assert '<meta name="robots" content="noindex" />' in document
+    # The policy comes first, so it governs every element after it.
+    assert document.index("Content-Security-Policy") < document.index("<style>")
