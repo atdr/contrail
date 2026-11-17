@@ -137,7 +137,7 @@ and each script, style and the map's land as a file of its own under
 days, so a daily rebuild costs a visitor only the data, and a version control
 history only the files that changed. A site cannot open from disk, because
 browsers refuse to fetch a `file:` URL; serve the folder, even if only with
-`python3 -m http.server -d passport`.
+`python3 -m http.server --bind 127.0.0.1 -d passport`.
 
 Each format has its own default `output_path`: `passport.html` for a file,
 `passport` for a folder. A path that plainly names the other shape is refused

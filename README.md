@@ -115,7 +115,7 @@ Passport comes in two formats. `standalone`, the default, is the one HTML file
 described below, to open from disk. `--format site` (or `passport.format: site`,
 or `PASSPORT_FORMAT`) writes a folder instead, `./passport/` by default, for a
 server: the page, `data.json` and each asset as its own cacheable file. A site
-has to be served to open, even if only by `python3 -m http.server -d passport`,
+has to be served to open, even if only by `python3 -m http.server --bind 127.0.0.1 -d passport`,
 and it owns its folder, so point it at a new or empty one. Both formats carry a
 Content-Security-Policy that loads nothing from anywhere else. See
 [docs/config.md](docs/config.md#passportformat).
