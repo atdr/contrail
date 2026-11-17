@@ -1,9 +1,17 @@
-Natural Earth 1:110m Admin 0 country boundaries
+Natural Earth 1:110m Admin 0 country boundaries, as TopoJSON
 
-Source:
-https://github.com/nvkelso/natural-earth-vector/blob/master/geojson/ne_110m_admin_0_countries.geojson
+countries-110m.json is world-atlas 2.0.2, unmodified:
+https://registry.npmjs.org/world-atlas/-/world-atlas-2.0.2.tgz
+https://github.com/topojson/world-atlas
+world-atlas is ISC licensed; see WORLD-ATLAS-LICENSE.
+
+It is built from Natural Earth's 1:110m Admin 0 countries:
+https://www.naturalearthdata.com/downloads/110m-cultural-vectors/
 
 Natural Earth data is in the public domain:
 https://www.naturalearthdata.com/about/terms-of-use/
 
-The bundled copy removes feature properties that are not needed by Contrail.
+The map's code is the npm packages' own minified UMD builds, unmodified,
+each naming its version in its first line: d3-array 3.2.4, d3-geo 3.1.1 and
+topojson-client 3.1.0. Their licences are D3-ARRAY-LICENSE, D3-GEO-LICENSE
+and TOPOJSON-CLIENT-LICENSE.

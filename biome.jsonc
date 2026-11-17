@@ -20,10 +20,11 @@
     }
   },
   "javascript": {
-    // Chart and L are provided by the Chart.js and Leaflet bundles inlined
-    // ahead of the page's own script. Passport is the namespace format.js
-    // declares, which every later file in PASSPORT_SCRIPTS adds to.
-    "globals": ["Chart", "L", "Passport"],
+    // Chart, d3 and topojson are provided by the Chart.js, d3-array, d3-geo
+    // and topojson-client bundles inlined ahead of the page's own script.
+    // Passport is the namespace format.js declares, which every later file
+    // in PASSPORT_SCRIPTS adds to.
+    "globals": ["Chart", "d3", "topojson", "Passport"],
     "formatter": { "quoteStyle": "double" }
   }
 }

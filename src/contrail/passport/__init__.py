@@ -210,16 +210,19 @@ def _document(rows: list[dict], now: datetime | None) -> str:
     payload = json.dumps(build_data(rows, now), ensure_ascii=False, separators=(",", ":"))
     # JSON sits in a script element. Prevent user-entered text from closing it.
     payload = payload.replace("</", "<\\/")
+
+    def vendor(name: str) -> str:
+        return package.joinpath("vendor", name).read_text(encoding="utf-8")
+
     assets = {
         "__PASSPORT_DATA__": payload,
-        "__WORLD_GEOJSON__": package.joinpath("vendor", "world.geojson").read_text(
-            encoding="utf-8"
-        ),
-        "__LEAFLET_CSS__": package.joinpath("vendor", "leaflet.css").read_text(encoding="utf-8"),
-        "__LEAFLET_JS__": package.joinpath("vendor", "leaflet.js").read_text(encoding="utf-8"),
-        "__CHARTJS_JS__": package.joinpath("vendor", "chart.umd.min.js").read_text(
-            encoding="utf-8"
-        ),
+        # Natural Earth's countries as TopoJSON, and the three bundles that
+        # project them: d3-geo needs d3-array, so it comes after it.
+        "__WORLD_TOPOJSON__": vendor("countries-110m.json"),
+        "__D3_ARRAY_JS__": vendor("d3-array.min.js"),
+        "__D3_GEO_JS__": vendor("d3-geo.min.js"),
+        "__TOPOJSON_JS__": vendor("topojson-client.min.js"),
+        "__CHARTJS_JS__": vendor("chart.umd.min.js"),
         # The authored styles and script. Separate files so each can be read,
         # reviewed and checked as the language it is.
         "__PASSPORT_CSS__": package.joinpath("passport.css").read_text(encoding="utf-8"),

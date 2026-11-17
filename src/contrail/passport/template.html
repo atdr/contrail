@@ -7,9 +7,6 @@
     <link rel="icon" href="data:," />
     <title>Contrail Passport</title>
     <style>
-      __LEAFLET_CSS__
-    </style>
-    <style>
       __PASSPORT_CSS__
     </style>
   </head>
@@ -114,10 +111,42 @@
           </div>
         </div>
 
-        <div class="map" aria-label="Interactive route map">
-          <div id="route-map" role="img" aria-label="Route network"></div>
-          <div class="map-caption">
-            <strong>Carbon map</strong><span>Line area represents CO₂e</span>
+        <div class="map" id="route-map-frame">
+          <svg
+            id="route-map"
+            role="group"
+            aria-label="Route map"
+            aria-describedby="route-map-help"
+          ></svg>
+          <p class="visually-hidden" id="route-map-help">
+            Arrow keys move between airports. Enter shows an airport's routes,
+            and Enter again opens its flights. Escape shows every route.
+          </p>
+          <div class="map-toolbar" id="map-toolbar">
+            <div class="map-focus" id="map-focus" hidden>
+              <span id="map-focus-label"></span>
+              <button class="map-button" type="button" id="map-focus-flights">
+                Flights
+              </button>
+              <button class="map-button" type="button" id="map-reset">
+                Show all
+              </button>
+            </div>
+            <button class="see-all map-list" type="button" id="map-list">
+              See all
+            </button>
+          </div>
+          <div class="map-caption" id="map-caption">
+            <p>
+              <strong>Carbon map</strong>
+              <span id="map-caption-text">Line area = route CO₂e</span>
+            </p>
+            <div class="map-legend" id="map-legend">
+              <span>Airport CO₂e</span>
+              <span id="map-legend-low"></span>
+              <span class="map-legend-ramp" aria-hidden="true"></span>
+              <span id="map-legend-high"></span>
+            </div>
           </div>
         </div>
       </section>
@@ -716,13 +745,19 @@
       __PASSPORT_DATA__
     </script>
     <script id="world-data" type="application/json">
-      __WORLD_GEOJSON__
+      __WORLD_TOPOJSON__
     </script>
     <script>
       __CHARTJS_JS__
     </script>
     <script>
-      __LEAFLET_JS__
+      __D3_ARRAY_JS__
+    </script>
+    <script>
+      __D3_GEO_JS__
+    </script>
+    <script>
+      __TOPOJSON_JS__
     </script>
     <script>
       __PASSPORT_JS__
