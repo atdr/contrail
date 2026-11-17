@@ -33,6 +33,9 @@ DEFAULT_EMISSIONS_PROVIDER = "tim"
 DEFAULT_STORAGE = "local_csv"
 DEFAULT_RAW_LOG = "jsonl"
 DEFAULT_PASSPORT_OUTPUT = "passport.html"
+# The two shapes Passport is written in: one file to open from disk, or a
+# folder of linked files for a server. See passport/__init__.py.
+PASSPORT_FORMATS = ("standalone", "site")
 CONFIG_BASENAMES = ("config.json", "config.yaml", "config.yml")
 
 # The sections a config file may carry, the roles `storage:` may name, and the

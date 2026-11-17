@@ -15,6 +15,7 @@ from contrail import __version__, resync
 from contrail.airlines import airline_name
 from contrail.airports import details_for
 from contrail.config import DEFAULT_PASSPORT_OUTPUT as DEFAULT_OUTPUT_PATH
+from contrail.config import PASSPORT_FORMATS
 from contrail.storage.local_csv import is_cancelled
 
 EARTH_RADIUS_KM = 6371.0088
@@ -206,16 +207,49 @@ def build_data(rows: list[dict], now: datetime | None = None) -> dict:
     }
 
 
-# The markers whose content the browser runs or applies, by the element that
-# holds it. JSON blocks are data, which no policy governs.
-_INLINE_SCRIPTS = (
-    "__CHARTJS_JS__",
-    "__D3_ARRAY_JS__",
-    "__D3_GEO_JS__",
-    "__TOPOJSON_JS__",
-    "__PASSPORT_JS__",
-)
-_INLINE_STYLES = ("__PASSPORT_CSS__",)
+# Each asset the page is drawn from besides its payload, by the template
+# marker it fills: the element that marker sits in, and the file a site
+# publishes it as under assets/. Script elements run in the template's order,
+# whichever format is built. The authored script is one file in a site too,
+# the same text a standalone page runs, so the two cannot drift apart.
+_ASSETS = {
+    "__PASSPORT_CSS__": ("style", "passport.css"),
+    "__WORLD_TOPOJSON__": ("json", "countries-110m.json"),
+    "__CHARTJS_JS__": ("script", "chart.umd.min.js"),
+    "__D3_ARRAY_JS__": ("script", "d3-array.min.js"),
+    "__D3_GEO_JS__": ("script", "d3-geo.min.js"),
+    "__TOPOJSON_JS__": ("script", "topojson-client.min.js"),
+    "__PASSPORT_JS__": ("script", "passport.js"),
+}
+
+# A site's layout. Everything but the page and its data is under assets/, and
+# assets/ is the only folder a render removes anything from.
+SITE_INDEX = "index.html"
+SITE_DATA = "data.json"
+SITE_ASSETS = "assets"
+
+
+def _read_assets() -> dict[str, str]:
+    package = files(__package__)
+
+    def vendor(name: str) -> str:
+        return package.joinpath("vendor", name).read_text(encoding="utf-8")
+
+    return {
+        # Natural Earth's countries as TopoJSON, and the three bundles that
+        # project them: d3-geo needs d3-array, so it comes after it.
+        "__WORLD_TOPOJSON__": vendor("countries-110m.json"),
+        "__D3_ARRAY_JS__": vendor("d3-array.min.js"),
+        "__D3_GEO_JS__": vendor("d3-geo.min.js"),
+        "__TOPOJSON_JS__": vendor("topojson-client.min.js"),
+        "__CHARTJS_JS__": vendor("chart.umd.min.js"),
+        # The authored styles and script. Separate files so each can be read,
+        # reviewed and checked as the language it is.
+        "__PASSPORT_CSS__": package.joinpath("passport.css").read_text(encoding="utf-8"),
+        "__PASSPORT_JS__": "\n".join(
+            package.joinpath(name).read_text(encoding="utf-8") for name in PASSPORT_SCRIPTS
+        ),
+    }
 
 
 def _policy(scripts: str, styles: str, *, connect: str | None = None) -> str:
@@ -259,42 +293,84 @@ def _inline_hash(template: str, marker: str, tag: str, asset: str) -> str:
     return f"'sha256-{base64.b64encode(digest).decode('ascii')}'"
 
 
-def _document(rows: list[dict], now: datetime | None) -> str:
-    package = files(__package__)
-    template = package.joinpath("template.html").read_text(encoding="utf-8")
-    payload = json.dumps(build_data(rows, now), ensure_ascii=False, separators=(",", ":"))
-
-    def vendor(name: str) -> str:
-        return package.joinpath("vendor", name).read_text(encoding="utf-8")
-
-    assets = {
-        "__PASSPORT_DATA__": payload,
-        # Natural Earth's countries as TopoJSON, and the three bundles that
-        # project them: d3-geo needs d3-array, so it comes after it.
-        "__WORLD_TOPOJSON__": vendor("countries-110m.json"),
-        "__D3_ARRAY_JS__": vendor("d3-array.min.js"),
-        "__D3_GEO_JS__": vendor("d3-geo.min.js"),
-        "__TOPOJSON_JS__": vendor("topojson-client.min.js"),
-        "__CHARTJS_JS__": vendor("chart.umd.min.js"),
-        # The authored styles and script. Separate files so each can be read,
-        # reviewed and checked as the language it is.
-        "__PASSPORT_CSS__": package.joinpath("passport.css").read_text(encoding="utf-8"),
-        "__PASSPORT_JS__": "\n".join(
-            package.joinpath(name).read_text(encoding="utf-8") for name in PASSPORT_SCRIPTS
-        ),
+def _standalone(template: str, assets: dict[str, str]) -> str:
+    """Everything inline: one file that opens from disk."""
+    inline = {
+        kind: [m for m, (k, _) in _ASSETS.items() if k == kind] for kind in ("script", "style")
     }
     # Hashes rather than 'unsafe-inline': the policy then admits these exact
     # blocks and nothing else, so text that ever got into the page some other
     # way still could not run.
-    assets["__PASSPORT_CSP__"] = _policy(
-        " ".join(
-            _inline_hash(template, marker, "script", assets[marker]) for marker in _INLINE_SCRIPTS
-        ),
-        " ".join(
-            _inline_hash(template, marker, "style", assets[marker]) for marker in _INLINE_STYLES
-        ),
+    policy = _policy(
+        " ".join(_inline_hash(template, m, "script", assets[m]) for m in inline["script"]),
+        " ".join(_inline_hash(template, m, "style", assets[m]) for m in inline["style"]),
     )
-    return _fill(template, assets)
+    return _fill(template, {**assets, "__PASSPORT_CSP__": policy})
+
+
+# How a site links each kind of element to its file instead of holding it.
+# A JSON element stays, emptied, and names its file for main.js to fetch.
+_LINKS = {
+    "script": (r"<script>\s*{}\s*</script>", lambda match, url: f'<script src="{url}"></script>'),
+    "style": (
+        r"<style>\s*{}\s*</style>",
+        lambda match, url: f'<link rel="stylesheet" href="{url}" />',
+    ),
+    "json": (
+        r'(<script [^>]*type="application/json")>\s*{}\s*</script>',
+        lambda match, url: f'{match.group(1)} data-src="{url}"></script>',
+    ),
+}
+
+
+def _link(template: str, marker: str, kind: str, url: str) -> str:
+    pattern, element = _LINKS[kind]
+    linked, count = re.subn(
+        pattern.format(re.escape(marker)), lambda match: element(match, url), template
+    )
+    if count != 1:
+        raise ValueError(f"Passport template must hold {marker} alone in one {kind} element")
+    return linked
+
+
+def _site(template: str, assets: dict[str, str]) -> dict[str, str]:
+    """A folder for a server: the page, its data, and each asset as a file
+    of its own, all fetched from the page's own origin.
+
+    Each asset keeps one name across versions, so a release that leaves a
+    file alone leaves it byte for byte alone, and history holds no renames.
+    Its URL carries a hash of its content instead, so a browser that cached
+    the last version fetches the new one the moment it changes."""
+    built = {}
+    for marker, (kind, name) in _ASSETS.items():
+        path = f"{SITE_ASSETS}/{name}"
+        built[path] = assets[marker]
+        version = hashlib.sha256(assets[marker].encode()).hexdigest()[:12]
+        template = _link(template, marker, kind, f"{path}?v={version}")
+    built[SITE_DATA] = assets["__PASSPORT_DATA__"]
+    template = _link(template, "__PASSPORT_DATA__", "json", SITE_DATA)
+    # Last, so a render writes the page only after everything it names.
+    built[SITE_INDEX] = _fill(
+        template, {"__PASSPORT_CSP__": _policy("'self'", "'self'", connect="'self'")}
+    )
+    return built
+
+
+def _document(rows: list[dict], now: datetime | None, mode: str = "standalone") -> dict[str, str]:
+    """Every file Passport writes in `mode`, by its path inside the output.
+
+    A standalone Passport is one file, and its one path is "": the output
+    path itself. A site's paths are relative to the folder it names."""
+    if mode not in PASSPORT_FORMATS:
+        raise ValueError(f"Unknown Passport format {mode!r}. Expected one of: {PASSPORT_FORMATS}.")
+    template = files(__package__).joinpath("template.html").read_text(encoding="utf-8")
+    assets = _read_assets()
+    assets["__PASSPORT_DATA__"] = json.dumps(
+        build_data(rows, now), ensure_ascii=False, separators=(",", ":")
+    )
+    if mode == "site":
+        return _site(template, assets)
+    return {"": _standalone(template, assets)}
 
 
 def _fill(template: str, assets: dict[str, str]) -> str:
@@ -314,9 +390,12 @@ def _fill(template: str, assets: dict[str, str]) -> str:
     return pattern.sub(lambda match: escaped[match.group(0)], template)
 
 
-def render(rows: list[dict], output_path: str | Path, now: datetime | None = None) -> Path:
-    """Write Passport as one offline HTML file and return its resolved path."""
-    return render_if_changed(rows, output_path, now, force=True)[0]
+def render(
+    rows: list[dict], output_path: str | Path, now: datetime | None = None, *, mode="standalone"
+) -> Path:
+    """Write Passport, one offline HTML file or a site folder, and return its
+    resolved path."""
+    return render_if_changed(rows, output_path, now, force=True, mode=mode)[0]
 
 
 # The one part of the page that moves on every build. Each flight's departed
@@ -324,23 +403,94 @@ def render(rows: list[dict], output_path: str | Path, now: datetime | None = Non
 _GENERATED_AT = re.compile(r'"generatedAt":"[^"]*"')
 
 
+def _differs(path: Path, text: str) -> bool:
+    if not path.is_file():
+        return True
+    existing = path.read_text(encoding="utf-8")
+    return _GENERATED_AT.sub("", existing) != _GENERATED_AT.sub("", text)
+
+
+def _visible(folder: Path) -> list[Path]:
+    """A folder's entries, less the hidden ones: a .DS_Store or a .gitkeep is
+    neither Passport's to remove nor a reason to refuse the folder."""
+    return sorted(entry for entry in folder.iterdir() if not entry.name.startswith("."))
+
+
+def _claim(folder: Path) -> None:
+    """Refuse a folder that holds anything a site render did not write.
+
+    A site removes the assets it no longer ships, so it has to own its folder
+    outright. Pointed by mistake at the repository root, or anywhere else
+    with files in it, it stops here before writing a byte. Symlinks are
+    refused too: one would carry a removal outside the folder."""
+    if not folder.exists():
+        return
+    if folder.is_symlink() or not folder.is_dir():
+        raise ValueError(f"{folder} is not a folder, and a Passport site is written as one")
+    foreign = [
+        entry
+        for entry in _visible(folder)
+        if entry.is_symlink()
+        or not (
+            (entry.name in (SITE_INDEX, SITE_DATA) and entry.is_file())
+            or (entry.name == SITE_ASSETS and entry.is_dir())
+        )
+    ]
+    assets = folder / SITE_ASSETS
+    if assets.is_dir() and not assets.is_symlink():
+        foreign += [
+            entry for entry in _visible(assets) if entry.is_symlink() or not entry.is_file()
+        ]
+    if foreign:
+        names = ", ".join(str(entry.relative_to(folder)) for entry in foreign)
+        raise ValueError(
+            f"{folder} holds what a Passport site did not write ({names}). A site owns its "
+            "folder and removes the files it no longer needs, so give it a new or empty one."
+        )
+
+
+def _remove_stale(folder: Path, built: dict[str, str]) -> bool:
+    """Remove each asset an earlier version wrote and this one does not.
+    Only ever inside assets/, which `_claim` has checked holds only files."""
+    keep = {Path(path).name for path in built if path.startswith(f"{SITE_ASSETS}/")}
+    stale = [entry for entry in _visible(folder / SITE_ASSETS) if entry.name not in keep]
+    for entry in stale:
+        entry.unlink()
+    return bool(stale)
+
+
 def render_if_changed(
-    rows: list[dict], output_path: str | Path, now: datetime | None = None, *, force=False
+    rows: list[dict],
+    output_path: str | Path,
+    now: datetime | None = None,
+    *,
+    force=False,
+    mode="standalone",
 ) -> tuple[Path, bool]:
-    """Write Passport unless the file there differs only in its generatedAt
-    stamp. Returns the resolved path and whether it was written.
+    """Write each Passport file that differs from what is there by more than
+    its generatedAt stamp. Returns the resolved output path and whether
+    anything was written or removed.
 
     A page rebuilt daily would otherwise be a new ~800 KB version in history
-    every day with nothing in it changed: the same rule the CSV follows."""
+    every day with nothing in it changed: the same rule the CSV follows. A
+    site compares file by file, so a day with nothing new writes nothing."""
     output = Path(output_path)
-    document = _document(rows, now)
-    if not force and output.is_file():
-        existing = output.read_text(encoding="utf-8")
-        if _GENERATED_AT.sub("", existing) == _GENERATED_AT.sub("", document):
-            return output.resolve(), False
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(document, encoding="utf-8")
-    return output.resolve(), True
+    built = _document(rows, now, mode)
+    if mode == "site":
+        _claim(output)
+    elif output.is_dir():
+        raise ValueError(f"{output} is a folder, and a standalone Passport is one HTML file")
+
+    written = False
+    for path, text in built.items():
+        target = output / path if path else output
+        if force or _differs(target, text):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text, encoding="utf-8")
+            written = True
+    if mode == "site":
+        written = _remove_stale(output, built) or written
+    return output.resolve(), written
 
 
 __all__ = [
