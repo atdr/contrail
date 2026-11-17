@@ -11,6 +11,11 @@ the file itself: anything over the network is aborted and fails the test.
 Each test opens the standalone page. One marked `both_formats` runs a second
 time against a site folder, served from 127.0.0.1 because fetch() refuses a
 file: URL, and then the only requests allowed are to that server.
+
+The page runs under its own Content-Security-Policy, which refuses eval. Give
+`wait_for_function` a function, never a bare expression: Playwright evals a
+bare expression in the page whenever its first check fails, and the policy
+refuses that as a violation, so the test fails only when it had to wait.
 """
 
 from __future__ import annotations

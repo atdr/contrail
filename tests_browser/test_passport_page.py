@@ -608,7 +608,7 @@ def test_charts_follow_a_scheme_change_while_open(open_passport, page):
 
     page.emulate_media(color_scheme="dark")
     page.wait_for_function(
-        "Chart.getChart('trend-chart').options.scales.x.ticks.color === 'rgb(165, 178, 170)'"
+        "() => Chart.getChart('trend-chart').options.scales.x.ticks.color === 'rgb(165, 178, 170)'"
     )
     assert page.evaluate(tick, "pattern-chart") == "rgb(165, 178, 170)"
     assert page.evaluate("Chart.getChart('routes').options.scales.y.ticks.color") == (
@@ -1650,7 +1650,7 @@ def test_the_view_survives_a_reload_through_the_hash(open_passport):
     close_panel(page)
     # The dialog hides at once but fires "close" a task later, and only then
     # is the hash rewritten. Read it from the page: page.url lags too.
-    page.wait_for_function("!location.href.includes('panel=')")
+    page.wait_for_function("() => !location.href.includes('panel=')")
     page.get_by_role("button", name="All time").click()
     page.locator("#metric-tabs [data-value=total]").click()
     page.locator("#trend-breakdown-tabs [data-value=total]").click()
