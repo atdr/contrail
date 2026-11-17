@@ -1188,7 +1188,11 @@ def test_the_keyboard_reaches_and_operates_the_map(open_passport, page):
     close_panel(page)
     expect(airport(page, "JFK")).to_be_focused()
 
+    # Closing the panel restores focus in a later task; let it land first, or
+    # on a slow runner it can take focus back from See all after we move it.
+    page.evaluate("() => new Promise(r => setTimeout(() => requestAnimationFrame(r)))")
     page.locator("#map-list").focus()
+    expect(page.locator("#map-list")).to_be_focused()
     page.keyboard.press("Enter")
     expect(page.locator("#ranking-dialog-title")).to_contain_text("Routes at JFK")
     rows = page.locator("#ranking-dialog-list .ranking-row")
