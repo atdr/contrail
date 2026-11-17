@@ -70,6 +70,8 @@ body:
       label: Output
       description: |
         The full stdout/stderr from the run. For a `--dry-run`, this includes the `MATCHED`/`NEW`/`UNPARSED`/`LINKED`/`CHANGED`/`REPRICE`/`CANCEL` lines, which are usually the most useful part.
+
+        Check it for secrets and flight details before pasting. Older versions could print the feed URL in a network error.
       render: shell
     validations:
       required: true

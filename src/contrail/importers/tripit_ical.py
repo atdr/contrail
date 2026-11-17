@@ -19,6 +19,7 @@ from icalendar import Calendar
 from contrail.airlines import AirlineResolver
 from contrail.airports import arrival_datetime, departure_date, departure_datetime
 from contrail.models import FlightRecord, UnparsedEvent
+from contrail.request_errors import RedactedRequestError, describe
 
 # Matches "(SFO)" style airport codes anywhere in text
 AIRPORT_CODE_RE = re.compile(r"\(([A-Z]{3})\)")
@@ -131,10 +132,20 @@ def fetch_ical(url_or_path: str) -> bytes:
 
     Local paths are supported so CI can run ``contrail sync --dry-run`` against
     the test fixture with no network and no mocking.
+
+    A TripIt feed URL is a read credential for every itinerary on the account,
+    and ``requests`` repeats it in every error it raises. A failure is re-raised
+    naming only the host and the status, ``from None`` so a traceback cannot
+    print the original either.
     """
     if _looks_like_url(url_or_path):
-        resp = requests.get(url_or_path, timeout=FETCH_TIMEOUT)
-        resp.raise_for_status()
+        try:
+            resp = requests.get(url_or_path, timeout=FETCH_TIMEOUT)
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            raise RedactedRequestError(
+                f"could not fetch the calendar feed: {describe(exc, url_or_path)}"
+            ) from None
         return resp.content
 
     parsed = urlparse(url_or_path)

@@ -26,6 +26,7 @@ from contrail.importers import IMPORTERS, get_importer
 from contrail.models import FlightRecord, UnparsedEvent
 from contrail.passport import DEFAULT_OUTPUT_PATH
 from contrail.passport import render_if_changed as render_passport
+from contrail.request_errors import describe
 from contrail.storage import get_raw_log, get_storage, kg_value, normalize_rows, total_kg
 from contrail.storage.local_csv import STATUS_CANCELLED, actual_kg, row_key
 from contrail.storage.raw_log import default_path as default_raw_path
@@ -1150,7 +1151,8 @@ def main(argv: list[str] | None = None) -> int:
     except requests.RequestException as exc:
         # Report the failure, not a traceback: a 403 or a quota error is an
         # ordinary outcome, and cron setups routinely pipe stderr to a log file.
-        print(f"Network error talking to an API: {exc}", file=sys.stderr)
+        # Never str(exc): requests puts the URL in it, and a feed URL is a secret.
+        print(f"Network error talking to an API: {describe(exc)}", file=sys.stderr)
         return 1
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
