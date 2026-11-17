@@ -7,11 +7,18 @@ it, so the Python matrix and the coverage job need no browser. Run it with
 Every test opens the generated file, not the template, so what is exercised is
 exactly what `contrail passport` writes. The page must make no request beyond
 the file itself: anything over the network is aborted and fails the test.
+
+Each test opens the standalone page. One marked `both_formats` runs a second
+time against a site folder, served from 127.0.0.1 because fetch() refuses a
+file: URL, and then the only requests allowed are to that server.
 """
 
 from __future__ import annotations
 
+import threading
 from datetime import UTC, datetime
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
@@ -90,6 +97,44 @@ def fixture_rows() -> list[dict]:
     ]
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "both_formats: run against a served site folder as well as the standalone page"
+    )
+
+
+def pytest_generate_tests(metafunc):
+    if metafunc.definition.get_closest_marker("both_formats"):
+        metafunc.parametrize("passport_format", ["standalone", "site"])
+
+
+@pytest.fixture
+def passport_format() -> str:
+    """The format `open_passport` renders. Overridden by `both_formats`."""
+    return "standalone"
+
+
+class QuietHandler(SimpleHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass
+
+
+@pytest.fixture
+def site_origin(passport_format, tmp_path):
+    """A server for the test's own folder, on loopback, for a site only."""
+    if passport_format != "site":
+        yield None
+        return
+    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(QuietHandler, directory=tmp_path))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 @pytest.fixture
 def browser_context_args(browser_context_args):
     # formatNumber() uses the browser's locale, so pin it for stable text.
@@ -121,10 +166,13 @@ def pytest_runtest_call(item):
 
 
 @pytest.fixture
-def problems(page):
+def problems(page, site_origin):
     """Page errors, console errors and non-local requests, collected as the
     page runs. Asserted empty as the test body ends, by pytest_runtest_call
-    above, and again at teardown for anything that arrived after it."""
+    above, and again at teardown for anything that arrived after it.
+
+    For a site, its own server is local too, and the only origin let through."""
+    local = LOCAL_SCHEMES + ((f"{site_origin}/",) if site_origin else ())
     found = Problems()
     page.on("pageerror", lambda error: found.append(f"page error: {error}"))
     page.on(
@@ -133,11 +181,12 @@ def problems(page):
     )
     page.on(
         "request",
-        lambda request: (
-            request.url.startswith(LOCAL_SCHEMES) or found.append(f"request: {request.url}")
-        ),
+        lambda request: request.url.startswith(local) or found.append(f"request: {request.url}"),
     )
-    page.context.route("http*://**", lambda route: route.abort())
+    page.context.route(
+        "http*://**",
+        lambda route: route.continue_() if route.request.url.startswith(local) else route.abort(),
+    )
     # Chrome logs most refusals to the console, but not as errors in every
     # case. The event is the policy's own report of each one.
     page.on(
@@ -153,14 +202,23 @@ def problems(page):
 
 
 @pytest.fixture
-def open_passport(page, problems, tmp_path):
-    """Render rows at a given clock, open the file and wait for the first draw."""
+def open_passport(page, problems, tmp_path, passport_format, site_origin):
+    """Render rows at a given clock, open the page and wait for the first draw.
+
+    A site is rendered to a folder named after the file, less `.html`, and
+    opened from the test's server."""
 
     def open_(rows: list[dict] | None = None, now: datetime = NOW, name="passport.html"):
-        output = render(fixture_rows() if rows is None else rows, tmp_path / name, now)
+        rows = fixture_rows() if rows is None else rows
+        if passport_format == "site":
+            folder = name.removesuffix(".html")
+            render(rows, tmp_path / folder, now, mode="site")
+            url = f"{site_origin}/{folder}/"
+        else:
+            url = render(rows, tmp_path / name, now).as_uri()
         # networkidle, so a request the page makes after load is recorded
         # before the test inspects `problems`, not only at teardown.
-        page.goto(output.as_uri(), wait_until="networkidle")
+        page.goto(url, wait_until="networkidle")
         page.locator("#hero-value").filter(has_text="CO").wait_for()
         return page
 
