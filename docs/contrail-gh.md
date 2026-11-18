@@ -85,21 +85,28 @@ An instance can also opt in to publishing it behind Cloudflare Access with
 folder instead, `passport/` by default: `index.html`, `data.json` holding the
 itinerary, and the scripts, styles and map under `assets/`. It suits the
 published copy better, since a browser caches the assets and only the data
-moves day to day. Taking it up obliges three changes in the template, made
-after the release that ships it and before any instance sets the format:
+moves day to day. The template stays on standalone by default, and an instance
+switches with a repository variable, `PASSPORT_FORMAT`, never by editing its
+workflows, since a template pull overwrites `.github/workflows/` wholesale. The
+template's workflows read that variable, so a change to either format's output
+shape touches them:
 
-- `sync.yml`'s `file_pattern` must cover the folder (`passport/`) when the
-  format is `site`. A site removes assets a newer contrail no longer ships, and
-  `git add` on a folder stages those removals with everything else.
-- `publish-passport.yml` copies the folder into `_publish/site` rather than
-  copying `passport.html` to `_publish/site/index.html`, and its `paths`
-  trigger names `passport/**`. The page fetches `data.json` and its assets from
-  its own origin, which the Worker already serves same-origin, and its policy
-  allows nothing else.
-- `check-template.yml` rejects the Passport folder as a whole, in the tree and
-  in history, not only HTML files. `data.json` is the whole itinerary and is
-  not HTML, so a guard that matches `.html` alone catches `index.html` and lets
-  the data through.
+- `sync.yml` passes the variable to `contrail sync --passport`, and its
+  `file_pattern` names both `passport.html` and `passport/`. A site removes
+  assets a newer contrail no longer ships, and the commit step stages those
+  removals with everything else. It also sets `status.showUntrackedFiles all`,
+  because the commit step reads `git status`, which otherwise reports a new
+  folder as one entry rather than its files.
+- `publish-passport.yml` stages by the variable, not by which files exist: the
+  folder whole into `_publish/site` for a site, `passport.html` as
+  `_publish/site/index.html` otherwise. The page fetches `data.json` and its
+  assets from its own origin, which the Worker serves, and its policy allows
+  nothing else. Only the default folder name is supported.
+- `check-instance.yml` builds the Passport in the variable's format.
+- `check-template.yml` rejects the `passport/` folder and any `data.json`, in
+  the tree and in history, as well as any HTML file. `data.json` is the whole
+  itinerary and is not HTML, so a guard that matches `.html` alone would catch
+  `index.html` and let the data through.
 
 Regenerating the header, from a checkout of contrail:
 
