@@ -3,6 +3,11 @@ name: release-please
 on:
   push:
     branches: [main]
+  # Daily as well: an auto-merged Dependabot bump is pushed by GITHUB_TOKEN,
+  # which starts no push workflow. 04:47 UTC is off the top of the hour, when
+  # GitHub delays scheduled runs. A run with nothing new changes nothing.
+  schedule:
+    - cron: "47 4 * * *"
 
 # Scoped per job: the publish job must not hold a writable contents token.
 permissions: {}
@@ -57,7 +62,11 @@ jobs:
     # than fails, and this job is the last thing between a tag and a release.
     timeout-minutes: 10
     runs-on: ubuntu-latest
-    environment: pypi
+    # The url puts a link to the published version on the deployment, so the
+    # environment's page shows what each run released.
+    environment:
+      name: pypi
+      url: ${{ steps.published.outputs.url }}
     permissions:
       # A job-level block sets every unlisted scope to none, and checkout
       # needs this one.
@@ -83,3 +92,12 @@ jobs:
           python -m build
 
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+      # After the publish, so a failed one links nowhere. Read from the sdist,
+      # <name>-<version>.tar.gz, which is what PyPI was sent: a version holds
+      # no hyphen, so the last one splits the two.
+      - name: Link the deployment to the published version
+        id: published
+        run: |
+          sdist=$(basename dist/*.tar.gz .tar.gz)
+          echo "url=https://pypi.org/project/${sdist%-*}/${sdist##*-}/" >> "$GITHUB_OUTPUT"
