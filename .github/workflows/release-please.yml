@@ -3,6 +3,11 @@ name: release-please
 on:
   push:
     branches: [main]
+  # Daily as well: an auto-merged Dependabot bump is pushed by GITHUB_TOKEN,
+  # which starts no push workflow. 04:47 UTC is off the top of the hour, when
+  # GitHub delays scheduled runs. A run with nothing new changes nothing.
+  schedule:
+    - cron: "47 4 * * *"
 
 # Scoped per job: the publish job must not hold a writable contents token.
 permissions: {}
