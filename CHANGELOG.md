@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/atdr/contrail/compare/v0.9.0...v0.9.1) (2026-11-28)
+
+
+### Documentation
+
+* **contrail-gh:** describe how the template switches Passport format ([#117](https://github.com/atdr/contrail/issues/117)) ([625fa14](https://github.com/atdr/contrail/commit/625fa14f290f9d2d8fc536b73d69f9fa729ca2b1))
+
 ## [0.9.0](https://github.com/atdr/contrail/compare/v0.8.1...v0.9.0) (2026-11-17)
 
 
